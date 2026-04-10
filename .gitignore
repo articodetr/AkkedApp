@@ -1,0 +1,8 @@
+node_modules/
+.env
+dist/
+.bolt/
+.expo/
+.expo-shared/
+android/app/build/
+ios/build/
