@@ -27,6 +27,7 @@ import {
   Percent,
   Activity,
   Wallet,
+  Clock,
 } from 'lucide-react-native';
 import { CURRENCIES } from '@/types/database';
 import { StatisticsService, StatisticsData, PeriodStats } from '@/services/statisticsService';
@@ -238,6 +239,38 @@ export default function StatisticsScreen() {
     );
   };
 
+  const formatApprovalTime = (minutes: number | null) => {
+    if (minutes == null) {
+      return 'لا توجد موافقات كافية';
+    }
+
+    if (minutes < 60) {
+      return `${formatAmount(minutes)} دقيقة`;
+    }
+
+    const hours = minutes / 60;
+    if (hours < 24) {
+      return `${formatAmount(hours)} ساعة`;
+    }
+
+    return `${formatAmount(hours / 24)} يوم`;
+  };
+
+  const summarizeCurrencyList = (
+    items: { currency: string; amount: number }[],
+    emptyText: string = 'لا توجد مبالغ',
+  ) => {
+    if (items.length === 0) {
+      return emptyText;
+    }
+
+    const primary = items[0];
+    const currencyInfo = getCurrencyInfo(primary.currency);
+    const restCount = items.length - 1;
+
+    return `${formatAmount(primary.amount)} ${currencyInfo.symbol}${restCount > 0 ? ` +${restCount}` : ''}`;
+  };
+
   const renderBalanceBreakdown = (
     items: { currency: string; amount: number }[],
     maxItems: number = 2,
@@ -313,6 +346,52 @@ export default function StatisticsScreen() {
           value: stats.currencyBalances.length,
           icon: Wallet,
           color: '#F59E0B',
+        },
+      ]
+    : [];
+
+  const actionableCards = stats
+    ? [
+        {
+          key: 'awaitingMine',
+          title: 'بانتظار موافقتي',
+          value: stats.actionableStats.awaitingMyApprovalCount,
+          subtitle: summarizeCurrencyList(
+            stats.actionableStats.awaitingMyApprovalByCurrency,
+            'لا يوجد شيء بانتظارك',
+          ),
+          icon: Clock,
+          color: '#D97706',
+        },
+        {
+          key: 'awaitingOthers',
+          title: 'بانتظار رد الطرف الآخر',
+          value: stats.actionableStats.awaitingOthersApprovalCount,
+          subtitle: summarizeCurrencyList(
+            stats.actionableStats.awaitingOthersApprovalByCurrency,
+            'لا توجد طلبات معلّقة',
+          ),
+          icon: Activity,
+          color: '#2563EB',
+        },
+        {
+          key: 'stalePending',
+          title: 'متأخر أكثر من 24 ساعة',
+          value: stats.actionableStats.stalePendingCount,
+          subtitle: summarizeCurrencyList(
+            stats.actionableStats.stalePendingByCurrency,
+            'لا يوجد تأخير',
+          ),
+          icon: AlertCircle,
+          color: '#DC2626',
+        },
+        {
+          key: 'approvalRate',
+          title: 'نسبة القبول آخر 7 أيام',
+          value: `${stats.actionableStats.approvalRateLast7Days}%`,
+          subtitle: `${stats.actionableStats.approvedLast7Days} قبول / ${stats.actionableStats.rejectedLast7Days} رفض`,
+          icon: TrendingUp,
+          color: '#059669',
         },
       ]
     : [];
@@ -417,6 +496,83 @@ export default function StatisticsScreen() {
                 <Text style={styles.summaryTitle}>{card.title}</Text>
               </View>
             ))}
+          </View>
+        </View>
+
+        <View style={styles.actionableSection}>
+          <View style={styles.sectionHeader}>
+            <Clock size={24} color="#D97706" />
+            <Text style={styles.sectionTitle}>ما يحتاج متابعة الآن</Text>
+          </View>
+
+          <View style={styles.summaryGrid}>
+            {actionableCards.map((card) => (
+              <View key={card.key} style={styles.actionableCard}>
+                <View style={[styles.summaryIcon, { backgroundColor: `${card.color}15` }]}>
+                  <card.icon size={20} color={card.color} />
+                </View>
+                <Text style={styles.actionableValue}>{card.value}</Text>
+                <Text style={styles.summaryTitle}>{card.title}</Text>
+                <Text style={styles.actionableSubtitle}>{card.subtitle}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.actionableBreakdownCard}>
+            <Text style={styles.actionableBreakdownTitle}>تفصيل المبالغ المعلّقة</Text>
+
+            <View style={styles.actionableBreakdownBlock}>
+              <Text style={styles.actionableBreakdownLabel}>بانتظار موافقتك</Text>
+              {renderCurrencyBreakdown(stats.actionableStats.awaitingMyApprovalByCurrency)}
+            </View>
+
+            <View style={styles.actionableBreakdownDivider} />
+
+            <View style={styles.actionableBreakdownBlock}>
+              <Text style={styles.actionableBreakdownLabel}>بانتظار رد الطرف الآخر</Text>
+              {renderCurrencyBreakdown(stats.actionableStats.awaitingOthersApprovalByCurrency)}
+            </View>
+
+            <View style={styles.actionableBreakdownDivider} />
+
+            <View style={styles.actionableBreakdownBlock}>
+              <Text style={styles.actionableBreakdownLabel}>متأخر أكثر من 24 ساعة</Text>
+              {renderCurrencyBreakdown(stats.actionableStats.stalePendingByCurrency)}
+            </View>
+          </View>
+
+          <View style={styles.actionablePerformanceCard}>
+            <View style={styles.sectionHeader}>
+              <Activity size={22} color="#059669" />
+              <Text style={styles.actionablePerformanceTitle}>أداء الموافقات</Text>
+            </View>
+
+            <View style={styles.actionablePerformanceGrid}>
+              <View style={styles.actionablePerformanceItem}>
+                <Text style={styles.actionablePerformanceLabel}>تم قبوله</Text>
+                <Text style={[styles.actionablePerformanceValue, { color: '#059669' }]}>
+                  {stats.actionableStats.approvedLast7Days}
+                </Text>
+              </View>
+
+              <View style={styles.topCustomerStatDivider} />
+
+              <View style={styles.actionablePerformanceItem}>
+                <Text style={styles.actionablePerformanceLabel}>تم رفضه</Text>
+                <Text style={[styles.actionablePerformanceValue, { color: '#DC2626' }]}>
+                  {stats.actionableStats.rejectedLast7Days}
+                </Text>
+              </View>
+
+              <View style={styles.topCustomerStatDivider} />
+
+              <View style={styles.actionablePerformanceItem}>
+                <Text style={styles.actionablePerformanceLabel}>متوسط زمن الموافقة</Text>
+                <Text style={[styles.actionablePerformanceValue, { color: '#111827', fontSize: 17 }]}>
+                  {formatApprovalTime(stats.actionableStats.averageApprovalMinutesLast7Days)}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -1195,6 +1351,104 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#475569',
+  },
+  actionableSection: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  actionableCard: {
+    width: '47%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  actionableValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'right',
+  },
+  actionableSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'right',
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  actionableBreakdownCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  actionableBreakdownTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'right',
+    marginBottom: 16,
+  },
+  actionableBreakdownBlock: {
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  actionableBreakdownLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  actionableBreakdownDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 14,
+  },
+  actionablePerformanceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  actionablePerformanceTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  actionablePerformanceGrid: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  actionablePerformanceItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  actionablePerformanceLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  actionablePerformanceValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   balancesSection: {
     padding: 16,

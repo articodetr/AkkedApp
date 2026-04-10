@@ -46,6 +46,20 @@ export interface DebtStats {
   weOweByCurrency: { currency: string; amount: number }[];
 }
 
+export interface ActionableStats {
+  awaitingMyApprovalCount: number;
+  awaitingMyApprovalByCurrency: { currency: string; amount: number }[];
+  awaitingOthersApprovalCount: number;
+  awaitingOthersApprovalByCurrency: { currency: string; amount: number }[];
+  stalePendingCount: number;
+  stalePendingByCurrency: { currency: string; amount: number }[];
+  approvedLast7Days: number;
+  rejectedLast7Days: number;
+  approvalRateLast7Days: number;
+  rejectionRateLast7Days: number;
+  averageApprovalMinutesLast7Days: number | null;
+}
+
 export interface StatisticsData {
   totalCustomers: number;
   totalTransactions: number;
@@ -64,6 +78,7 @@ export interface StatisticsData {
   topCustomers: TopCustomer[];
   commissionStats: CommissionStats;
   debtStats: DebtStats;
+  actionableStats: ActionableStats;
 }
 
 interface StatsTransactionRow {
@@ -90,6 +105,7 @@ interface StatsMovementRow {
   is_voided?: boolean | null;
   from_customer_id?: string | null;
   to_customer_id?: string | null;
+  approved_at?: string | null;
 }
 
 const EMPTY_DEBT_STATS: DebtStats = {
@@ -97,6 +113,20 @@ const EMPTY_DEBT_STATS: DebtStats = {
   totalWeOwe: 0,
   owedToUsByCurrency: [],
   weOweByCurrency: [],
+};
+
+const EMPTY_ACTIONABLE_STATS: ActionableStats = {
+  awaitingMyApprovalCount: 0,
+  awaitingMyApprovalByCurrency: [],
+  awaitingOthersApprovalCount: 0,
+  awaitingOthersApprovalByCurrency: [],
+  stalePendingCount: 0,
+  stalePendingByCurrency: [],
+  approvedLast7Days: 0,
+  rejectedLast7Days: 0,
+  approvalRateLast7Days: 0,
+  rejectionRateLast7Days: 0,
+  averageApprovalMinutesLast7Days: null,
 };
 
 interface CommissionEntry {
@@ -423,6 +453,110 @@ export class StatisticsService {
     };
   }
 
+  private static roundMetric(value: number): number {
+    return Number(value.toFixed(1));
+  }
+
+  private static buildActionableStats(
+    movements: StatsMovementRow[],
+    customers: Customer[],
+    userId: string,
+  ): ActionableStats {
+    if (movements.length === 0 || customers.length === 0) {
+      return EMPTY_ACTIONABLE_STATS;
+    }
+
+    const customerMap = new Map(customers.map((customer) => [customer.id, customer]));
+    const awaitingMyApprovalByCurrency = new Map<string, number>();
+    const awaitingOthersApprovalByCurrency = new Map<string, number>();
+    const stalePendingByCurrency = new Map<string, number>();
+
+    let awaitingMyApprovalCount = 0;
+    let awaitingOthersApprovalCount = 0;
+    let stalePendingCount = 0;
+    let approvedLast7Days = 0;
+    let rejectedLast7Days = 0;
+
+    const approvalDurations: number[] = [];
+    const now = Date.now();
+    const staleThreshold = now - 24 * 60 * 60 * 1000;
+    const weekAgo = subDays(new Date(), 7).getTime();
+
+    movements
+      .filter((movement) => !movement.is_commission_movement)
+      .forEach((movement) => {
+        const customer = customerMap.get(movement.customer_id);
+
+        if (!customer || movement.is_voided) {
+          return;
+        }
+
+        const amount = Number(movement.amount || 0);
+        const createdAt = new Date(movement.created_at).getTime();
+        const approvedAt = movement.approved_at ? new Date(movement.approved_at).getTime() : null;
+        const status = movement.approval_status ?? (movement.pending_approval ? 'pending' : 'approved');
+        const isPending = status === 'pending' || movement.pending_approval === true;
+        const ownedByCurrentUser = customer.user_id === userId;
+        const visibleAsCounterparty = customer.user_id !== userId && customer.linked_user_id === userId;
+
+        if (isPending && visibleAsCounterparty) {
+          awaitingMyApprovalCount += 1;
+          awaitingMyApprovalByCurrency.set(
+            movement.currency,
+            (awaitingMyApprovalByCurrency.get(movement.currency) || 0) + amount,
+          );
+        }
+
+        if (isPending && ownedByCurrentUser && Boolean(customer.linked_user_id)) {
+          awaitingOthersApprovalCount += 1;
+          awaitingOthersApprovalByCurrency.set(
+            movement.currency,
+            (awaitingOthersApprovalByCurrency.get(movement.currency) || 0) + amount,
+          );
+        }
+
+        if (isPending && createdAt <= staleThreshold) {
+          stalePendingCount += 1;
+          stalePendingByCurrency.set(
+            movement.currency,
+            (stalePendingByCurrency.get(movement.currency) || 0) + amount,
+          );
+        }
+
+        if (approvedAt && approvedAt >= weekAgo) {
+          approvedLast7Days += 1;
+          approvalDurations.push(Math.max(0, (approvedAt - createdAt) / (1000 * 60)));
+        }
+
+        if (status === 'rejected' && createdAt >= weekAgo) {
+          rejectedLast7Days += 1;
+        }
+      });
+
+    const decisionCount = approvedLast7Days + rejectedLast7Days;
+
+    return {
+      awaitingMyApprovalCount,
+      awaitingMyApprovalByCurrency: this.mapCurrencyTotals(awaitingMyApprovalByCurrency),
+      awaitingOthersApprovalCount,
+      awaitingOthersApprovalByCurrency: this.mapCurrencyTotals(awaitingOthersApprovalByCurrency),
+      stalePendingCount,
+      stalePendingByCurrency: this.mapCurrencyTotals(stalePendingByCurrency),
+      approvedLast7Days,
+      rejectedLast7Days,
+      approvalRateLast7Days:
+        decisionCount > 0 ? this.roundMetric((approvedLast7Days / decisionCount) * 100) : 0,
+      rejectionRateLast7Days:
+        decisionCount > 0 ? this.roundMetric((rejectedLast7Days / decisionCount) * 100) : 0,
+      averageApprovalMinutesLast7Days:
+        approvalDurations.length > 0
+          ? this.roundMetric(
+              approvalDurations.reduce((sum, minutes) => sum + minutes, 0) / approvalDurations.length,
+            )
+          : null,
+    };
+  }
+
   private static buildCashFlowByCurrency(
     movements: StatsMovementRow[],
   ): CashFlowByCurrency[] {
@@ -474,6 +608,7 @@ export class StatisticsService {
         commissionByCurrency: [],
       },
       debtStats: EMPTY_DEBT_STATS,
+      actionableStats: EMPTY_ACTIONABLE_STATS,
     };
   }
 
@@ -497,7 +632,7 @@ export class StatisticsService {
         supabase
           .from('account_movements')
           .select(
-            'id, customer_id, amount, commission, commission_currency, currency, movement_type, created_at, related_transfer_id, is_commission_movement, pending_approval, approval_status, is_voided, from_customer_id, to_customer_id',
+            'id, customer_id, amount, commission, commission_currency, currency, movement_type, created_at, related_transfer_id, is_commission_movement, pending_approval, approval_status, is_voided, from_customer_id, to_customer_id, approved_at',
           )
           .in('customer_id', customerIds),
         supabase
@@ -570,6 +705,7 @@ export class StatisticsService {
         topCustomers: this.buildTopCustomers(nonSystemCustomers, movements, 5),
         commissionStats: this.buildCommissionStats(movements),
         debtStats,
+        actionableStats: this.buildActionableStats(movements, customers, userId),
       };
     } catch (error) {
       console.error('Error in fetchAllStatistics:', error);
@@ -597,7 +733,7 @@ export class StatisticsService {
       supabase
         .from('account_movements')
         .select(
-          'id, customer_id, amount, commission, commission_currency, currency, movement_type, created_at, related_transfer_id, is_commission_movement, pending_approval, approval_status, is_voided',
+          'id, customer_id, amount, commission, commission_currency, currency, movement_type, created_at, related_transfer_id, is_commission_movement, pending_approval, approval_status, is_voided, approved_at',
         )
         .in('customer_id', customerIds),
     ]);

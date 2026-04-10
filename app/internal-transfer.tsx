@@ -142,6 +142,18 @@ export default function InternalTransferScreen() {
           triggerRefresh('movements');
           const movementId = result.to_movement_id || result.from_movement_id;
 
+          let pendingApproval = false;
+          if (movementId) {
+            const { data: movementStatus } = await supabase
+              .from('account_movements')
+              .select('pending_approval, approval_status')
+              .eq('id', movementId)
+              .maybeSingle();
+
+            pendingApproval =
+              movementStatus?.pending_approval === true || movementStatus?.approval_status === 'pending';
+          }
+
           if (withPrint && movementId) {
             const customerName = formData.toType === 'customer' ? formData.toCustomerName : formData.fromCustomerName;
             const customerAccountNumber = formData.toType === 'customer' ? formData.toCustomerAccount : formData.fromCustomerAccount;
@@ -156,8 +168,10 @@ export default function InternalTransferScreen() {
             });
           } else {
             Alert.alert(
-              'نجح التحويل',
-              result.message,
+              pendingApproval ? 'تم تسجيل التحويل' : 'نجح التحويل',
+              pendingApproval
+                ? 'تم تسجيل التحويل بانتظار موافقة الطرف الآخر، ولن يدخل في الإجماليات قبل القبول.'
+                : result.message,
               [
                 {
                   text: 'حسناً',

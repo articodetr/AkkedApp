@@ -261,7 +261,22 @@ export default function NewMovementScreen() {
         throw new Error('لم يتم إرجاع بيانات الحركة');
       }
 
-      const movement = Array.isArray(insertedData) ? insertedData[0] : insertedData;
+      let movement = Array.isArray(insertedData) ? insertedData[0] : insertedData;
+
+      if (movement?.id) {
+        const { data: latestMovement } = await supabase
+          .from('account_movements')
+          .select('id, movement_number, amount, currency, pending_approval, approval_status, receipt_number, created_at')
+          .eq('id', movement.id)
+          .maybeSingle();
+
+        if (latestMovement) {
+          movement = {
+            ...movement,
+            ...latestMovement,
+          };
+        }
+      }
 
       const customerName = formData.operation_type === 'customer_to_shop'
         ? formData.from_customer_name
