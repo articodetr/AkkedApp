@@ -37,6 +37,15 @@ export interface CashFlowByCurrency {
   totalReceived: number;
   totalPaid: number;
   netFlow: number;
+  linkedReceived: number;
+  linkedPaid: number;
+  directReceived: number;
+  directPaid: number;
+  pendingAmount: number;
+  pendingCount: number;
+  internalTransferAmount: number;
+  internalTransferCount: number;
+  approvedCount: number;
 }
 
 export interface DebtStats {
@@ -158,6 +167,18 @@ export class StatisticsService {
 
   private static isApprovedCustomerMovement(movement: StatsMovementRow): boolean {
     return this.isApprovedMovement(movement) && !movement.is_commission_movement;
+  }
+
+  private static isPendingMovement(movement: StatsMovementRow): boolean {
+    return Boolean(movement.pending_approval) || movement.approval_status === 'pending';
+  }
+
+  private static isRejectedMovement(movement: StatsMovementRow): boolean {
+    return movement.approval_status === 'rejected';
+  }
+
+  private static isLinkedMovement(movement: StatsMovementRow): boolean {
+    return Boolean(movement.related_transfer_id) && !this.isInternalTransfer(movement);
   }
 
   private static isCompletedTransaction(transaction: StatsTransactionRow): boolean {
@@ -563,23 +584,67 @@ export class StatisticsService {
     const flowByCurrency = new Map<string, CashFlowByCurrency>();
 
     movements
-      .filter((movement) => this.isApprovedCustomerMovement(movement))
-      .filter((movement) => !this.isInternalTransfer(movement))
+      .filter((movement) => !movement.is_commission_movement)
       .forEach((movement) => {
+        const amount = Number(movement.amount || 0);
         const current = flowByCurrency.get(movement.currency) || {
           currency: movement.currency,
           totalReceived: 0,
           totalPaid: 0,
           netFlow: 0,
+          linkedReceived: 0,
+          linkedPaid: 0,
+          directReceived: 0,
+          directPaid: 0,
+          pendingAmount: 0,
+          pendingCount: 0,
+          internalTransferAmount: 0,
+          internalTransferCount: 0,
+          approvedCount: 0,
         };
 
-        if (movement.movement_type === 'outgoing') {
-          current.totalReceived += Number(movement.amount);
-        } else {
-          current.totalPaid += Number(movement.amount);
+        if (this.isInternalTransfer(movement)) {
+          current.internalTransferAmount += amount;
+          current.internalTransferCount += 1;
+          flowByCurrency.set(movement.currency, current);
+          return;
         }
 
+        if (this.isPendingMovement(movement)) {
+          current.pendingAmount += amount;
+          current.pendingCount += 1;
+          flowByCurrency.set(movement.currency, current);
+          return;
+        }
+
+        if (this.isRejectedMovement(movement) || !this.isApprovedCustomerMovement(movement)) {
+          flowByCurrency.set(movement.currency, current);
+          return;
+        }
+
+        const isLinked = this.isLinkedMovement(movement);
+
+        if (movement.movement_type === 'outgoing') {
+          current.totalReceived += amount;
+
+          if (isLinked) {
+            current.linkedReceived += amount;
+          } else {
+            current.directReceived += amount;
+          }
+        } else {
+          current.totalPaid += amount;
+
+          if (isLinked) {
+            current.linkedPaid += amount;
+          } else {
+            current.directPaid += amount;
+          }
+        }
+
+        current.approvedCount += 1;
         current.netFlow = current.totalReceived - current.totalPaid;
+
         flowByCurrency.set(movement.currency, current);
       });
 

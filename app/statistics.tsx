@@ -579,7 +579,7 @@ export default function StatisticsScreen() {
         <View style={styles.balancesSection}>
           <View style={styles.sectionHeader}>
             <Wallet size={24} color="#4F46E5" />
-            <Text style={styles.sectionTitle}>التدفق النقدي حسب العملة</Text>
+            <Text style={styles.sectionTitle}>التدفق المالي الواضح حسب العملة</Text>
           </View>
 
           {stats.cashFlowByCurrency.length === 0 ? (
@@ -606,7 +606,7 @@ export default function StatisticsScreen() {
                       <View style={styles.balanceItem}>
                         <View style={styles.balanceItemHeader}>
                           <TrendingDown size={18} color="#EF4444" />
-                          <Text style={styles.balanceItemLabel}>عليه</Text>
+                          <Text style={styles.balanceItemLabel}>عليه المعتمد</Text>
                         </View>
                         <Text style={[styles.balanceItemValue, { color: '#EF4444' }]}>
                           {formatAmount(flow.totalReceived)}
@@ -618,7 +618,7 @@ export default function StatisticsScreen() {
                       <View style={styles.balanceItem}>
                         <View style={styles.balanceItemHeader}>
                           <TrendingUp size={18} color="#10B981" />
-                          <Text style={styles.balanceItemLabel}>له</Text>
+                          <Text style={styles.balanceItemLabel}>له المعتمد</Text>
                         </View>
                         <Text style={[styles.balanceItemValue, { color: '#10B981' }]}>
                           {formatAmount(flow.totalPaid)}
@@ -629,7 +629,7 @@ export default function StatisticsScreen() {
                     <View style={styles.balanceSeparator} />
 
                     <View style={styles.netBalanceContainer}>
-                      <Text style={styles.netBalanceLabel}>الصافي</Text>
+                      <Text style={styles.netBalanceLabel}>الصافي الفعلي</Text>
                       <View style={styles.netBalanceValueContainer}>
                         <Text
                           style={[
@@ -653,6 +653,113 @@ export default function StatisticsScreen() {
                             ? 'الصافي له'
                             : 'متوازن'}
                       </Text>
+                    </View>
+
+                    <View
+                      style={{
+                        marginTop: 12,
+                        paddingTop: 12,
+                        borderTopWidth: 1,
+                        borderTopColor: '#E5E7EB',
+                        gap: 10,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          color: '#6B7280',
+                          textAlign: 'right',
+                          lineHeight: 20,
+                        }}
+                      >
+                        التدفق الفعلي أعلاه يعتمد على الحركات المعتمدة فقط، أما التفاصيل التالية فتوضح مصدر
+                        الحركة وما هو ما زال معلّقًا أو داخليًا.
+                      </Text>
+
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <View
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#F9FAFB',
+                            borderRadius: 12,
+                            padding: 12,
+                            borderWidth: 1,
+                            borderColor: '#E5E7EB',
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827', marginBottom: 8 }}>
+                            الحركات المرتبطة
+                          </Text>
+                          <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>
+                            عليه: {formatAmount(flow.linkedReceived)} {currencyInfo.symbol}
+                          </Text>
+                          <Text style={{ fontSize: 13, color: '#374151' }}>
+                            له: {formatAmount(flow.linkedPaid)} {currencyInfo.symbol}
+                          </Text>
+                        </View>
+
+                        <View
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#F9FAFB',
+                            borderRadius: 12,
+                            padding: 12,
+                            borderWidth: 1,
+                            borderColor: '#E5E7EB',
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827', marginBottom: 8 }}>
+                            الحركات غير المرتبطة
+                          </Text>
+                          <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>
+                            عليه: {formatAmount(flow.directReceived)} {currencyInfo.symbol}
+                          </Text>
+                          <Text style={{ fontSize: 13, color: '#374151' }}>
+                            له: {formatAmount(flow.directPaid)} {currencyInfo.symbol}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        <View
+                          style={{
+                            backgroundColor: '#FEF3C7',
+                            borderRadius: 999,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#92400E' }}>
+                            معلّق: {flow.pendingCount} حركة / {formatAmount(flow.pendingAmount)} {currencyInfo.symbol}
+                          </Text>
+                        </View>
+
+                        <View
+                          style={{
+                            backgroundColor: '#DBEAFE',
+                            borderRadius: 999,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#1D4ED8' }}>
+                            داخلي: {flow.internalTransferCount} حركة / {formatAmount(flow.internalTransferAmount)} {currencyInfo.symbol}
+                          </Text>
+                        </View>
+
+                        <View
+                          style={{
+                            backgroundColor: '#DCFCE7',
+                            borderRadius: 999,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#166534' }}>
+                            معتمد: {flow.approvedCount} حركة
+                          </Text>
+                        </View>
+                      </View>
                     </View>
                   </View>
                 </View>
