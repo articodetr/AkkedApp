@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
@@ -259,6 +260,7 @@ export default function NotificationDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { currentUser } = useAuth();
+  const { triggerRefresh } = useDataRefresh();
 
   const [notification, setNotification] = useState<NotificationDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -324,6 +326,7 @@ export default function NotificationDetailScreen() {
       if (error) throw error;
 
       await markAsReadAndRemove(notification.id);
+      triggerRefresh('movements');
       Alert.alert('تم القبول', 'تم اعتماد الحركة للطرفين، وأصبحت مؤثرة في الإجماليات بعد الموافقة.', [
         { text: 'حسنًا', onPress: () => router.back() },
       ]);
@@ -348,7 +351,7 @@ export default function NotificationDetailScreen() {
       setIsProcessing(true);
       setShowRejectModal(false);
 
-      const { data, error } = await supabase.rpc('reject_movement_with_reason', {
+      const { error } = await supabase.rpc('reject_movement_with_reason', {
         p_movement_id: notification.movement_id,
         p_user_name: currentUser.userName,
         p_reject_reason: trimmedRejectReason,
@@ -357,6 +360,7 @@ export default function NotificationDetailScreen() {
       if (error) throw error;
 
       await markAsReadAndRemove(notification.id);
+      triggerRefresh('movements');
       Alert.alert(
         'تم الرفض',
         `تم رفض الحركة للطرفين، ولن تؤثر في الإجماليات عند أي طرف.\n\nسبب الرفض: ${trimmedRejectReason}`,
@@ -390,6 +394,7 @@ export default function NotificationDetailScreen() {
             if (error) throw error;
 
             await markAsReadAndRemove(notification.id);
+            triggerRefresh('movements');
             Alert.alert('تمت الموافقة', 'تمت الموافقة على حذف الحركة بنجاح.', [
               { text: 'حسنًا', onPress: () => router.back() },
             ]);

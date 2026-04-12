@@ -298,9 +298,13 @@ export default function NewMovementScreen() {
         customerAccountNumber: customerAccountNumber,
       });
       setShowSuccessModal(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding movement:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء إضافة الحركة');
+      const errorMessage =
+        error?.message ||
+        error?.details ||
+        'حدث خطأ أثناء إضافة الحركة';
+      Alert.alert('خطأ', errorMessage);
     } finally {
       setIsLoading(false);
     }
