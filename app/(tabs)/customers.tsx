@@ -79,6 +79,10 @@ export default function CustomersScreen() {
 
       if (!customersResult.error && customersResult.data) {
         const balancesMap = new Map<string, CustomerBalanceByCurrency[]>();
+        const visibleCustomers = customersResult.data.filter(
+          (customer) =>
+            customer.user_id === currentUser.userId || customer.is_profit_loss_account,
+        );
 
         if (!balancesResult.error && balancesResult.data) {
           balancesResult.data.forEach((balance) => {
@@ -89,7 +93,7 @@ export default function CustomersScreen() {
           });
         }
 
-        const customersWithBalances: CustomerWithBalances[] = customersResult.data.map((customer) => ({
+        const customersWithBalances: CustomerWithBalances[] = visibleCustomers.map((customer) => ({
           ...customer,
           balances: balancesMap.get(customer.id) || [],
         }));

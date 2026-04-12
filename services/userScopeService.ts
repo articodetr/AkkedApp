@@ -1,19 +1,28 @@
 import { supabase } from '@/lib/supabase';
 import { Customer } from '@/types/database';
 
+export function buildOwnedCustomerFilter(
+  userId: string,
+  ownerField: string = 'user_id',
+): string {
+  return `${ownerField}.eq.${userId}`;
+}
+
 export function buildUserScopeFilter(
   userId: string,
   ownerField: string = 'user_id',
   linkedField: string = 'linked_user_id',
 ): string {
-  return `${ownerField}.eq.${userId},${linkedField}.eq.${userId}`;
+  void linkedField;
+  return buildOwnedCustomerFilter(userId, ownerField);
 }
 
 export function buildScopedCustomerFilter(
   userId: string,
   includeProfitLoss: boolean = false,
 ): string {
-  const filters = [buildUserScopeFilter(userId)];
+  // User-facing customer lists should only show customers owned by the current user.
+  const filters = [buildOwnedCustomerFilter(userId)];
 
   if (includeProfitLoss) {
     filters.push('phone.eq.PROFIT_LOSS_ACCOUNT');

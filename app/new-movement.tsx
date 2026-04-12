@@ -31,6 +31,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { sortCustomersByDisplayPriority } from '@/utils/customerDisplay';
 import { isPendingMovement } from '@/utils/movementApproval';
+import { buildOwnedCustomerFilter } from '@/services/userScopeService';
 
 type OperationType = 'shop_to_customer' | 'customer_to_shop' | '';
 
@@ -151,7 +152,7 @@ export default function NewMovementScreen() {
         .from('customers')
         .select('*')
         .neq('phone', 'PROFIT_LOSS_ACCOUNT')
-        .or(`user_id.eq.${currentUser.userId},linked_user_id.eq.${currentUser.userId}`)
+        .or(buildOwnedCustomerFilter(currentUser.userId))
         .order('name', { ascending: true });
 
       if (!error && data) {

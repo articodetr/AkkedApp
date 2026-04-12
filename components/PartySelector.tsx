@@ -18,6 +18,7 @@ import { Customer } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { sortCustomersByDisplayPriority } from '@/utils/customerDisplay';
+import { buildScopedCustomerFilter } from '@/services/userScopeService';
 
 interface PartySelectorProps {
   label: string;
@@ -83,7 +84,7 @@ export default function PartySelector({
       const { data, error } = await supabase
         .from('customers')
         .select('*')
-        .or(`user_id.eq.${currentUser.userId},linked_user_id.eq.${currentUser.userId},phone.eq.PROFIT_LOSS_ACCOUNT`)
+        .or(buildScopedCustomerFilter(currentUser.userId, true))
         .order('name');
 
       if (error) {

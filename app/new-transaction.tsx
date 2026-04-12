@@ -19,6 +19,7 @@ import { KeyboardAwareView } from '@/components/KeyboardAwareView';
 import { useAuth } from '@/contexts/AuthContext';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { sortCustomersByDisplayPriority } from '@/utils/customerDisplay';
+import { buildOwnedCustomerFilter } from '@/services/userScopeService';
 
 export default function NewTransactionScreen() {
   const router = useRouter();
@@ -78,7 +79,7 @@ export default function NewTransactionScreen() {
         .from('customers')
         .select('*')
         .neq('phone', 'PROFIT_LOSS_ACCOUNT')
-        .or(`user_id.eq.${currentUser.userId},linked_user_id.eq.${currentUser.userId}`)
+        .or(buildOwnedCustomerFilter(currentUser.userId))
         .order('name', { ascending: true });
 
       if (!error && data) {
