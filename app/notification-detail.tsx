@@ -324,7 +324,7 @@ export default function NotificationDetailScreen() {
       if (error) throw error;
 
       await markAsReadAndRemove(notification.id);
-      Alert.alert('تم القبول', 'تم اعتماد الحركة، وأصبحت مؤثرة في الإجماليات.', [
+      Alert.alert('تم القبول', 'تم اعتماد الحركة للطرفين، وأصبحت مؤثرة في الإجماليات بعد الموافقة.', [
         { text: 'حسنًا', onPress: () => router.back() },
       ]);
     } catch (error: any) {
@@ -359,7 +359,7 @@ export default function NotificationDetailScreen() {
       await markAsReadAndRemove(notification.id);
       Alert.alert(
         'تم الرفض',
-        `تم رفض الحركة، ولن تؤثر في الإجماليات.\n\nسبب الرفض: ${trimmedRejectReason}`,
+        `تم رفض الحركة للطرفين، ولن تؤثر في الإجماليات عند أي طرف.\n\nسبب الرفض: ${trimmedRejectReason}`,
         [{ text: 'حسنًا', onPress: () => router.back() }],
       );
     } catch (error: any) {

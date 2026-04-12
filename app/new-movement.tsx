@@ -52,6 +52,9 @@ export default function NewMovementScreen() {
   const [isSavingPdf, setIsSavingPdf] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const pendingApprovalNotice =
+    'هذه الحركة مسجلة بانتظار موافقة الطرف الآخر، ولن تؤثر في الإجماليات أو يُسمح بإصدار السند النهائي قبل الاعتماد.';
+
   const [formData, setFormData] = useState({
     operation_type: '' as OperationType,
     from_customer_id: '',
@@ -304,6 +307,13 @@ export default function NewMovementScreen() {
   };
 
   const handleOpenReceipt = () => {
+    if (!savedMovementData) return;
+
+    if (isPendingMovement(savedMovementData)) {
+      Alert.alert('بانتظار الموافقة', pendingApprovalNotice);
+      return;
+    }
+
     setShowSuccessModal(false);
     router.push({
       pathname: '/receipt-preview',
@@ -361,6 +371,11 @@ export default function NewMovementScreen() {
 
   const handleDownloadFromSuccess = async () => {
     if (!savedMovementData) return;
+
+    if (isPendingMovement(savedMovementData)) {
+      Alert.alert('بانتظار الموافقة', pendingApprovalNotice);
+      return;
+    }
 
     setIsSavingPdf(true);
     try {
@@ -998,36 +1013,48 @@ export default function NewMovementScreen() {
             <View style={styles.successIconContainer}>
               <CheckCircle size={64} color="#10B981" />
             </View>
-            <Text style={styles.successTitle}>تم الحفظ بنجاح</Text>
+            <Text style={styles.successTitle}>
+              {isPendingMovement(savedMovementData) ? 'تم تسجيل الطلب' : 'تم الحفظ بنجاح'}
+            </Text>
             <Text style={styles.successSubtitle}>
               {isPendingMovement(savedMovementData)
-                ? 'تم تسجيل الحركة بانتظار موافقة الطرف الآخر، ولن تؤثر في الإجماليات قبل القبول.'
+                ? pendingApprovalNotice
                 : 'تم إضافة الحركة المالية إلى النظام'}
             </Text>
 
             <View style={styles.successButtonsContainer}>
-              <TouchableOpacity
-                style={styles.openReceiptButton}
-                onPress={() => handleOpenReceipt()}
-              >
-                <FileText size={20} color="#FFFFFF" />
-                <Text style={styles.openReceiptButtonText}>فتح السند</Text>
-              </TouchableOpacity>
+              {isPendingMovement(savedMovementData) ? (
+                <View style={styles.pendingInfoBox}>
+                  <Text style={styles.pendingInfoBoxText}>
+                    سيصبح فتح السند وحفظه في الجهاز متاحًا بعد موافقة الطرف الآخر فقط.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.openReceiptButton}
+                    onPress={() => handleOpenReceipt()}
+                  >
+                    <FileText size={20} color="#FFFFFF" />
+                    <Text style={styles.openReceiptButtonText}>فتح السند</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.saveButton, isSavingPdf && styles.saveButtonDisabled]}
-                onPress={() => handleDownloadFromSuccess()}
-                disabled={isSavingPdf}
-              >
-                {isSavingPdf ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Download size={20} color="#FFFFFF" />
-                    <Text style={styles.saveButtonText}>حفظ في الجهاز</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.saveButton, isSavingPdf && styles.saveButtonDisabled]}
+                    onPress={() => handleDownloadFromSuccess()}
+                    disabled={isSavingPdf}
+                  >
+                    {isSavingPdf ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Download size={20} color="#FFFFFF" />
+                        <Text style={styles.saveButtonText}>حفظ في الجهاز</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
 
               <TouchableOpacity
                 style={styles.closeModalButton}
@@ -1441,6 +1468,21 @@ const styles = StyleSheet.create({
   successButtonsContainer: {
     width: '100%',
     gap: 12,
+  },
+  pendingInfoBox: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  pendingInfoBoxText: {
+    fontSize: 15,
+    color: '#92400E',
+    textAlign: 'center',
+    lineHeight: 22,
+    fontWeight: '600',
   },
   openReceiptButton: {
     backgroundColor: '#3B82F6',
