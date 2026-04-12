@@ -178,7 +178,9 @@ export class StatisticsService {
   }
 
   private static isLinkedMovement(movement: StatsMovementRow): boolean {
-    return Boolean(movement.related_transfer_id) && !this.isInternalTransfer(movement);
+    return Boolean(
+      movement.related_transfer_id || movement.from_customer_id || movement.to_customer_id,
+    );
   }
 
   private static isCompletedTransaction(transaction: StatsTransactionRow): boolean {
@@ -603,12 +605,8 @@ export class StatisticsService {
           approvedCount: 0,
         };
 
-        if (this.isInternalTransfer(movement)) {
-          current.internalTransferAmount += amount;
-          current.internalTransferCount += 1;
-          flowByCurrency.set(movement.currency, current);
-          return;
-        }
+        const isInternal = this.isInternalTransfer(movement);
+        const isLinked = this.isLinkedMovement(movement);
 
         if (this.isPendingMovement(movement)) {
           current.pendingAmount += amount;
@@ -622,7 +620,10 @@ export class StatisticsService {
           return;
         }
 
-        const isLinked = this.isLinkedMovement(movement);
+        if (isInternal) {
+          current.internalTransferAmount += amount;
+          current.internalTransferCount += 1;
+        }
 
         if (movement.movement_type === 'outgoing') {
           current.totalReceived += amount;
