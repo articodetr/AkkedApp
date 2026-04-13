@@ -13,8 +13,7 @@ export function buildUserScopeFilter(
   ownerField: string = 'user_id',
   linkedField: string = 'linked_user_id',
 ): string {
-  void linkedField;
-  return buildOwnedCustomerFilter(userId, ownerField);
+  return `${ownerField}.eq.${userId},${linkedField}.eq.${userId}`;
 }
 
 export function buildScopedCustomerFilter(

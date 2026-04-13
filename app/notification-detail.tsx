@@ -26,11 +26,11 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { isPendingMovement } from '@/utils/movementApproval';
+import { useDataRefresh } from '@/contexts/DataRefreshContext';
 
 interface NotificationDetail {
   id: string;
@@ -351,7 +351,7 @@ export default function NotificationDetailScreen() {
       setIsProcessing(true);
       setShowRejectModal(false);
 
-      const { error } = await supabase.rpc('reject_movement_with_reason', {
+      const { data, error } = await supabase.rpc('reject_movement_with_reason', {
         p_movement_id: notification.movement_id,
         p_user_name: currentUser.userName,
         p_reject_reason: trimmedRejectReason,
@@ -413,6 +413,7 @@ export default function NotificationDetailScreen() {
     if (!notification) return;
     setIsProcessing(true);
     await markAsReadAndRemove(notification.id);
+    triggerRefresh('movements');
     router.back();
   };
 
