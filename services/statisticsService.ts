@@ -1,7 +1,7 @@
 import { endOfDay, startOfDay, subDays } from 'date-fns';
 import { Customer, CustomerBalanceByCurrency, TotalBalanceByCurrency } from '@/types/database';
 import { supabase } from '@/lib/supabase';
-import { buildUserScopeFilter, fetchAccessibleCustomers } from '@/services/userScopeService';
+import { buildUserScopeFilter } from '@/services/userScopeService';
 import { isPostedMovement } from '@/utils/movementApproval';
 
 export interface PeriodStats {
@@ -687,7 +687,17 @@ export class StatisticsService {
 
   static async fetchAllStatistics(userId: string): Promise<StatisticsData> {
     try {
-      const customers = await fetchAccessibleCustomers(userId, true);
+      const customersResult = await supabase
+        .from('customers')
+        .select('*')
+        .or(`${buildUserScopeFilter(userId)},phone.eq.PROFIT_LOSS_ACCOUNT`)
+        .order('name', { ascending: true });
+
+      if (customersResult.error) {
+        throw customersResult.error;
+      }
+
+      const customers = (customersResult.data || []) as Customer[];
       const customerIds = customers.map((customer) => customer.id);
 
       if (customerIds.length === 0) {
@@ -791,7 +801,17 @@ export class StatisticsService {
     startDate: Date,
     endDate: Date,
   ): Promise<PeriodStats> {
-    const customers = await fetchAccessibleCustomers(userId, true);
+    const customersResult = await supabase
+      .from('customers')
+      .select('*')
+      .or(`${buildUserScopeFilter(userId)},phone.eq.PROFIT_LOSS_ACCOUNT`)
+      .order('name', { ascending: true });
+
+    if (customersResult.error) {
+      throw customersResult.error;
+    }
+
+    const customers = (customersResult.data || []) as Customer[];
     const customerIds = customers.map((customer) => customer.id);
 
     if (customerIds.length === 0) {

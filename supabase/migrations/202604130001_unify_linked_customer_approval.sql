@@ -176,19 +176,19 @@ DECLARE
   v_approval_status text := 'approved';
   v_notes text;
 BEGIN
-  SELECT id, COALESCE(NULLIF(trim(full_name), ''), user_name)
+  SELECT a.id, COALESCE(NULLIF(trim(a.full_name), ''), a.user_name)
   INTO v_user_id, v_user_full_name
-  FROM public.app_security
-  WHERE user_name = p_user_name;
+  FROM public.app_security a
+  WHERE a.user_name = p_user_name;
 
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'User not found: %', p_user_name;
   END IF;
 
-  SELECT *
+  SELECT c.*
   INTO v_customer
-  FROM public.customers
-  WHERE id = p_customer_id;
+  FROM public.customers c
+  WHERE c.id = p_customer_id;
 
   IF v_customer IS NULL THEN
     RAISE EXCEPTION 'Customer not found: %', p_customer_id;
@@ -483,10 +483,10 @@ DECLARE
   v_creator_movement_type text;
   v_creator_customer_name text;
 BEGIN
-  SELECT id, COALESCE(NULLIF(trim(full_name), ''), user_name)
+  SELECT a.id, COALESCE(NULLIF(trim(a.full_name), ''), a.user_name)
   INTO v_user_id, v_user_full_name
-  FROM public.app_security
-  WHERE user_name = p_user_name;
+  FROM public.app_security a
+  WHERE a.user_name = p_user_name;
 
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'User not found: %', p_user_name;
@@ -653,10 +653,10 @@ BEGIN
     RAISE EXCEPTION 'Reject reason is required';
   END IF;
 
-  SELECT id, COALESCE(NULLIF(trim(full_name), ''), user_name)
+  SELECT a.id, COALESCE(NULLIF(trim(a.full_name), ''), a.user_name)
   INTO v_user_id, v_user_full_name
-  FROM public.app_security
-  WHERE user_name = p_user_name;
+  FROM public.app_security a
+  WHERE a.user_name = p_user_name;
 
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'User not found: %', p_user_name;
