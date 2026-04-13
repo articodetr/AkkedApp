@@ -1,7 +1,6 @@
 import { endOfDay, startOfDay, subDays } from 'date-fns';
 import { Customer, CustomerBalanceByCurrency, TotalBalanceByCurrency } from '@/types/database';
 import { supabase } from '@/lib/supabase';
-import { buildUserScopeFilter, fetchAccessibleCustomers } from '@/services/userScopeService';
 import { isPostedMovement } from '@/utils/movementApproval';
 
 export interface PeriodStats {
@@ -179,6 +178,10 @@ export class StatisticsService {
   }
 
   private static isLinkedMovement(movement: StatsMovementRow): boolean {
+    if (this.isInternalTransfer(movement)) {
+      return false;
+    }
+
     return Boolean(
       movement.related_transfer_id ||
         movement.mirror_movement_id ||
@@ -627,6 +630,8 @@ export class StatisticsService {
         if (isInternal) {
           current.internalTransferAmount += amount;
           current.internalTransferCount += 1;
+          flowByCurrency.set(movement.currency, current);
+          return;
         }
 
         if (movement.movement_type === 'outgoing') {
@@ -684,7 +689,19 @@ export class StatisticsService {
 
   static async fetchAllStatistics(userId: string): Promise<StatisticsData> {
     try {
-      const customers = await fetchAccessibleCustomers(userId, true);
+      const customerScopeFilter = `user_id.eq.${userId},linked_user_id.eq.${userId},phone.eq.PROFIT_LOSS_ACCOUNT`;
+
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('*')
+        .or(customerScopeFilter)
+        .order('name', { ascending: true });
+
+      if (customersError) {
+        throw customersError;
+      }
+
+      const customers = (customersData || []) as Customer[];
       const customerIds = customers.map((customer) => customer.id);
 
       if (customerIds.length === 0) {
@@ -693,6 +710,8 @@ export class StatisticsService {
 
       const nonSystemCustomers = customers.filter((customer) => !customer.is_profit_loss_account);
       const nonSystemCustomerIds = new Set(nonSystemCustomers.map((customer) => customer.id));
+
+      const balanceScopeFilter = `user_id.eq.${userId},linked_user_id.eq.${userId}`;
 
       const [transactionsResult, movementsResult, balancesResult] = await Promise.all([
         supabase
@@ -708,7 +727,7 @@ export class StatisticsService {
         supabase
           .from('customer_balances_by_currency')
           .select('*')
-          .or(buildUserScopeFilter(userId)),
+          .or(balanceScopeFilter),
       ]);
 
       if (transactionsResult.error) {
@@ -732,6 +751,12 @@ export class StatisticsService {
       const approvedCustomerMovements = movements.filter((movement) =>
         this.isApprovedCustomerMovement(movement),
       );
+      const visibleCustomerMovements = movements.filter(
+        (movement) =>
+          !movement.is_commission_movement &&
+          !movement.is_voided &&
+          !this.isRejectedMovement(movement),
+      );
       const nonSystemBalances = balances.filter((balance) =>
         nonSystemCustomerIds.has(balance.customer_id),
       );
@@ -747,25 +772,25 @@ export class StatisticsService {
       return {
         totalCustomers: nonSystemCustomers.length,
         totalTransactions: transactions.length,
-        totalMovements: approvedCustomerMovements.length,
-        totalAmount: approvedCustomerMovements.reduce(
+        totalMovements: visibleCustomerMovements.length,
+        totalAmount: visibleCustomerMovements.reduce(
           (sum, movement) => sum + Number(movement.amount),
           0,
         ),
         totalDebts: debtStats.totalOwedToUs,
         totalWeOwe: debtStats.totalWeOwe,
         periodStats: {
-          today: this.calculatePeriodStats(transactions, approvedCustomerMovements, today, today),
+          today: this.calculatePeriodStats(transactions, visibleCustomerMovements, today, today),
           yesterday: this.calculatePeriodStats(
             transactions,
-            approvedCustomerMovements,
+            visibleCustomerMovements,
             yesterday,
             yesterday,
           ),
-          week: this.calculatePeriodStats(transactions, approvedCustomerMovements, weekAgo, today),
+          week: this.calculatePeriodStats(transactions, visibleCustomerMovements, weekAgo, today),
           month: this.calculatePeriodStats(
             transactions,
-            approvedCustomerMovements,
+            visibleCustomerMovements,
             monthAgo,
             today,
           ),
@@ -788,8 +813,18 @@ export class StatisticsService {
     startDate: Date,
     endDate: Date,
   ): Promise<PeriodStats> {
-    const customers = await fetchAccessibleCustomers(userId, true);
-    const customerIds = customers.map((customer) => customer.id);
+    const customerScopeFilter = `user_id.eq.${userId},linked_user_id.eq.${userId},phone.eq.PROFIT_LOSS_ACCOUNT`;
+
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id')
+      .or(customerScopeFilter);
+
+    if (customersError) {
+      throw customersError;
+    }
+
+    const customerIds = (customersData || []).map((customer) => customer.id as string);
 
     if (customerIds.length === 0) {
       return this.createEmptyPeriodStats();
@@ -819,8 +854,11 @@ export class StatisticsService {
     const transactions = ((transactionsResult.data || []) as StatsTransactionRow[]).filter(
       (transaction) => this.isCompletedTransaction(transaction),
     );
-    const movements = ((movementsResult.data || []) as StatsMovementRow[]).filter((movement) =>
-      this.isApprovedCustomerMovement(movement),
+    const movements = ((movementsResult.data || []) as StatsMovementRow[]).filter(
+      (movement) =>
+        !movement.is_commission_movement &&
+        !movement.is_voided &&
+        !this.isRejectedMovement(movement),
     );
 
     return this.calculatePeriodStats(transactions, movements, startDate, endDate);
