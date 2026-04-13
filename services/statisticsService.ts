@@ -108,6 +108,7 @@ interface StatsMovementRow {
   movement_type: 'incoming' | 'outgoing';
   created_at: string;
   related_transfer_id?: string | null;
+  mirror_movement_id?: string | null;
   is_commission_movement?: boolean | null;
   pending_approval?: boolean | null;
   approval_status?: 'pending' | 'approved' | 'rejected' | null;
@@ -179,7 +180,10 @@ export class StatisticsService {
 
   private static isLinkedMovement(movement: StatsMovementRow): boolean {
     return Boolean(
-      movement.related_transfer_id || movement.from_customer_id || movement.to_customer_id,
+      movement.related_transfer_id ||
+        movement.mirror_movement_id ||
+        movement.from_customer_id ||
+        movement.to_customer_id,
     );
   }
 
@@ -698,7 +702,7 @@ export class StatisticsService {
         supabase
           .from('account_movements')
           .select(
-            'id, customer_id, amount, commission, commission_currency, currency, movement_type, created_at, related_transfer_id, is_commission_movement, pending_approval, approval_status, is_voided, from_customer_id, to_customer_id, approved_at',
+            'id, customer_id, amount, commission, commission_currency, currency, movement_type, created_at, related_transfer_id, mirror_movement_id, is_commission_movement, pending_approval, approval_status, is_voided, from_customer_id, to_customer_id, approved_at',
           )
           .in('customer_id', customerIds),
         supabase
@@ -799,7 +803,7 @@ export class StatisticsService {
       supabase
         .from('account_movements')
         .select(
-          'id, customer_id, amount, commission, commission_currency, currency, movement_type, created_at, related_transfer_id, is_commission_movement, pending_approval, approval_status, is_voided, approved_at',
+          'id, customer_id, amount, commission, commission_currency, currency, movement_type, created_at, related_transfer_id, mirror_movement_id, is_commission_movement, pending_approval, approval_status, is_voided, from_customer_id, to_customer_id, approved_at',
         )
         .in('customer_id', customerIds),
     ]);
