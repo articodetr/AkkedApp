@@ -19,6 +19,7 @@ import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowRight, Phone, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon, Bell } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { buildScopedCustomerFilter } from '@/services/userScopeService';
 import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
 import { format, isSameMonth, isSameYear, startOfDay, endOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -292,7 +293,12 @@ export default function CustomerDetailsScreen() {
       console.log('[CustomerDetails] Loading data for user:', currentUser.userName);
 
       const [customerResult, movementsResult] = await Promise.all([
-        supabase.from('customers').select('*, linked_user:app_security!customers_linked_user_id_fkey(id, user_name, full_name, account_number)').eq('id', id).maybeSingle(),
+        supabase
+          .from('customers')
+          .select('*, linked_user:app_security!customers_linked_user_id_fkey(id, user_name, full_name, account_number)')
+          .eq('id', id)
+          .or(buildScopedCustomerFilter(currentUser.userId, true))
+          .maybeSingle(),
         supabase.rpc('get_customer_movements_with_user', {
           p_user_name: currentUser.userName,
           p_customer_id: id

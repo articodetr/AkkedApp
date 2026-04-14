@@ -16,7 +16,7 @@ import { Customer, CustomerBalanceByCurrency, CURRENCIES } from '@/types/databas
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
-import { buildScopedCustomerFilter, buildUserScopeFilter } from '@/services/userScopeService';
+import { buildScopedCustomerFilter } from '@/services/userScopeService';
 import { sortCustomersKeepingOriginalOrder } from '@/utils/customerDisplay';
 
 interface CustomerWithBalances extends Customer {
@@ -50,7 +50,6 @@ export default function CustomersScreen() {
 
   const loadCustomers = async () => {
     try {
-      // التحقق من وجود المستخدم الحالي
       if (!currentUser?.userId) {
         console.warn('[Customers] No current user found, showing empty list');
         setCustomers([]);
@@ -58,53 +57,53 @@ export default function CustomersScreen() {
         return;
       }
 
-      // بناء الاستعلام للعملاء حسب المستخدم الحالي
-      const customersQuery = supabase
+      const { data: customersData, error: customersError } = await supabase
         .from('customers_with_last_activity')
         .select('*')
         .or(buildScopedCustomerFilter(currentUser.userId, true))
         .order('is_profit_loss_account', { ascending: false })
         .order('last_activity', { ascending: false });
 
-      // بناء الاستعلام للأرصدة
-      const balancesQuery = supabase
-        .from('customer_balances_by_currency')
-        .select('*')
-        .or(buildUserScopeFilter(currentUser.userId));
+      if (customersError) {
+        throw customersError;
+      }
 
-      const [customersResult, balancesResult] = await Promise.all([
-        customersQuery,
-        balancesQuery,
-      ]);
+      const visibleCustomers = (customersData || []).filter(
+        (customer) => customer.user_id === currentUser.userId || customer.is_profit_loss_account,
+      );
 
-      if (!customersResult.error && customersResult.data) {
-        const balancesMap = new Map<string, CustomerBalanceByCurrency[]>();
-        const visibleCustomers = customersResult.data.filter(
-          (customer) =>
-            customer.user_id === currentUser.userId || customer.is_profit_loss_account,
-        );
+      const visibleCustomerIds = visibleCustomers.map((customer) => customer.id);
+      const balancesMap = new Map<string, CustomerBalanceByCurrency[]>();
 
-        if (!balancesResult.error && balancesResult.data) {
-          balancesResult.data.forEach((balance) => {
-            if (!balancesMap.has(balance.customer_id)) {
-              balancesMap.set(balance.customer_id, []);
-            }
-            balancesMap.get(balance.customer_id)?.push(balance);
-          });
+      if (visibleCustomerIds.length > 0) {
+        const { data: balancesData, error: balancesError } = await supabase
+          .from('customer_balances_by_currency')
+          .select('*')
+          .in('customer_id', visibleCustomerIds);
+
+        if (balancesError) {
+          throw balancesError;
         }
 
-        const customersWithBalances: CustomerWithBalances[] = visibleCustomers.map((customer) => ({
-          ...customer,
-          balances: balancesMap.get(customer.id) || [],
-        }));
-
-        const systemCustomers = customersWithBalances.filter((customer) => customer.is_profit_loss_account);
-        const regularCustomers = sortCustomersKeepingOriginalOrder(
-          customersWithBalances.filter((customer) => !customer.is_profit_loss_account),
-        );
-
-        setCustomers([...systemCustomers, ...regularCustomers]);
+        (balancesData || []).forEach((balance) => {
+          if (!balancesMap.has(balance.customer_id)) {
+            balancesMap.set(balance.customer_id, []);
+          }
+          balancesMap.get(balance.customer_id)?.push(balance);
+        });
       }
+
+      const customersWithBalances: CustomerWithBalances[] = visibleCustomers.map((customer) => ({
+        ...customer,
+        balances: balancesMap.get(customer.id) || [],
+      }));
+
+      const systemCustomers = customersWithBalances.filter((customer) => customer.is_profit_loss_account);
+      const regularCustomers = sortCustomersKeepingOriginalOrder(
+        customersWithBalances.filter((customer) => !customer.is_profit_loss_account),
+      );
+
+      setCustomers([...systemCustomers, ...regularCustomers]);
     } catch (error) {
       console.error('Error loading customers:', error);
     } finally {

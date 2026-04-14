@@ -115,6 +115,16 @@ export default function StatisticsScreen() {
     return format(date, 'dd MMM yyyy', { locale: ar });
   };
 
+  const formatActivityDate = (value: string) => {
+    const parsedDate = new Date(value);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return 'غير محدد';
+    }
+
+    return format(parsedDate, 'dd MMM', { locale: ar });
+  };
+
   const getCurrencyInfo = (code: string) => {
     const currency = CURRENCIES.find((c) => c.code === code);
     return currency || { code, name: code, symbol: code };
@@ -843,9 +853,9 @@ export default function StatisticsScreen() {
                   </View>
                   <View style={styles.topCustomerStatDivider} />
                   <View style={styles.topCustomerStatItem}>
-                    <Text style={styles.topCustomerStatLabel}>الحجم</Text>
+                    <Text style={styles.topCustomerStatLabel}>آخر نشاط</Text>
                     <Text style={styles.topCustomerStatValue}>
-                      {formatAmount(customer.totalVolume)}
+                      {formatActivityDate(customer.lastActivity)}
                     </Text>
                   </View>
                 </View>

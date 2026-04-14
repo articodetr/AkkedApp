@@ -1,7 +1,7 @@
 import { endOfDay, startOfDay, subDays } from 'date-fns';
 import { Customer, CustomerBalanceByCurrency, TotalBalanceByCurrency } from '@/types/database';
 import { supabase } from '@/lib/supabase';
-import { buildUserScopeFilter } from '@/services/userScopeService';
+import { buildScopedCustomerFilter } from '@/services/userScopeService';
 import { isPostedMovement } from '@/utils/movementApproval';
 
 export interface PeriodStats {
@@ -632,7 +632,7 @@ export class StatisticsService {
           return;
         }
 
-        if (movement.movement_type === 'outgoing') {
+        if (movement.movement_type === 'incoming') {
           current.totalReceived += amount;
 
           if (isLinked) {
@@ -690,7 +690,7 @@ export class StatisticsService {
       const customersResult = await supabase
         .from('customers')
         .select('*')
-        .or(`${buildUserScopeFilter(userId)},phone.eq.PROFIT_LOSS_ACCOUNT`)
+        .or(buildScopedCustomerFilter(userId, true))
         .order('name', { ascending: true });
 
       if (customersResult.error) {
@@ -721,7 +721,7 @@ export class StatisticsService {
         supabase
           .from('customer_balances_by_currency')
           .select('*')
-          .or(buildUserScopeFilter(userId)),
+          .in('customer_id', customerIds),
       ]);
 
       if (transactionsResult.error) {
@@ -804,7 +804,7 @@ export class StatisticsService {
     const customersResult = await supabase
       .from('customers')
       .select('*')
-      .or(`${buildUserScopeFilter(userId)},phone.eq.PROFIT_LOSS_ACCOUNT`)
+      .or(buildScopedCustomerFilter(userId, true))
       .order('name', { ascending: true });
 
     if (customersResult.error) {
