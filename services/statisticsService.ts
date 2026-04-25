@@ -66,6 +66,36 @@ export interface ActionableStats {
   averageApprovalMinutesLast7Days: number | null;
 }
 
+export interface StatisticsDebugData {
+  inputUserId?: string;
+  selectedUser?: {
+    id?: string;
+    user_name?: string;
+    role?: string;
+    is_active?: boolean;
+  } | null;
+  allUsers: number;
+  allCustomers: number;
+  scopedCustomers: number;
+  allMovements: number;
+  scopedMovements: number;
+  allNotificationsForUser: number;
+  functionSignatures: string[];
+  movementStatusCounts: Array<{
+    status: string;
+    is_voided: boolean;
+    is_commission: boolean;
+    count: number;
+    amount: number;
+  }>;
+  currencyCounts: Array<{
+    currency: string;
+    count: number;
+    amount: number;
+  }>;
+  latestScopedMovements: Array<Record<string, unknown>>;
+}
+
 export interface StatisticsData {
   totalCustomers: number;
   totalTransactions: number;
@@ -85,6 +115,7 @@ export interface StatisticsData {
   commissionStats: CommissionStats;
   debtStats: DebtStats;
   actionableStats: ActionableStats;
+  debug?: StatisticsDebugData | null;
 }
 
 const EMPTY_PERIOD_STATS: PeriodStats = {
@@ -120,25 +151,27 @@ const EMPTY_ACTIONABLE_STATS: ActionableStats = {
   averageApprovalMinutesLast7Days: null,
 };
 
-type MaybeRecord = Record<string, any> | null | undefined;
+type LooseRecord = Record<string, any>;
 
-function asNumber(value: unknown, fallback: number = 0): number {
+function asNumber(value: unknown, fallback = 0): number {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? numericValue : fallback;
 }
 
-function asString(value: unknown, fallback: string = ''): string {
+function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
-function asArray<T = any>(value: unknown): T[] {
+function asBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function asArray<T = LooseRecord>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
-function normalizeCurrencyAmountList(
-  value: unknown,
-): { currency: string; amount: number }[] {
-  return asArray<MaybeRecord>(value)
+function normalizeCurrencyAmountList(value: unknown): { currency: string; amount: number }[] {
+  return asArray<LooseRecord>(value)
     .map((item) => ({
       currency: asString(item?.currency),
       amount: asNumber(item?.amount),
@@ -147,7 +180,7 @@ function normalizeCurrencyAmountList(
 }
 
 function normalizePeriodStats(value: unknown): PeriodStats {
-  const item = (value || {}) as Record<string, any>;
+  const item = (value || {}) as LooseRecord;
 
   return {
     transactions: asNumber(item.transactions),
@@ -156,20 +189,57 @@ function normalizePeriodStats(value: unknown): PeriodStats {
     transactionAmount: asNumber(item.transactionAmount),
     movementAmount: asNumber(item.movementAmount),
     commissionAmount: asNumber(item.commissionAmount),
-    transactionAmountsByCurrency: normalizeCurrencyAmountList(
-      item.transactionAmountsByCurrency,
-    ),
-    movementAmountsByCurrency: normalizeCurrencyAmountList(
-      item.movementAmountsByCurrency,
-    ),
-    commissionAmountsByCurrency: normalizeCurrencyAmountList(
-      item.commissionAmountsByCurrency,
-    ),
+    transactionAmountsByCurrency: normalizeCurrencyAmountList(item.transactionAmountsByCurrency),
+    movementAmountsByCurrency: normalizeCurrencyAmountList(item.movementAmountsByCurrency),
+    commissionAmountsByCurrency: normalizeCurrencyAmountList(item.commissionAmountsByCurrency),
   };
 }
 
-function normalizeStatisticsPayload(value: unknown): StatisticsData {
-  const item = (value || {}) as Record<string, any>;
+function normalizeDebugPayload(value: unknown): StatisticsDebugData | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const item = value as LooseRecord;
+  const selectedUser = item.selectedUser && typeof item.selectedUser === 'object'
+    ? (item.selectedUser as LooseRecord)
+    : null;
+
+  return {
+    inputUserId: asString(item.inputUserId),
+    selectedUser: selectedUser
+      ? {
+          id: asString(selectedUser.id),
+          user_name: asString(selectedUser.user_name),
+          role: asString(selectedUser.role),
+          is_active: asBoolean(selectedUser.is_active),
+        }
+      : null,
+    allUsers: asNumber(item.allUsers),
+    allCustomers: asNumber(item.allCustomers),
+    scopedCustomers: asNumber(item.scopedCustomers),
+    allMovements: asNumber(item.allMovements),
+    scopedMovements: asNumber(item.scopedMovements),
+    allNotificationsForUser: asNumber(item.allNotificationsForUser),
+    functionSignatures: asArray<string>(item.functionSignatures),
+    movementStatusCounts: asArray<LooseRecord>(item.movementStatusCounts).map((row) => ({
+      status: asString(row.status),
+      is_voided: asBoolean(row.is_voided),
+      is_commission: asBoolean(row.is_commission),
+      count: asNumber(row.count),
+      amount: asNumber(row.amount),
+    })),
+    currencyCounts: asArray<LooseRecord>(item.currencyCounts).map((row) => ({
+      currency: asString(row.currency),
+      count: asNumber(row.count),
+      amount: asNumber(row.amount),
+    })),
+    latestScopedMovements: asArray<Record<string, unknown>>(item.latestScopedMovements),
+  };
+}
+
+function normalizeStatisticsPayload(value: unknown, debug?: StatisticsDebugData | null): StatisticsData {
+  const item = (value || {}) as LooseRecord;
   const periodStats = item.periodStats || {};
   const commissionStats = item.commissionStats || {};
   const debtStats = item.debtStats || {};
@@ -188,7 +258,7 @@ function normalizeStatisticsPayload(value: unknown): StatisticsData {
       week: normalizePeriodStats(periodStats.week || EMPTY_PERIOD_STATS),
       month: normalizePeriodStats(periodStats.month || EMPTY_PERIOD_STATS),
     },
-    currencyBalances: asArray<MaybeRecord>(item.currencyBalances)
+    currencyBalances: asArray<LooseRecord>(item.currencyBalances)
       .map((balance) => ({
         currency: asString(balance?.currency),
         total_incoming: asNumber(balance?.total_incoming),
@@ -196,7 +266,7 @@ function normalizeStatisticsPayload(value: unknown): StatisticsData {
         balance: asNumber(balance?.balance),
       }))
       .filter((balance) => balance.currency.length > 0),
-    cashFlowByCurrency: asArray<MaybeRecord>(item.cashFlowByCurrency)
+    cashFlowByCurrency: asArray<LooseRecord>(item.cashFlowByCurrency)
       .map((flow) => ({
         currency: asString(flow?.currency),
         totalReceived: asNumber(flow?.totalReceived),
@@ -213,7 +283,7 @@ function normalizeStatisticsPayload(value: unknown): StatisticsData {
         approvedCount: asNumber(flow?.approvedCount),
       }))
       .filter((flow) => flow.currency.length > 0),
-    topCustomers: asArray<MaybeRecord>(item.topCustomers).map((customer) => ({
+    topCustomers: asArray<LooseRecord>(item.topCustomers).map((customer) => ({
       id: asString(customer?.id),
       name: asString(customer?.name, 'عميل'),
       phone: asString(customer?.phone),
@@ -225,9 +295,7 @@ function normalizeStatisticsPayload(value: unknown): StatisticsData {
     })),
     commissionStats: {
       totalCommission: asNumber(commissionStats.totalCommission),
-      commissionByCurrency: asArray<MaybeRecord>(
-        commissionStats.commissionByCurrency,
-      )
+      commissionByCurrency: asArray<LooseRecord>(commissionStats.commissionByCurrency)
         .map((entry) => ({
           currency: asString(entry?.currency),
           total: asNumber(entry?.total),
@@ -237,40 +305,27 @@ function normalizeStatisticsPayload(value: unknown): StatisticsData {
     debtStats: {
       totalOwedToUs: asNumber(debtStats.totalOwedToUs),
       totalWeOwe: asNumber(debtStats.totalWeOwe),
-      owedToUsByCurrency: normalizeCurrencyAmountList(
-        debtStats.owedToUsByCurrency,
-      ),
+      owedToUsByCurrency: normalizeCurrencyAmountList(debtStats.owedToUsByCurrency),
       weOweByCurrency: normalizeCurrencyAmountList(debtStats.weOweByCurrency),
     },
     actionableStats: {
-      awaitingMyApprovalCount: asNumber(
-        actionableStats.awaitingMyApprovalCount,
-      ),
-      awaitingMyApprovalByCurrency: normalizeCurrencyAmountList(
-        actionableStats.awaitingMyApprovalByCurrency,
-      ),
-      awaitingOthersApprovalCount: asNumber(
-        actionableStats.awaitingOthersApprovalCount,
-      ),
-      awaitingOthersApprovalByCurrency: normalizeCurrencyAmountList(
-        actionableStats.awaitingOthersApprovalByCurrency,
-      ),
+      awaitingMyApprovalCount: asNumber(actionableStats.awaitingMyApprovalCount),
+      awaitingMyApprovalByCurrency: normalizeCurrencyAmountList(actionableStats.awaitingMyApprovalByCurrency),
+      awaitingOthersApprovalCount: asNumber(actionableStats.awaitingOthersApprovalCount),
+      awaitingOthersApprovalByCurrency: normalizeCurrencyAmountList(actionableStats.awaitingOthersApprovalByCurrency),
       stalePendingCount: asNumber(actionableStats.stalePendingCount),
-      stalePendingByCurrency: normalizeCurrencyAmountList(
-        actionableStats.stalePendingByCurrency,
-      ),
+      stalePendingByCurrency: normalizeCurrencyAmountList(actionableStats.stalePendingByCurrency),
       approvedLast7Days: asNumber(actionableStats.approvedLast7Days),
       rejectedLast7Days: asNumber(actionableStats.rejectedLast7Days),
       approvalRateLast7Days: asNumber(actionableStats.approvalRateLast7Days),
-      rejectionRateLast7Days: asNumber(
-        actionableStats.rejectionRateLast7Days,
-      ),
+      rejectionRateLast7Days: asNumber(actionableStats.rejectionRateLast7Days),
       averageApprovalMinutesLast7Days:
         actionableStats.averageApprovalMinutesLast7Days === null ||
         actionableStats.averageApprovalMinutesLast7Days === undefined
           ? null
           : asNumber(actionableStats.averageApprovalMinutesLast7Days),
     },
+    debug: debug || null,
   };
 }
 
@@ -302,7 +357,25 @@ export class StatisticsService {
       },
       debtStats: EMPTY_DEBT_STATS,
       actionableStats: EMPTY_ACTIONABLE_STATS,
+      debug: null,
     };
+  }
+
+  static async fetchStatisticsDebug(userId: string): Promise<StatisticsDebugData | null> {
+    if (!userId) {
+      return null;
+    }
+
+    const { data, error } = await supabase.rpc('get_app_statistics_debug', {
+      p_user_id: userId,
+    });
+
+    if (error) {
+      console.warn('[StatisticsService] get_app_statistics_debug failed:', error);
+      return null;
+    }
+
+    return normalizeDebugPayload(data);
   }
 
   static async fetchAllStatistics(userId: string): Promise<StatisticsData> {
@@ -315,13 +388,24 @@ export class StatisticsService {
     });
 
     if (error) {
-      console.error('[StatisticsService] get_app_statistics failed:', error);
-      throw new Error(
-        `فشل تحميل الإحصاءات من قاعدة البيانات: ${error.message}`,
-      );
+      const debug = await this.fetchStatisticsDebug(userId);
+      console.error('[StatisticsService] get_app_statistics failed:', error, debug);
+      throw new Error(`فشل تحميل الإحصاءات من قاعدة البيانات: ${error.message}`);
     }
 
-    return normalizeStatisticsPayload(data);
+    const debug = await this.fetchStatisticsDebug(userId);
+    const normalized = normalizeStatisticsPayload(data, debug);
+
+    if (
+      normalized.totalMovements === 0 &&
+      normalized.cashFlowByCurrency.length === 0 &&
+      debug &&
+      debug.scopedMovements > 0
+    ) {
+      console.warn('[StatisticsService] Statistics returned zero, but debug found scoped movements:', debug);
+    }
+
+    return normalized;
   }
 
   static async fetchCustomDateRangeStats(
@@ -341,9 +425,7 @@ export class StatisticsService {
 
     if (error) {
       console.error('[StatisticsService] get_app_period_statistics failed:', error);
-      throw new Error(
-        `فشل تحميل إحصائيات الفترة من قاعدة البيانات: ${error.message}`,
-      );
+      throw new Error(`فشل تحميل إحصائيات الفترة من قاعدة البيانات: ${error.message}`);
     }
 
     return normalizePeriodStats(data);
