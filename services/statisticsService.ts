@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { CustomerBalanceByCurrency, TotalBalanceByCurrency } from '@/types/database';
+import { TotalBalanceByCurrency } from '@/types/database';
 
 export interface PeriodStats {
   transactions: number;
@@ -120,198 +120,156 @@ const EMPTY_ACTIONABLE_STATS: ActionableStats = {
   averageApprovalMinutesLast7Days: null,
 };
 
-const EMPTY_STATISTICS: StatisticsData = {
-  totalCustomers: 0,
-  totalTransactions: 0,
-  totalMovements: 0,
-  totalAmount: 0,
-  totalDebts: 0,
-  totalWeOwe: 0,
-  periodStats: {
-    today: EMPTY_PERIOD_STATS,
-    yesterday: EMPTY_PERIOD_STATS,
-    week: EMPTY_PERIOD_STATS,
-    month: EMPTY_PERIOD_STATS,
-  },
-  currencyBalances: [],
-  cashFlowByCurrency: [],
-  topCustomers: [],
-  commissionStats: {
-    totalCommission: 0,
-    commissionByCurrency: [],
-  },
-  debtStats: EMPTY_DEBT_STATS,
-  actionableStats: EMPTY_ACTIONABLE_STATS,
-};
+type MaybeRecord = Record<string, any> | null | undefined;
 
-function toNumber(value: unknown): number {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  return 0;
+function asNumber(value: unknown, fallback: number = 0): number {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
 }
 
-function normalizeAmountList(
-  items: any,
+function asString(value: unknown, fallback: string = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function asArray<T = any>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function normalizeCurrencyAmountList(
+  value: unknown,
 ): { currency: string; amount: number }[] {
-  if (!Array.isArray(items)) {
-    return [];
-  }
-
-  return items
-    .filter((item) => item && item.currency)
+  return asArray<MaybeRecord>(value)
     .map((item) => ({
-      currency: String(item.currency),
-      amount: toNumber(item.amount),
-    }));
+      currency: asString(item?.currency),
+      amount: asNumber(item?.amount),
+    }))
+    .filter((item) => item.currency.length > 0);
 }
 
-function normalizePeriodStats(value: any): PeriodStats {
-  if (!value) {
-    return { ...EMPTY_PERIOD_STATS };
-  }
+function normalizePeriodStats(value: unknown): PeriodStats {
+  const item = (value || {}) as Record<string, any>;
 
   return {
-    transactions: toNumber(value.transactions),
-    movements: toNumber(value.movements),
-    commissionMovements: toNumber(value.commissionMovements),
-    transactionAmount: toNumber(value.transactionAmount),
-    movementAmount: toNumber(value.movementAmount),
-    commissionAmount: toNumber(value.commissionAmount),
-    transactionAmountsByCurrency: normalizeAmountList(
-      value.transactionAmountsByCurrency,
+    transactions: asNumber(item.transactions),
+    movements: asNumber(item.movements),
+    commissionMovements: asNumber(item.commissionMovements),
+    transactionAmount: asNumber(item.transactionAmount),
+    movementAmount: asNumber(item.movementAmount),
+    commissionAmount: asNumber(item.commissionAmount),
+    transactionAmountsByCurrency: normalizeCurrencyAmountList(
+      item.transactionAmountsByCurrency,
     ),
-    movementAmountsByCurrency: normalizeAmountList(
-      value.movementAmountsByCurrency,
+    movementAmountsByCurrency: normalizeCurrencyAmountList(
+      item.movementAmountsByCurrency,
     ),
-    commissionAmountsByCurrency: normalizeAmountList(
-      value.commissionAmountsByCurrency,
+    commissionAmountsByCurrency: normalizeCurrencyAmountList(
+      item.commissionAmountsByCurrency,
     ),
   };
 }
 
-function normalizeStatistics(value: any): StatisticsData {
-  if (!value) {
-    return { ...EMPTY_STATISTICS };
-  }
+function normalizeStatisticsPayload(value: unknown): StatisticsData {
+  const item = (value || {}) as Record<string, any>;
+  const periodStats = item.periodStats || {};
+  const commissionStats = item.commissionStats || {};
+  const debtStats = item.debtStats || {};
+  const actionableStats = item.actionableStats || {};
 
   return {
-    totalCustomers: toNumber(value.totalCustomers),
-    totalTransactions: toNumber(value.totalTransactions),
-    totalMovements: toNumber(value.totalMovements),
-    totalAmount: toNumber(value.totalAmount),
-    totalDebts: toNumber(value.totalDebts),
-    totalWeOwe: toNumber(value.totalWeOwe),
-
+    totalCustomers: asNumber(item.totalCustomers),
+    totalTransactions: asNumber(item.totalTransactions),
+    totalMovements: asNumber(item.totalMovements),
+    totalAmount: asNumber(item.totalAmount),
+    totalDebts: asNumber(item.totalDebts),
+    totalWeOwe: asNumber(item.totalWeOwe),
     periodStats: {
-      today: normalizePeriodStats(value.periodStats?.today),
-      yesterday: normalizePeriodStats(value.periodStats?.yesterday),
-      week: normalizePeriodStats(value.periodStats?.week),
-      month: normalizePeriodStats(value.periodStats?.month),
+      today: normalizePeriodStats(periodStats.today || EMPTY_PERIOD_STATS),
+      yesterday: normalizePeriodStats(periodStats.yesterday || EMPTY_PERIOD_STATS),
+      week: normalizePeriodStats(periodStats.week || EMPTY_PERIOD_STATS),
+      month: normalizePeriodStats(periodStats.month || EMPTY_PERIOD_STATS),
     },
-
-    currencyBalances: Array.isArray(value.currencyBalances)
-      ? value.currencyBalances.map(
-          (item: any): TotalBalanceByCurrency => ({
-            currency: String(item.currency),
-            total_incoming: toNumber(item.total_incoming),
-            total_outgoing: toNumber(item.total_outgoing),
-            balance: toNumber(item.balance),
-          }),
-        )
-      : [],
-
-    cashFlowByCurrency: Array.isArray(value.cashFlowByCurrency)
-      ? value.cashFlowByCurrency.map(
-          (item: any): CashFlowByCurrency => ({
-            currency: String(item.currency),
-            totalReceived: toNumber(item.totalReceived),
-            totalPaid: toNumber(item.totalPaid),
-            netFlow: toNumber(item.netFlow),
-            linkedReceived: toNumber(item.linkedReceived),
-            linkedPaid: toNumber(item.linkedPaid),
-            directReceived: toNumber(item.directReceived),
-            directPaid: toNumber(item.directPaid),
-            pendingAmount: toNumber(item.pendingAmount),
-            pendingCount: toNumber(item.pendingCount),
-            internalTransferAmount: toNumber(item.internalTransferAmount),
-            internalTransferCount: toNumber(item.internalTransferCount),
-            approvedCount: toNumber(item.approvedCount),
-          }),
-        )
-      : [],
-
-    topCustomers: Array.isArray(value.topCustomers)
-      ? value.topCustomers.map(
-          (item: any): TopCustomer => ({
-            id: String(item.id),
-            name: String(item.name || ''),
-            phone: String(item.phone || ''),
-            linked_user_id: item.linked_user_id || null,
-            totalMovements: toNumber(item.totalMovements),
-            totalVolume: toNumber(item.totalVolume),
-            balanceByCurrency: normalizeAmountList(item.balanceByCurrency),
-            lastActivity: String(item.lastActivity || new Date().toISOString()),
-          }),
-        )
-      : [],
-
+    currencyBalances: asArray<MaybeRecord>(item.currencyBalances)
+      .map((balance) => ({
+        currency: asString(balance?.currency),
+        total_incoming: asNumber(balance?.total_incoming),
+        total_outgoing: asNumber(balance?.total_outgoing),
+        balance: asNumber(balance?.balance),
+      }))
+      .filter((balance) => balance.currency.length > 0),
+    cashFlowByCurrency: asArray<MaybeRecord>(item.cashFlowByCurrency)
+      .map((flow) => ({
+        currency: asString(flow?.currency),
+        totalReceived: asNumber(flow?.totalReceived),
+        totalPaid: asNumber(flow?.totalPaid),
+        netFlow: asNumber(flow?.netFlow),
+        linkedReceived: asNumber(flow?.linkedReceived),
+        linkedPaid: asNumber(flow?.linkedPaid),
+        directReceived: asNumber(flow?.directReceived),
+        directPaid: asNumber(flow?.directPaid),
+        pendingAmount: asNumber(flow?.pendingAmount),
+        pendingCount: asNumber(flow?.pendingCount),
+        internalTransferAmount: asNumber(flow?.internalTransferAmount),
+        internalTransferCount: asNumber(flow?.internalTransferCount),
+        approvedCount: asNumber(flow?.approvedCount),
+      }))
+      .filter((flow) => flow.currency.length > 0),
+    topCustomers: asArray<MaybeRecord>(item.topCustomers).map((customer) => ({
+      id: asString(customer?.id),
+      name: asString(customer?.name, 'عميل'),
+      phone: asString(customer?.phone),
+      linked_user_id: customer?.linked_user_id || null,
+      totalMovements: asNumber(customer?.totalMovements),
+      totalVolume: asNumber(customer?.totalVolume),
+      balanceByCurrency: normalizeCurrencyAmountList(customer?.balanceByCurrency),
+      lastActivity: asString(customer?.lastActivity, new Date().toISOString()),
+    })),
     commissionStats: {
-      totalCommission: toNumber(value.commissionStats?.totalCommission),
-      commissionByCurrency: Array.isArray(
-        value.commissionStats?.commissionByCurrency,
+      totalCommission: asNumber(commissionStats.totalCommission),
+      commissionByCurrency: asArray<MaybeRecord>(
+        commissionStats.commissionByCurrency,
       )
-        ? value.commissionStats.commissionByCurrency.map((item: any) => ({
-            currency: String(item.currency),
-            total: toNumber(item.total),
-          }))
-        : [],
+        .map((entry) => ({
+          currency: asString(entry?.currency),
+          total: asNumber(entry?.total),
+        }))
+        .filter((entry) => entry.currency.length > 0),
     },
-
     debtStats: {
-      totalOwedToUs: toNumber(value.debtStats?.totalOwedToUs),
-      totalWeOwe: toNumber(value.debtStats?.totalWeOwe),
-      owedToUsByCurrency: normalizeAmountList(
-        value.debtStats?.owedToUsByCurrency,
+      totalOwedToUs: asNumber(debtStats.totalOwedToUs),
+      totalWeOwe: asNumber(debtStats.totalWeOwe),
+      owedToUsByCurrency: normalizeCurrencyAmountList(
+        debtStats.owedToUsByCurrency,
       ),
-      weOweByCurrency: normalizeAmountList(value.debtStats?.weOweByCurrency),
+      weOweByCurrency: normalizeCurrencyAmountList(debtStats.weOweByCurrency),
     },
-
     actionableStats: {
-      awaitingMyApprovalCount: toNumber(
-        value.actionableStats?.awaitingMyApprovalCount,
+      awaitingMyApprovalCount: asNumber(
+        actionableStats.awaitingMyApprovalCount,
       ),
-      awaitingMyApprovalByCurrency: normalizeAmountList(
-        value.actionableStats?.awaitingMyApprovalByCurrency,
+      awaitingMyApprovalByCurrency: normalizeCurrencyAmountList(
+        actionableStats.awaitingMyApprovalByCurrency,
       ),
-      awaitingOthersApprovalCount: toNumber(
-        value.actionableStats?.awaitingOthersApprovalCount,
+      awaitingOthersApprovalCount: asNumber(
+        actionableStats.awaitingOthersApprovalCount,
       ),
-      awaitingOthersApprovalByCurrency: normalizeAmountList(
-        value.actionableStats?.awaitingOthersApprovalByCurrency,
+      awaitingOthersApprovalByCurrency: normalizeCurrencyAmountList(
+        actionableStats.awaitingOthersApprovalByCurrency,
       ),
-      stalePendingCount: toNumber(value.actionableStats?.stalePendingCount),
-      stalePendingByCurrency: normalizeAmountList(
-        value.actionableStats?.stalePendingByCurrency,
+      stalePendingCount: asNumber(actionableStats.stalePendingCount),
+      stalePendingByCurrency: normalizeCurrencyAmountList(
+        actionableStats.stalePendingByCurrency,
       ),
-      approvedLast7Days: toNumber(value.actionableStats?.approvedLast7Days),
-      rejectedLast7Days: toNumber(value.actionableStats?.rejectedLast7Days),
-      approvalRateLast7Days: toNumber(
-        value.actionableStats?.approvalRateLast7Days,
-      ),
-      rejectionRateLast7Days: toNumber(
-        value.actionableStats?.rejectionRateLast7Days,
+      approvedLast7Days: asNumber(actionableStats.approvedLast7Days),
+      rejectedLast7Days: asNumber(actionableStats.rejectedLast7Days),
+      approvalRateLast7Days: asNumber(actionableStats.approvalRateLast7Days),
+      rejectionRateLast7Days: asNumber(
+        actionableStats.rejectionRateLast7Days,
       ),
       averageApprovalMinutesLast7Days:
-        value.actionableStats?.averageApprovalMinutesLast7Days == null
+        actionableStats.averageApprovalMinutesLast7Days === null ||
+        actionableStats.averageApprovalMinutesLast7Days === undefined
           ? null
-          : toNumber(value.actionableStats.averageApprovalMinutesLast7Days),
+          : asNumber(actionableStats.averageApprovalMinutesLast7Days),
     },
   };
 }
@@ -321,22 +279,49 @@ function toSqlDate(date: Date): string {
 }
 
 export class StatisticsService {
+  private static getEmptyStatistics(): StatisticsData {
+    return {
+      totalCustomers: 0,
+      totalTransactions: 0,
+      totalMovements: 0,
+      totalAmount: 0,
+      totalDebts: 0,
+      totalWeOwe: 0,
+      periodStats: {
+        today: EMPTY_PERIOD_STATS,
+        yesterday: EMPTY_PERIOD_STATS,
+        week: EMPTY_PERIOD_STATS,
+        month: EMPTY_PERIOD_STATS,
+      },
+      currencyBalances: [],
+      cashFlowByCurrency: [],
+      topCustomers: [],
+      commissionStats: {
+        totalCommission: 0,
+        commissionByCurrency: [],
+      },
+      debtStats: EMPTY_DEBT_STATS,
+      actionableStats: EMPTY_ACTIONABLE_STATS,
+    };
+  }
+
   static async fetchAllStatistics(userId: string): Promise<StatisticsData> {
-    try {
-      const { data, error } = await supabase.rpc('get_app_statistics', {
-        p_user_id: userId,
-      });
-
-      if (error) {
-        console.error('[StatisticsService] RPC get_app_statistics failed:', error);
-        throw error;
-      }
-
-      return normalizeStatistics(data);
-    } catch (error) {
-      console.error('Error in fetchAllStatistics:', error);
-      throw error;
+    if (!userId) {
+      return this.getEmptyStatistics();
     }
+
+    const { data, error } = await supabase.rpc('get_app_statistics', {
+      p_user_id: userId,
+    });
+
+    if (error) {
+      console.error('[StatisticsService] get_app_statistics failed:', error);
+      throw new Error(
+        `فشل تحميل الإحصاءات من قاعدة البيانات: ${error.message}`,
+      );
+    }
+
+    return normalizeStatisticsPayload(data);
   }
 
   static async fetchCustomDateRangeStats(
@@ -344,24 +329,23 @@ export class StatisticsService {
     startDate: Date,
     endDate: Date,
   ): Promise<PeriodStats> {
-    try {
-      const { data, error } = await supabase.rpc('get_app_statistics', {
-        p_user_id: userId,
-        p_start_date: toSqlDate(startDate),
-        p_end_date: toSqlDate(endDate),
-      });
-
-      if (error) {
-        console.error('[StatisticsService] Custom stats RPC failed:', error);
-        throw error;
-      }
-
-      return normalizePeriodStats(data?.customPeriod);
-    } catch (error) {
-      console.error('Error in fetchCustomDateRangeStats:', error);
-      throw error;
+    if (!userId) {
+      return EMPTY_PERIOD_STATS;
     }
+
+    const { data, error } = await supabase.rpc('get_app_period_statistics', {
+      p_user_id: userId,
+      p_start_date: toSqlDate(startDate),
+      p_end_date: toSqlDate(endDate),
+    });
+
+    if (error) {
+      console.error('[StatisticsService] get_app_period_statistics failed:', error);
+      throw new Error(
+        `فشل تحميل إحصائيات الفترة من قاعدة البيانات: ${error.message}`,
+      );
+    }
+
+    return normalizePeriodStats(data);
   }
 }
-
-export type { CustomerBalanceByCurrency };
