@@ -24,7 +24,13 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { CURRENCIES } from '@/types/database';
-import { CashFlowByCurrency, PeriodStats, StatisticsData, StatisticsService } from '@/services/statisticsService';
+import {
+  CashFlowByCurrency,
+  NetDebtByCurrency,
+  PeriodStats,
+  StatisticsData,
+  StatisticsService,
+} from '@/services/statisticsService';
 
 type PeriodKey = 'today' | 'yesterday' | 'week' | 'month';
 
@@ -158,6 +164,50 @@ function CashFlowCard({ flow }: { flow: CashFlowByCurrency }) {
       <View style={styles.chipRow}>
         <Text style={[styles.chip, styles.pendingChip]}>معلّق: {flow.pendingCount} / {formatAmount(flow.pendingAmount)} {symbol}</Text>
         <Text style={[styles.chip, styles.internalChip]}>داخلي: {flow.internalTransferCount} / {formatAmount(flow.internalTransferAmount)} {symbol}</Text>
+      </View>
+    </View>
+  );
+}
+
+
+function NetDebtCard({ item }: { item: NetDebtByCurrency }) {
+  const symbol = getCurrencySymbol(item.currency);
+  const color = item.direction === 'for_me' ? '#059669' : item.direction === 'on_me' ? '#DC2626' : '#6B7280';
+  const label = item.direction === 'for_me' ? 'الصافي لك' : item.direction === 'on_me' ? 'الصافي عليك' : 'متوازن';
+  const hint = item.direction === 'balanced'
+    ? 'كل ما لك وما عليك متساوٍ في هذه العملة'
+    : 'بعد تصفية جميع العملاء في نفس العملة';
+
+  return (
+    <View style={styles.flowCard}>
+      <View style={styles.flowHeader}>
+        <View>
+          <Text style={styles.flowCurrency}>{item.currency}</Text>
+          <Text style={styles.flowHint}>{hint}</Text>
+        </View>
+        <View style={[styles.netPill, { backgroundColor: `${color}14` }]}> 
+          <Text style={[styles.netPillText, { color }]}>{label}</Text>
+        </View>
+      </View>
+
+      <View style={styles.netBox}>
+        <Text style={styles.netLabel}>النتيجة النهائية</Text>
+        <Text style={[styles.netValue, { color }]}>{formatAmount(item.finalAmount)} {symbol}</Text>
+      </View>
+
+      <View style={styles.smallGrid}>
+        <View style={styles.smallInfoBox}>
+          <Text style={styles.smallInfoTitle}>إجمالي الذي لك</Text>
+          <Text style={[styles.smallInfoText, { color: '#059669', fontWeight: '900' }]}>
+            {formatAmount(item.totalForMe)} {symbol}
+          </Text>
+        </View>
+        <View style={styles.smallInfoBox}>
+          <Text style={styles.smallInfoTitle}>إجمالي الذي عليك</Text>
+          <Text style={[styles.smallInfoText, { color: '#DC2626', fontWeight: '900' }]}>
+            {formatAmount(item.totalOnMe)} {symbol}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -309,7 +359,30 @@ export default function StatisticsScreen() {
           />
         </View>
 
-        <SectionHeader title="التدفق المالي حسب العملة" icon={Wallet} color="#2563EB" />
+        <SectionHeader title="الصافي النهائي حسب العملة" icon={Wallet} color="#2563EB" />
+        {stats?.debtStats.netByCurrency.length ? (
+          stats.debtStats.netByCurrency.map((item) => <NetDebtCard key={item.currency} item={item} />)
+        ) : (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>لا توجد ديون صافية</Text>
+            <Text style={styles.emptyMessage}>لا يوجد فرق بين ما لك وما عليك في العملات الحالية.</Text>
+          </View>
+        )}
+
+        <SectionHeader title="تفاصيل الديون قبل التصفية" icon={AlertCircle} color="#DC2626" />
+        <View style={styles.debtBox}>
+          <View style={styles.debtColumn}>
+            <Text style={styles.debtLabel}>إجمالي الذي لك</Text>
+            <Text style={[styles.debtValue, { color: '#059669' }]}>{currencyLine(stats?.debtStats.owedToUsByCurrency || [])}</Text>
+          </View>
+          <View style={styles.verticalDivider} />
+          <View style={styles.debtColumn}>
+            <Text style={styles.debtLabel}>إجمالي الذي عليك</Text>
+            <Text style={[styles.debtValue, { color: '#DC2626' }]}>{currencyLine(stats?.debtStats.weOweByCurrency || [])}</Text>
+          </View>
+        </View>
+
+        <SectionHeader title="التدفق المالي حسب الحركة" icon={Wallet} color="#2563EB" />
         {stats?.cashFlowByCurrency.length ? (
           stats.cashFlowByCurrency.map((flow) => <CashFlowCard key={flow.currency} flow={flow} />)
         ) : (
@@ -318,19 +391,6 @@ export default function StatisticsScreen() {
             <Text style={styles.emptyMessage}>إذا كانت هناك حركات فعلية، افتح قسم التشخيص أسفل الصفحة لمعرفة هل المشكلة من النطاق أو من حالة الموافقة.</Text>
           </View>
         )}
-
-        <SectionHeader title="ملخص الديون" icon={AlertCircle} color="#DC2626" />
-        <View style={styles.debtBox}>
-          <View style={styles.debtColumn}>
-            <Text style={styles.debtLabel}>له</Text>
-            <Text style={[styles.debtValue, { color: '#059669' }]}>{currencyLine(stats?.debtStats.weOweByCurrency || [])}</Text>
-          </View>
-          <View style={styles.verticalDivider} />
-          <View style={styles.debtColumn}>
-            <Text style={styles.debtLabel}>عليه</Text>
-            <Text style={[styles.debtValue, { color: '#DC2626' }]}>{currencyLine(stats?.debtStats.owedToUsByCurrency || [])}</Text>
-          </View>
-        </View>
 
         <SectionHeader title="إحصائيات الفترات" icon={BarChart3} color="#7C3AED" />
         {(Object.keys(periodLabels) as PeriodKey[]).map((key) => (

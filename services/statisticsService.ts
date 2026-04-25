@@ -45,11 +45,21 @@ export interface CashFlowByCurrency {
   approvedCount: number;
 }
 
+export interface NetDebtByCurrency {
+  currency: string;
+  totalForMe: number;
+  totalOnMe: number;
+  netAmount: number;
+  finalAmount: number;
+  direction: 'for_me' | 'on_me' | 'balanced';
+}
+
 export interface DebtStats {
   totalOwedToUs: number;
   totalWeOwe: number;
   owedToUsByCurrency: { currency: string; amount: number }[];
   weOweByCurrency: { currency: string; amount: number }[];
+  netByCurrency: NetDebtByCurrency[];
 }
 
 export interface ActionableStats {
@@ -135,6 +145,7 @@ const EMPTY_DEBT_STATS: DebtStats = {
   totalWeOwe: 0,
   owedToUsByCurrency: [],
   weOweByCurrency: [],
+  netByCurrency: [],
 };
 
 const EMPTY_ACTIONABLE_STATS: ActionableStats = {
@@ -177,6 +188,68 @@ function normalizeCurrencyAmountList(value: unknown): { currency: string; amount
       amount: asNumber(item?.amount),
     }))
     .filter((item) => item.currency.length > 0);
+}
+
+function normalizeNetDebtList(value: unknown): NetDebtByCurrency[] {
+  return asArray<LooseRecord>(value)
+    .map((item) => {
+      const totalForMe = asNumber(item?.totalForMe ?? item?.total_for_me);
+      const totalOnMe = asNumber(item?.totalOnMe ?? item?.total_on_me);
+      const netAmount = asNumber(item?.netAmount ?? item?.net_amount, totalForMe - totalOnMe);
+      const finalAmount = Math.abs(asNumber(item?.finalAmount ?? item?.final_amount, netAmount));
+      const rawDirection = asString(item?.direction);
+      const direction: NetDebtByCurrency['direction'] =
+        rawDirection === 'for_me' || rawDirection === 'on_me' || rawDirection === 'balanced'
+          ? rawDirection
+          : netAmount > 0
+            ? 'for_me'
+            : netAmount < 0
+              ? 'on_me'
+              : 'balanced';
+
+      return {
+        currency: asString(item?.currency),
+        totalForMe,
+        totalOnMe,
+        netAmount,
+        finalAmount,
+        direction,
+      };
+    })
+    .filter((item) => item.currency.length > 0);
+}
+
+function buildNetDebtByCurrency(
+  owedToUsByCurrency: { currency: string; amount: number }[],
+  weOweByCurrency: { currency: string; amount: number }[],
+): NetDebtByCurrency[] {
+  const currencyMap = new Map<string, { totalForMe: number; totalOnMe: number }>();
+
+  owedToUsByCurrency.forEach((item) => {
+    const current = currencyMap.get(item.currency) || { totalForMe: 0, totalOnMe: 0 };
+    current.totalForMe += asNumber(item.amount);
+    currencyMap.set(item.currency, current);
+  });
+
+  weOweByCurrency.forEach((item) => {
+    const current = currencyMap.get(item.currency) || { totalForMe: 0, totalOnMe: 0 };
+    current.totalOnMe += asNumber(item.amount);
+    currencyMap.set(item.currency, current);
+  });
+
+  return Array.from(currencyMap.entries())
+    .map(([currency, values]) => {
+      const netAmount = values.totalForMe - values.totalOnMe;
+      return {
+        currency,
+        totalForMe: values.totalForMe,
+        totalOnMe: values.totalOnMe,
+        netAmount,
+        finalAmount: Math.abs(netAmount),
+        direction: netAmount > 0 ? 'for_me' : netAmount < 0 ? 'on_me' : 'balanced',
+      } as NetDebtByCurrency;
+    })
+    .sort((a, b) => Math.abs(b.netAmount) - Math.abs(a.netAmount));
 }
 
 function normalizePeriodStats(value: unknown): PeriodStats {
@@ -244,6 +317,12 @@ function normalizeStatisticsPayload(value: unknown, debug?: StatisticsDebugData 
   const commissionStats = item.commissionStats || {};
   const debtStats = item.debtStats || {};
   const actionableStats = item.actionableStats || {};
+  const owedToUsByCurrency = normalizeCurrencyAmountList(debtStats.owedToUsByCurrency);
+  const weOweByCurrency = normalizeCurrencyAmountList(debtStats.weOweByCurrency);
+  const backendNetByCurrency = normalizeNetDebtList(debtStats.netByCurrency);
+  const netByCurrency = backendNetByCurrency.length
+    ? backendNetByCurrency
+    : buildNetDebtByCurrency(owedToUsByCurrency, weOweByCurrency);
 
   return {
     totalCustomers: asNumber(item.totalCustomers),
@@ -305,8 +384,9 @@ function normalizeStatisticsPayload(value: unknown, debug?: StatisticsDebugData 
     debtStats: {
       totalOwedToUs: asNumber(debtStats.totalOwedToUs),
       totalWeOwe: asNumber(debtStats.totalWeOwe),
-      owedToUsByCurrency: normalizeCurrencyAmountList(debtStats.owedToUsByCurrency),
-      weOweByCurrency: normalizeCurrencyAmountList(debtStats.weOweByCurrency),
+      owedToUsByCurrency,
+      weOweByCurrency,
+      netByCurrency,
     },
     actionableStats: {
       awaitingMyApprovalCount: asNumber(actionableStats.awaitingMyApprovalCount),
