@@ -295,6 +295,23 @@ export default function CustomerDetailsScreen() {
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
+  const currentCustomerId = Array.isArray(id) ? id[0] : id ? String(id) : '';
+
+  const openCustomerNotifications = useCallback(() => {
+    if (!currentCustomerId) {
+      router.push('/(tabs)/notifications');
+      return;
+    }
+
+    router.push({
+      pathname: '/(tabs)/notifications',
+      params: {
+        customerId: currentCustomerId,
+        customerName: customer?.name || '',
+      },
+    });
+  }, [currentCustomerId, customer?.name, router]);
+
   const loadCustomerData = useCallback(async () => {
     try {
       if (!currentUser?.userId || !currentUser?.userName) {
@@ -371,22 +388,29 @@ export default function CustomerDetailsScreen() {
   }, [id, currentUser]);
 
   const loadUnreadNotifications = useCallback(async () => {
-    if (!currentUser?.userId) return;
+    if (!currentUser?.userId || !currentCustomerId) return;
 
     try {
       const { count, error } = await supabase
         .from('movement_notifications')
-        .select('*', { count: 'exact', head: true })
+        .select(
+          `
+          id,
+          movement:account_movements!movement_id!inner(customer_id)
+          `,
+          { count: 'exact', head: true },
+        )
         .eq('user_id', currentUser.userId)
-        .eq('is_read', false);
+        .eq('is_read', false)
+        .eq('movement.customer_id', currentCustomerId);
 
       if (!error && count !== null) {
         setUnreadNotificationsCount(count);
       }
     } catch (error) {
-      console.error('Error loading unread notifications:', error);
+      console.error('Error loading customer unread notifications:', error);
     }
-  }, [currentUser]);
+  }, [currentUser?.userId, currentCustomerId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -798,7 +822,7 @@ export default function CustomerDetailsScreen() {
       if (notification?.id) {
         router.push({
           pathname: '/notification-detail',
-          params: { id: notification.id, returnToCustomerId: String(id) },
+          params: { id: notification.id, returnToCustomerId: currentCustomerId },
         });
         return true;
       }
@@ -810,7 +834,7 @@ export default function CustomerDetailsScreen() {
           [
             {
               text: 'فتح الإشعارات',
-              onPress: () => router.push('/(tabs)/notifications'),
+              onPress: () => openCustomerNotifications(),
             },
             {
               text: 'حسنًا',
@@ -827,7 +851,7 @@ export default function CustomerDetailsScreen() {
         [
           {
             text: 'فتح الإشعارات',
-            onPress: () => router.push('/(tabs)/notifications'),
+            onPress: () => openCustomerNotifications(),
           },
           {
             text: 'إلغاء',
@@ -844,7 +868,7 @@ export default function CustomerDetailsScreen() {
         [
           {
             text: 'فتح الإشعارات',
-            onPress: () => router.push('/(tabs)/notifications'),
+            onPress: () => openCustomerNotifications(),
           },
           {
             text: 'إلغاء',
@@ -1180,13 +1204,13 @@ export default function CustomerDetailsScreen() {
             <TouchableOpacity
               style={styles.notificationSummaryCard}
               activeOpacity={0.88}
-              onPress={() => router.push('/(tabs)/notifications')}
+              onPress={() => openCustomerNotifications()}
             >
               <View style={styles.notificationSummaryContent}>
                 <View style={styles.notificationSummaryTextWrap}>
                   <Text style={styles.notificationSummaryTitle}>الإشعارات</Text>
                   <Text style={styles.notificationSummarySubtitle}>
-                    اضغط لعرض جميع الإشعارات
+                    اضغط لعرض إشعارات هذا العميل
                   </Text>
                 </View>
                 <View style={styles.notificationSummaryIcon}>
@@ -1280,7 +1304,7 @@ export default function CustomerDetailsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.tabButton}
-            onPress={() => router.push('/(tabs)/notifications')}
+            onPress={() => openCustomerNotifications()}
           >
             <View style={{ position: 'relative' }}>
               <Bell size={16} color="#6B7280" />
