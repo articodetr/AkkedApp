@@ -16,7 +16,9 @@ export default function TabsLayout() {
     const { count } = await supabase
       .from('movement_notifications')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', currentUser.userId);
+      .eq('user_id', currentUser.userId)
+      .eq('is_read', false)
+      .is('deleted_at', null);
     if (count !== null) setUnreadCount(count);
   }, [currentUser?.userId]);
 

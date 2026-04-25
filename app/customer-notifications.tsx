@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
-import { Bell, Check, X, Clock, Trash2 } from 'lucide-react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ArrowRight, Bell, Check, X, Clock, Trash2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -343,8 +343,15 @@ function stopPressPropagation(event?: GestureResponderEvent) {
   event?.stopPropagation?.();
 }
 
-export default function NotificationsTabScreen() {
+export default function CustomerNotificationsScreen() {
   const router = useRouter();
+  const { customerId, customerName } = useLocalSearchParams<{
+    customerId?: string;
+    customerName?: string;
+  }>();
+
+  const scopedCustomerId = Array.isArray(customerId) ? customerId[0] : customerId;
+  const scopedCustomerName = Array.isArray(customerName) ? customerName[0] : customerName;
   const { currentUser } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -356,7 +363,12 @@ export default function NotificationsTabScreen() {
   const [rejectReason, setRejectReason] = useState('');
 
   const loadNotifications = useCallback(async () => {
-    if (!currentUser?.userId) return;
+    if (!currentUser?.userId || !scopedCustomerId) {
+      setNotifications([]);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -364,7 +376,7 @@ export default function NotificationsTabScreen() {
         .select(
           `
           *,
-          movement:account_movements!movement_id(
+          movement:account_movements!inner(
             movement_number,
             customer_id,
             amount,
@@ -381,6 +393,7 @@ export default function NotificationsTabScreen() {
         `,
         )
         .eq('user_id', currentUser.userId)
+        .eq('movement.customer_id', scopedCustomerId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
@@ -393,7 +406,7 @@ export default function NotificationsTabScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentUser?.userId]);
+  }, [currentUser?.userId, scopedCustomerId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -465,12 +478,12 @@ export default function NotificationsTabScreen() {
       pathname: '/notification-detail',
       params: {
         id: item.id,
-        from: 'general',
-        customerId: item.movement?.customer_id || '',
-        customerName: item.customer_name || item.movement?.customer?.name || '',
+        from: 'customer',
+        customerId: scopedCustomerId || item.movement?.customer_id || '',
+        customerName: scopedCustomerName || item.customer_name || item.movement?.customer?.name || '',
       },
     });
-  }, [markAsRead, router]);
+  }, [markAsRead, router, scopedCustomerId, scopedCustomerName]);
 
   const handleApproveFromList = useCallback(async (item: NotificationItem) => {
     if (!item.movement_id || !currentUser?.userName) {
@@ -625,14 +638,17 @@ export default function NotificationsTabScreen() {
   const renderHeader = () => (
     <View style={styles.headerBlock}>
       <View style={styles.headerTitleRow}>
-        <Text style={styles.headerTitle}>الإشعارات</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <ArrowRight size={20} color="#111827" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>إشعارات العميل</Text>
         <View style={styles.unreadCounterPill}>
           <Bell size={15} color="#FFFFFF" />
           <Text style={styles.unreadCounterText}>{summary.unread} غير مقروء</Text>
         </View>
       </View>
 
-      <Text style={styles.headerHint}>اضغط على الإشعار لفتح التفاصيل. القبول والرفض والحذف تظهر كأزرار مختصرة فقط.</Text>
+      <Text style={styles.headerHint}>هذه الصفحة تعرض إشعارات هذا العميل فقط. الإشعارات العامة تبقى في تبويب الإشعارات.</Text>
 
       <View style={styles.filterTabs}>
         {filterTabs.map((tab) => {
@@ -758,7 +774,7 @@ export default function NotificationsTabScreen() {
       {isLoading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#2563EB" />
-          <Text style={styles.loadingText}>جاري تحميل الإشعارات...</Text>
+          <Text style={styles.loadingText}>جاري تحميل إشعارات العميل...</Text>
         </View>
       ) : (
         <FlatList
@@ -778,7 +794,7 @@ export default function NotificationsTabScreen() {
                   <Bell size={40} color="#D1D5DB" />
                 </View>
                 <Text style={styles.emptyTitle}>لا توجد إشعارات</Text>
-                <Text style={styles.emptySubtitle}>ستظهر هنا الحركات التي تحتاج مراجعة أو متابعة.</Text>
+                <Text style={styles.emptySubtitle}>لا توجد إشعارات مرتبطة بهذا العميل حالياً.</Text>
               </View>
             ) : (
               <View style={styles.filteredEmptyContainer}>
@@ -861,7 +877,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
+    flex: 1,
     fontSize: 24,
     fontWeight: '900',
     color: '#111827',

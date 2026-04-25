@@ -295,23 +295,6 @@ export default function CustomerDetailsScreen() {
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
-  const currentCustomerId = Array.isArray(id) ? id[0] : id ? String(id) : '';
-
-  const openCustomerNotifications = useCallback(() => {
-    if (!currentCustomerId) {
-      router.push('/(tabs)/notifications');
-      return;
-    }
-
-    router.push({
-      pathname: '/(tabs)/notifications',
-      params: {
-        customerId: currentCustomerId,
-        customerName: customer?.name || '',
-      },
-    });
-  }, [currentCustomerId, customer?.name, router]);
-
   const loadCustomerData = useCallback(async () => {
     try {
       if (!currentUser?.userId || !currentUser?.userName) {
@@ -388,7 +371,7 @@ export default function CustomerDetailsScreen() {
   }, [id, currentUser]);
 
   const loadUnreadNotifications = useCallback(async () => {
-    if (!currentUser?.userId || !currentCustomerId) return;
+    if (!currentUser?.userId || !id) return;
 
     try {
       const { count, error } = await supabase
@@ -396,13 +379,14 @@ export default function CustomerDetailsScreen() {
         .select(
           `
           id,
-          movement:account_movements!movement_id!inner(customer_id)
+          movement:account_movements!inner(customer_id)
           `,
-          { count: 'exact', head: true },
+          { count: 'exact', head: true }
         )
         .eq('user_id', currentUser.userId)
         .eq('is_read', false)
-        .eq('movement.customer_id', currentCustomerId);
+        .eq('movement.customer_id', String(id))
+        .is('deleted_at', null);
 
       if (!error && count !== null) {
         setUnreadNotificationsCount(count);
@@ -410,7 +394,7 @@ export default function CustomerDetailsScreen() {
     } catch (error) {
       console.error('Error loading customer unread notifications:', error);
     }
-  }, [currentUser?.userId, currentCustomerId]);
+  }, [currentUser?.userId, id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -431,10 +415,10 @@ export default function CustomerDetailsScreen() {
 
   // الاستماع للتغييرات في الإشعارات لتحديث العداد تلقائياً
   useEffect(() => {
-    if (!currentUser?.userId) return;
+    if (!currentUser?.userId || !id) return;
 
     const channel = supabase
-      .channel('notifications-counter')
+      .channel(`customer-notifications-counter-${id}`)
       .on(
         'postgres_changes',
         {
@@ -452,7 +436,7 @@ export default function CustomerDetailsScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser?.userId, loadUnreadNotifications]);
+  }, [currentUser?.userId, id, loadUnreadNotifications]);
 
   const handleCall = () => {
     if (customer?.phone) {
@@ -795,6 +779,18 @@ export default function CustomerDetailsScreen() {
     console.log('[CustomerDetails] setShowQuickAdd(true) called');
   };
 
+  const openCustomerNotifications = useCallback(() => {
+    if (!id) return;
+
+    router.push({
+      pathname: '/customer-notifications',
+      params: {
+        customerId: String(id),
+        customerName: customer?.name || '',
+      },
+    });
+  }, [customer?.name, id, router]);
+
   const openNotificationDecisionPage = async (movement: AccountMovement): Promise<boolean> => {
     if (!currentUser?.userId) {
       Alert.alert('خطأ', 'لم يتم العثور على المستخدم الحالي');
@@ -822,7 +818,7 @@ export default function CustomerDetailsScreen() {
       if (notification?.id) {
         router.push({
           pathname: '/notification-detail',
-          params: { id: notification.id, returnToCustomerId: currentCustomerId },
+          params: { id: notification.id, from: 'customer-details', returnToCustomerId: String(id), customerName: customer?.name || '' },
         });
         return true;
       }
@@ -834,7 +830,7 @@ export default function CustomerDetailsScreen() {
           [
             {
               text: 'فتح الإشعارات',
-              onPress: () => openCustomerNotifications(),
+              onPress: openCustomerNotifications,
             },
             {
               text: 'حسنًا',
@@ -851,7 +847,7 @@ export default function CustomerDetailsScreen() {
         [
           {
             text: 'فتح الإشعارات',
-            onPress: () => openCustomerNotifications(),
+            onPress: openCustomerNotifications,
           },
           {
             text: 'إلغاء',
@@ -868,7 +864,7 @@ export default function CustomerDetailsScreen() {
         [
           {
             text: 'فتح الإشعارات',
-            onPress: () => openCustomerNotifications(),
+            onPress: openCustomerNotifications,
           },
           {
             text: 'إلغاء',
@@ -1204,13 +1200,13 @@ export default function CustomerDetailsScreen() {
             <TouchableOpacity
               style={styles.notificationSummaryCard}
               activeOpacity={0.88}
-              onPress={() => openCustomerNotifications()}
+              onPress={openCustomerNotifications}
             >
               <View style={styles.notificationSummaryContent}>
                 <View style={styles.notificationSummaryTextWrap}>
-                  <Text style={styles.notificationSummaryTitle}>الإشعارات</Text>
+                  <Text style={styles.notificationSummaryTitle}>إشعارات هذا العميل</Text>
                   <Text style={styles.notificationSummarySubtitle}>
-                    اضغط لعرض إشعارات هذا العميل
+                    اضغط لعرض إشعارات هذا العميل فقط
                   </Text>
                 </View>
                 <View style={styles.notificationSummaryIcon}>
@@ -1304,7 +1300,7 @@ export default function CustomerDetailsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.tabButton}
-            onPress={() => openCustomerNotifications()}
+            onPress={openCustomerNotifications}
           >
             <View style={{ position: 'relative' }}>
               <Bell size={16} color="#6B7280" />
@@ -1327,7 +1323,7 @@ export default function CustomerDetailsScreen() {
                 </View>
               )}
             </View>
-            <Text style={styles.tabButtonText}>الإشعارات</Text>
+            <Text style={styles.tabButtonText}>إشعارات العميل</Text>
           </TouchableOpacity>
         </View>
 

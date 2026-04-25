@@ -51,6 +51,7 @@ interface NotificationDetail {
   };
   movement?: {
     movement_number: string;
+    customer_id?: string | null;
     amount: number;
     currency: string;
     is_voided?: boolean;
@@ -258,7 +259,13 @@ function DetailIcon({ icon, color }: { icon: string; color: string }) {
 
 export default function NotificationDetailScreen() {
   const router = useRouter();
-  const { id, returnToCustomerId } = useLocalSearchParams<{ id: string; returnToCustomerId?: string }>();
+  const { id, from, customerId, customerName: paramCustomerName, returnToCustomerId } = useLocalSearchParams<{
+    id: string;
+    from?: 'general' | 'customer' | 'customer-details';
+    customerId?: string;
+    customerName?: string;
+    returnToCustomerId?: string;
+  }>();
   const { currentUser } = useAuth();
   const { triggerRefresh } = useDataRefresh();
 
@@ -279,6 +286,7 @@ export default function NotificationDetailScreen() {
           *,
           movement:account_movements!movement_id(
             movement_number,
+            customer_id,
             amount,
             currency,
             is_voided,
@@ -289,6 +297,7 @@ export default function NotificationDetailScreen() {
         `,
         )
         .eq('id', id)
+        .is('deleted_at', null)
         .maybeSingle();
 
       if (error) throw error;
@@ -319,10 +328,30 @@ export default function NotificationDetailScreen() {
   };
 
   const navigateAfterDecision = () => {
-    if (returnToCustomerId) {
+    const targetCustomerId =
+      (Array.isArray(customerId) ? customerId[0] : customerId) ||
+      (Array.isArray(returnToCustomerId) ? returnToCustomerId[0] : returnToCustomerId) ||
+      notification?.movement?.customer_id ||
+      '';
+
+    const targetCustomerName = Array.isArray(paramCustomerName) ? paramCustomerName[0] : paramCustomerName;
+    const sourcePage = Array.isArray(from) ? from[0] : from;
+
+    if (sourcePage === 'customer' && targetCustomerId) {
+      router.replace({
+        pathname: '/customer-notifications',
+        params: {
+          customerId: targetCustomerId,
+          customerName: targetCustomerName || notification?.customer_name || notification?.movement?.customer?.name || '',
+        },
+      });
+      return;
+    }
+
+    if (sourcePage === 'customer-details' && targetCustomerId) {
       router.replace({
         pathname: '/customer-details',
-        params: { id: returnToCustomerId },
+        params: { id: targetCustomerId },
       });
       return;
     }

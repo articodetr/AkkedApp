@@ -36,6 +36,7 @@ function RootLayoutNav() {
       <Stack.Screen name="pin-settings" />
       <Stack.Screen name="add-customer" />
       <Stack.Screen name="customer-details" />
+      <Stack.Screen name="customer-notifications" />
       <Stack.Screen name="new-transaction" />
       <Stack.Screen name="transaction-details" />
       <Stack.Screen name="new-movement" />
