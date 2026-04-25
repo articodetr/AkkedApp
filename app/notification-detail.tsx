@@ -304,11 +304,17 @@ export default function NotificationDetailScreen() {
     loadNotification();
   }, [loadNotification]);
 
-  const markAsReadAndRemove = async (notificationId: string) => {
+  const markAsReadOnly = async (notificationId: string) => {
     try {
-      await supabase.from('movement_notifications').delete().eq('id', notificationId);
+      await supabase
+        .from('movement_notifications')
+        .update({
+          is_read: true,
+          read_at: new Date().toISOString(),
+        })
+        .eq('id', notificationId);
     } catch (error) {
-      console.error('Error deleting notification:', error);
+      console.error('Error marking notification as read:', error);
     }
   };
 
@@ -337,9 +343,9 @@ export default function NotificationDetailScreen() {
 
       if (error) throw error;
 
-      await markAsReadAndRemove(notification.id);
+      await markAsReadOnly(notification.id);
       triggerRefresh('movements');
-      Alert.alert('تم القبول', 'تم اعتماد الحركة للطرفين، وأصبحت مؤثرة في الإجماليات بعد الموافقة.', [
+      Alert.alert('تم القبول', 'تم اعتماد الحركة للطرفين. سيبقى الإشعار موجودًا حتى تحذفه من صفحة الإشعارات.', [
         { text: 'حسنًا', onPress: navigateAfterDecision },
       ]);
     } catch (error: any) {
@@ -371,11 +377,11 @@ export default function NotificationDetailScreen() {
 
       if (error) throw error;
 
-      await markAsReadAndRemove(notification.id);
+      await markAsReadOnly(notification.id);
       triggerRefresh('movements');
       Alert.alert(
         'تم الرفض',
-        `تم رفض الحركة للطرفين، ولن تؤثر في الإجماليات عند أي طرف.\n\nسبب الرفض: ${trimmedRejectReason}`,
+        `تم رفض الحركة للطرفين. سيبقى الإشعار موجودًا حتى تحذفه من صفحة الإشعارات.\n\nسبب الرفض: ${trimmedRejectReason}`,
         [{ text: 'حسنًا', onPress: navigateAfterDecision }],
       );
     } catch (error: any) {
@@ -405,7 +411,7 @@ export default function NotificationDetailScreen() {
 
             if (error) throw error;
 
-            await markAsReadAndRemove(notification.id);
+            await markAsReadOnly(notification.id);
             triggerRefresh('movements');
             Alert.alert('تمت الموافقة', 'تمت الموافقة على حذف الحركة بنجاح.', [
               { text: 'حسنًا', onPress: () => router.back() },
@@ -424,7 +430,7 @@ export default function NotificationDetailScreen() {
   const handleAcknowledge = async () => {
     if (!notification) return;
     setIsProcessing(true);
-    await markAsReadAndRemove(notification.id);
+    await markAsReadOnly(notification.id);
     triggerRefresh('movements');
     router.back();
   };

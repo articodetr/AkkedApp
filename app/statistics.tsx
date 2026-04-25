@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ComponentType } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -13,7 +14,9 @@ import {
   AlertCircle,
   ArrowRight,
   BarChart3,
+  Bell,
   CheckCircle2,
+  ChevronLeft,
   Clock,
   RefreshCcw,
   TrendingDown,
@@ -23,23 +26,30 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
+import { supabase } from '@/lib/supabase';
 import { CURRENCIES } from '@/types/database';
-import {
-  CashFlowByCurrency,
-  NetDebtByCurrency,
-  PeriodStats,
-  StatisticsData,
-  StatisticsService,
-} from '@/services/statisticsService';
+import { StatisticsData, StatisticsService } from '@/services/statisticsService';
 
-type PeriodKey = 'today' | 'yesterday' | 'week' | 'month';
+type CurrencyAmount = { currency: string; amount: number };
 
-const periodLabels: Record<PeriodKey, string> = {
-  today: 'اليوم',
-  yesterday: 'أمس',
-  week: 'آخر 7 أيام',
-  month: 'آخر 30 يومًا',
+type NetDebtByCurrency = {
+  currency: string;
+  totalForMe: number;
+  totalOnMe: number;
+  netAmount: number;
+  finalAmount: number;
+  direction: 'for_me' | 'on_me' | 'balanced';
 };
+
+type CustomerBalanceLine = {
+  customerId: string;
+  customerName: string;
+  currency: string;
+  amount: number;
+  direction: 'for_me' | 'on_me';
+};
+
+type IconComponent = ComponentType<{ size: number; color: string }>;
 
 function formatAmount(amount: number): string {
   return Number(amount || 0).toLocaleString('en-US', {
@@ -48,167 +58,282 @@ function formatAmount(amount: number): string {
   });
 }
 
-function getCurrencySymbol(code: string): string {
-  return CURRENCIES.find((currency) => currency.code === code)?.symbol || code;
+function getCurrencyInfo(code: string) {
+  return CURRENCIES.find((currency) => currency.code === code) || {
+    code,
+    name: code,
+    symbol: code,
+  };
 }
 
-function currencyLine(items: { currency: string; amount: number }[]): string {
-  if (!items.length) return 'لا توجد مبالغ';
-  return items
-    .slice(0, 3)
-    .map((item) => `${formatAmount(item.amount)} ${getCurrencySymbol(item.currency)}`)
-    .join('  •  ');
+function getPrimaryAmount(items: CurrencyAmount[]) {
+  const visibleItems = items.filter((item) => Math.abs(item.amount) > 0);
+  if (visibleItems.length === 0) {
+    return {
+      amount: 0,
+      currency: '',
+      symbol: '',
+      extraText: 'لا توجد مبالغ',
+    };
+  }
+
+  const first = visibleItems[0];
+  const currencyInfo = getCurrencyInfo(first.currency);
+  return {
+    amount: first.amount,
+    currency: first.currency,
+    symbol: currencyInfo.symbol,
+    extraText:
+      visibleItems.length > 1 ? `+${visibleItems.length - 1} عملة أخرى` : currencyInfo.name,
+  };
 }
 
-function StatCard({
+function buildNetDebtByCurrency(stats: StatisticsData | null): NetDebtByCurrency[] {
+  if (!stats) return [];
+
+  const backendNet = (stats.debtStats as any)?.netByCurrency;
+  if (Array.isArray(backendNet) && backendNet.length > 0) {
+    return backendNet
+      .map((item: any) => {
+        const totalForMe = Number(item.totalForMe ?? item.total_for_me ?? 0) || 0;
+        const totalOnMe = Number(item.totalOnMe ?? item.total_on_me ?? 0) || 0;
+        const netAmount = Number(item.netAmount ?? item.net_amount ?? totalForMe - totalOnMe) || 0;
+        const finalAmount = Math.abs(Number(item.finalAmount ?? item.final_amount ?? netAmount) || 0);
+        const rawDirection = item.direction;
+        const direction: NetDebtByCurrency['direction'] =
+          rawDirection === 'for_me' || rawDirection === 'on_me' || rawDirection === 'balanced'
+            ? rawDirection
+            : netAmount > 0
+              ? 'for_me'
+              : netAmount < 0
+                ? 'on_me'
+                : 'balanced';
+
+        return {
+          currency: String(item.currency || ''),
+          totalForMe,
+          totalOnMe,
+          netAmount,
+          finalAmount,
+          direction,
+        };
+      })
+      .filter((item: NetDebtByCurrency) => item.currency);
+  }
+
+  const currencyMap = new Map<string, { totalForMe: number; totalOnMe: number }>();
+
+  stats.debtStats.owedToUsByCurrency.forEach((item) => {
+    const current = currencyMap.get(item.currency) || { totalForMe: 0, totalOnMe: 0 };
+    current.totalForMe += Number(item.amount || 0);
+    currencyMap.set(item.currency, current);
+  });
+
+  stats.debtStats.weOweByCurrency.forEach((item) => {
+    const current = currencyMap.get(item.currency) || { totalForMe: 0, totalOnMe: 0 };
+    current.totalOnMe += Number(item.amount || 0);
+    currencyMap.set(item.currency, current);
+  });
+
+  return Array.from(currencyMap.entries())
+    .map(([currency, totals]) => {
+      const netAmount = totals.totalForMe - totals.totalOnMe;
+      return {
+        currency,
+        totalForMe: totals.totalForMe,
+        totalOnMe: totals.totalOnMe,
+        netAmount,
+        finalAmount: Math.abs(netAmount),
+        direction: netAmount > 0 ? 'for_me' : netAmount < 0 ? 'on_me' : 'balanced',
+      } as NetDebtByCurrency;
+    })
+    .sort((a, b) => b.finalAmount - a.finalAmount);
+}
+
+function buildTopCustomerLines(stats: StatisticsData | null): {
+  forMe: CustomerBalanceLine[];
+  onMe: CustomerBalanceLine[];
+} {
+  const forMe: CustomerBalanceLine[] = [];
+  const onMe: CustomerBalanceLine[] = [];
+
+  if (!stats) return { forMe, onMe };
+
+  stats.topCustomers.forEach((customer) => {
+    customer.balanceByCurrency.forEach((balance) => {
+      const amount = Number(balance.amount || 0);
+      if (amount > 0) {
+        forMe.push({
+          customerId: customer.id,
+          customerName: customer.name,
+          currency: balance.currency,
+          amount,
+          direction: 'for_me',
+        });
+      } else if (amount < 0) {
+        onMe.push({
+          customerId: customer.id,
+          customerName: customer.name,
+          currency: balance.currency,
+          amount: Math.abs(amount),
+          direction: 'on_me',
+        });
+      }
+    });
+  });
+
+  return {
+    forMe: forMe.sort((a, b) => b.amount - a.amount).slice(0, 3),
+    onMe: onMe.sort((a, b) => b.amount - a.amount).slice(0, 3),
+  };
+}
+
+function StatSummaryCard({
   title,
-  value,
-  subtitle,
+  amount,
+  symbol,
+  note,
   color,
   icon: Icon,
 }: {
   title: string;
-  value: string | number;
-  subtitle?: string;
+  amount: string | number;
+  symbol?: string;
+  note?: string;
   color: string;
-  icon: React.ComponentType<{ size: number; color: string }>;
+  icon: IconComponent;
 }) {
   return (
-    <View style={styles.statCard}>
-      <View style={[styles.iconCircle, { backgroundColor: `${color}14` }]}>
-        <Icon size={20} color={color} />
+    <View style={styles.summaryCard}>
+      <View style={[styles.summaryIcon, { backgroundColor: `${color}14` }]}> 
+        <Icon size={22} color={color} />
       </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.statSubtitle}>{subtitle}</Text> : null}
+      <View style={styles.summaryTextBlock}>
+        <Text style={styles.summaryTitle}>{title}</Text>
+        <View style={styles.summaryAmountRow}>
+          {symbol ? <Text style={[styles.summarySymbol, { color }]}>{symbol}</Text> : null}
+          <Text style={[styles.summaryAmount, { color }]}>{amount}</Text>
+        </View>
+        {note ? <Text style={styles.summaryNote}>{note}</Text> : null}
+      </View>
     </View>
   );
 }
 
-function SectionHeader({ title, icon: Icon, color }: { title: string; icon: React.ComponentType<{ size: number; color: string }>; color: string }) {
+function SectionHeader({ title, icon: Icon, color }: { title: string; icon: IconComponent; color: string }) {
   return (
     <View style={styles.sectionHeader}>
-      <Icon size={22} color={color} />
+      <Icon size={21} color={color} />
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
   );
 }
 
-function PeriodCard({ label, data }: { label: string; data: PeriodStats }) {
+function NetCurrencyRow({ item }: { item: NetDebtByCurrency }) {
+  const currencyInfo = getCurrencyInfo(item.currency);
+  const isForMe = item.direction === 'for_me';
+  const isOnMe = item.direction === 'on_me';
+  const netColor = isForMe ? '#059669' : isOnMe ? '#DC2626' : '#64748B';
+  const netLabel = isForMe ? 'لك' : isOnMe ? 'عليك' : 'متوازن';
+
   return (
-    <View style={styles.periodCard}>
-      <Text style={styles.periodTitle}>{label}</Text>
-      <View style={styles.periodRow}>
-        <View style={styles.periodMetric}>
-          <Text style={styles.periodMetricLabel}>الحوالات</Text>
-          <Text style={styles.periodMetricValue}>{data.transactions}</Text>
-          <Text style={styles.periodMetricHint}>{currencyLine(data.transactionAmountsByCurrency)}</Text>
+    <View style={styles.currencyRow}>
+      <View style={styles.currencyBadge}>
+        <Text style={styles.currencyCode}>{item.currency}</Text>
+        <Text style={styles.currencyName}>{currencyInfo.name}</Text>
+      </View>
+
+      <View style={styles.currencyValuesGroup}>
+        <View style={styles.currencyValueBox}>
+          <Text style={[styles.currencyValueLabel, { color: '#059669' }]}>لك</Text>
+          <Text style={[styles.currencyValue, { color: '#059669' }]}>
+            {formatAmount(item.totalForMe)}
+          </Text>
         </View>
-        <View style={styles.verticalDivider} />
-        <View style={styles.periodMetric}>
-          <Text style={styles.periodMetricLabel}>الحركات</Text>
-          <Text style={styles.periodMetricValue}>{data.movements}</Text>
-          <Text style={styles.periodMetricHint}>{currencyLine(data.movementAmountsByCurrency)}</Text>
+
+        <View style={styles.currencyDivider} />
+
+        <View style={styles.currencyValueBox}>
+          <Text style={[styles.currencyValueLabel, { color: '#DC2626' }]}>عليك</Text>
+          <Text style={[styles.currencyValue, { color: '#DC2626' }]}>
+            {formatAmount(item.totalOnMe)}
+          </Text>
+        </View>
+
+        <View style={styles.currencyDivider} />
+
+        <View style={styles.currencyValueBox}>
+          <Text style={styles.currencyValueLabel}>الصافي</Text>
+          <Text style={[styles.currencyValue, { color: netColor }]}> 
+            {netLabel} {formatAmount(item.finalAmount)} {currencyInfo.symbol}
+          </Text>
         </View>
       </View>
     </View>
   );
 }
 
-function CashFlowCard({ flow }: { flow: CashFlowByCurrency }) {
-  const symbol = getCurrencySymbol(flow.currency);
-  const netColor = flow.netFlow > 0 ? '#DC2626' : flow.netFlow < 0 ? '#059669' : '#6B7280';
-  const netLabel = flow.netFlow > 0 ? 'الصافي عليه' : flow.netFlow < 0 ? 'الصافي له' : 'متوازن';
-
+function AttentionTile({
+  title,
+  value,
+  color,
+  icon: Icon,
+  onPress,
+}: {
+  title: string;
+  value: number;
+  color: string;
+  icon: IconComponent;
+  onPress?: () => void;
+}) {
   return (
-    <View style={styles.flowCard}>
-      <View style={styles.flowHeader}>
-        <View>
-          <Text style={styles.flowCurrency}>{flow.currency}</Text>
-          <Text style={styles.flowHint}>معتمد: {flow.approvedCount} حركة</Text>
-        </View>
-        <View style={[styles.netPill, { backgroundColor: `${netColor}14` }]}>
-          <Text style={[styles.netPillText, { color: netColor }]}>{netLabel}</Text>
-        </View>
+    <TouchableOpacity style={styles.attentionTile} activeOpacity={0.75} onPress={onPress}>
+      <View style={[styles.attentionIcon, { backgroundColor: `${color}14` }]}> 
+        <Icon size={20} color={color} />
       </View>
-
-      <View style={styles.flowMainRow}>
-        <View style={styles.flowBox}>
-          <TrendingDown size={18} color="#DC2626" />
-          <Text style={styles.flowBoxLabel}>عليه</Text>
-          <Text style={[styles.flowBoxValue, { color: '#DC2626' }]}>{formatAmount(flow.totalReceived)} {symbol}</Text>
-        </View>
-        <View style={styles.flowBox}>
-          <TrendingUp size={18} color="#059669" />
-          <Text style={styles.flowBoxLabel}>له</Text>
-          <Text style={[styles.flowBoxValue, { color: '#059669' }]}>{formatAmount(flow.totalPaid)} {symbol}</Text>
-        </View>
-      </View>
-
-      <View style={styles.netBox}>
-        <Text style={styles.netLabel}>الصافي الفعلي</Text>
-        <Text style={[styles.netValue, { color: netColor }]}>{formatAmount(Math.abs(flow.netFlow))} {symbol}</Text>
-      </View>
-
-      <View style={styles.smallGrid}>
-        <View style={styles.smallInfoBox}>
-          <Text style={styles.smallInfoTitle}>مرتبطة</Text>
-          <Text style={styles.smallInfoText}>عليه {formatAmount(flow.linkedReceived)} / له {formatAmount(flow.linkedPaid)}</Text>
-        </View>
-        <View style={styles.smallInfoBox}>
-          <Text style={styles.smallInfoTitle}>غير مرتبطة</Text>
-          <Text style={styles.smallInfoText}>عليه {formatAmount(flow.directReceived)} / له {formatAmount(flow.directPaid)}</Text>
-        </View>
-      </View>
-
-      <View style={styles.chipRow}>
-        <Text style={[styles.chip, styles.pendingChip]}>معلّق: {flow.pendingCount} / {formatAmount(flow.pendingAmount)} {symbol}</Text>
-        <Text style={[styles.chip, styles.internalChip]}>داخلي: {flow.internalTransferCount} / {formatAmount(flow.internalTransferAmount)} {symbol}</Text>
-      </View>
-    </View>
+      <Text style={styles.attentionTitle}>{title}</Text>
+      <Text style={[styles.attentionValue, { color }]}>{value}</Text>
+    </TouchableOpacity>
   );
 }
 
-
-function NetDebtCard({ item }: { item: NetDebtByCurrency }) {
-  const symbol = getCurrencySymbol(item.currency);
-  const color = item.direction === 'for_me' ? '#059669' : item.direction === 'on_me' ? '#DC2626' : '#6B7280';
-  const label = item.direction === 'for_me' ? 'الصافي لك' : item.direction === 'on_me' ? 'الصافي عليك' : 'متوازن';
-  const hint = item.direction === 'balanced'
-    ? 'كل ما لك وما عليك متساوٍ في هذه العملة'
-    : 'بعد تصفية جميع العملاء في نفس العملة';
-
+function TopCustomersCard({
+  title,
+  color,
+  customers,
+  onOpenCustomer,
+}: {
+  title: string;
+  color: string;
+  customers: CustomerBalanceLine[];
+  onOpenCustomer: (customerId: string) => void;
+}) {
   return (
-    <View style={styles.flowCard}>
-      <View style={styles.flowHeader}>
-        <View>
-          <Text style={styles.flowCurrency}>{item.currency}</Text>
-          <Text style={styles.flowHint}>{hint}</Text>
-        </View>
-        <View style={[styles.netPill, { backgroundColor: `${color}14` }]}> 
-          <Text style={[styles.netPillText, { color }]}>{label}</Text>
-        </View>
-      </View>
-
-      <View style={styles.netBox}>
-        <Text style={styles.netLabel}>النتيجة النهائية</Text>
-        <Text style={[styles.netValue, { color }]}>{formatAmount(item.finalAmount)} {symbol}</Text>
-      </View>
-
-      <View style={styles.smallGrid}>
-        <View style={styles.smallInfoBox}>
-          <Text style={styles.smallInfoTitle}>إجمالي الذي لك</Text>
-          <Text style={[styles.smallInfoText, { color: '#059669', fontWeight: '900' }]}>
-            {formatAmount(item.totalForMe)} {symbol}
-          </Text>
-        </View>
-        <View style={styles.smallInfoBox}>
-          <Text style={styles.smallInfoTitle}>إجمالي الذي عليك</Text>
-          <Text style={[styles.smallInfoText, { color: '#DC2626', fontWeight: '900' }]}>
-            {formatAmount(item.totalOnMe)} {symbol}
-          </Text>
-        </View>
-      </View>
+    <View style={[styles.topCustomersCard, { backgroundColor: `${color}0C` }]}> 
+      <Text style={[styles.topCustomersTitle, { color }]}>{title}</Text>
+      {customers.length === 0 ? (
+        <Text style={styles.emptySmallText}>لا توجد مبالغ</Text>
+      ) : (
+        customers.map((customer) => {
+          const currencyInfo = getCurrencyInfo(customer.currency);
+          return (
+            <TouchableOpacity
+              key={`${customer.customerId}-${customer.currency}-${customer.direction}`}
+              style={styles.customerLine}
+              activeOpacity={0.75}
+              onPress={() => onOpenCustomer(customer.customerId)}
+            >
+              <View style={styles.customerAvatarSmall}>
+                <Users size={15} color="#64748B" />
+              </View>
+              <Text style={styles.customerLineName} numberOfLines={1}>{customer.customerName}</Text>
+              <Text style={[styles.customerLineAmount, { color }]}> 
+                {formatAmount(customer.amount)} {currencyInfo.symbol}
+              </Text>
+            </TouchableOpacity>
+          );
+        })
+      )}
     </View>
   );
 }
@@ -218,13 +343,32 @@ export default function StatisticsScreen() {
   const { currentUser } = useAuth();
   const { lastRefreshTime } = useDataRefresh();
   const [stats, setStats] = useState<StatisticsData | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const loadUnreadCount = useCallback(async () => {
+    if (!currentUser?.userId) {
+      setUnreadCount(0);
+      return;
+    }
+
+    const { count, error: unreadError } = await supabase
+      .from('movement_notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', currentUser.userId)
+      .eq('is_read', false);
+
+    if (!unreadError && typeof count === 'number') {
+      setUnreadCount(count);
+    }
+  }, [currentUser?.userId]);
+
   const loadStats = useCallback(async () => {
     if (!currentUser?.userId) {
       setStats(null);
+      setUnreadCount(0);
       setLoading(false);
       return;
     }
@@ -233,13 +377,14 @@ export default function StatisticsScreen() {
       setError(null);
       const data = await StatisticsService.fetchAllStatistics(currentUser.userId);
       setStats(data);
+      await loadUnreadCount();
     } catch (loadError) {
       console.error('[StatisticsScreen] loadStats failed:', loadError);
       setError(loadError instanceof Error ? loadError.message : 'حدث خطأ أثناء تحميل الإحصائيات');
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.userId]);
+  }, [currentUser?.userId, loadUnreadCount]);
 
   useEffect(() => {
     setLoading(true);
@@ -250,7 +395,7 @@ export default function StatisticsScreen() {
     if (!loading && currentUser?.userId) {
       loadStats();
     }
-  }, [lastRefreshTime]);
+  }, [lastRefreshTime, currentUser?.userId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -258,24 +403,35 @@ export default function StatisticsScreen() {
     setRefreshing(false);
   };
 
-  const zeroButDataExists = useMemo(() => {
-    if (!stats?.debug) return false;
-    return stats.totalMovements === 0 && stats.debug.scopedMovements > 0;
-  }, [stats]);
+  const netDebts = useMemo(() => buildNetDebtByCurrency(stats), [stats]);
+  const topCustomers = useMemo(() => buildTopCustomerLines(stats), [stats]);
+
+  const primaryForMe = getPrimaryAmount(stats?.debtStats.owedToUsByCurrency || []);
+  const primaryOnMe = getPrimaryAmount(stats?.debtStats.weOweByCurrency || []);
+  const primaryNet = netDebts.find((item) => item.direction !== 'balanced') || netDebts[0];
+  const primaryNetCurrency = primaryNet ? getCurrencyInfo(primaryNet.currency) : null;
+  const primaryNetColor = primaryNet?.direction === 'on_me' ? '#DC2626' : primaryNet?.direction === 'for_me' ? '#2563EB' : '#64748B';
+  const primaryNetLabel = !primaryNet
+    ? 'متوازن'
+    : primaryNet.direction === 'on_me'
+      ? 'عليك'
+      : primaryNet.direction === 'for_me'
+        ? 'لك'
+        : 'متوازن';
 
   if (loading) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <ArrowRight size={24} color="#111827" />
+          <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+            <ArrowRight size={23} color="#0F172A" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>الإحصائيات</Text>
-          <View style={{ width: 40 }} />
+          <Text style={styles.headerTitle}>الإحصاءات</Text>
+          <View style={styles.headerButton} />
         </View>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color="#2563EB" />
-          <Text style={styles.centerText}>جاري تحميل الإحصائيات...</Text>
+          <Text style={styles.centerText}>جاري تحميل الإحصاءات...</Text>
         </View>
       </View>
     );
@@ -284,159 +440,143 @@ export default function StatisticsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowRight size={24} color="#111827" />
+        <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+          <ArrowRight size={23} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>الإحصائيات</Text>
-        <TouchableOpacity style={styles.backButton} onPress={loadStats}>
-          <RefreshCcw size={21} color="#2563EB" />
+        <Text style={styles.headerTitle}>الإحصاءات</Text>
+        <TouchableOpacity style={styles.headerButton} onPress={loadStats}>
+          <RefreshCcw size={20} color="#2563EB" />
         </TouchableOpacity>
       </View>
 
       <ScrollView
         style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {error ? (
           <View style={styles.errorBox}>
-            <AlertCircle size={24} color="#DC2626" />
+            <AlertCircle size={22} color="#DC2626" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.errorTitle}>تعذر تحميل الإحصائيات</Text>
+              <Text style={styles.errorTitle}>تعذر تحميل الإحصاءات</Text>
               <Text style={styles.errorMessage}>{error}</Text>
             </View>
           </View>
         ) : null}
 
-        {zeroButDataExists ? (
-          <View style={styles.warningBox}>
-            <AlertCircle size={24} color="#D97706" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.warningTitle}>تنبيه تشخيصي</Text>
-              <Text style={styles.warningMessage}>
-                توجد حركات في نطاق المستخدم ({stats?.debug?.scopedMovements}) لكن المعتمد منها صفر. راجع حالة approval_status أو is_voided في Supabase.
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
-        <SectionHeader title="ملخص عام" icon={BarChart3} color="#2563EB" />
-        <View style={styles.statsGrid}>
-          <StatCard title="العملاء" value={stats?.totalCustomers || 0} color="#2563EB" icon={Users} />
-          <StatCard title="الحركات المعتمدة" value={stats?.totalMovements || 0} color="#059669" icon={CheckCircle2} />
-          <StatCard title="الحوالات" value={stats?.totalTransactions || 0} color="#7C3AED" icon={BarChart3} />
-          <StatCard title="العملات" value={stats?.cashFlowByCurrency.length || 0} color="#D97706" icon={Wallet} />
-        </View>
-
-        <SectionHeader title="ما يحتاج متابعة" icon={Clock} color="#D97706" />
-        <View style={styles.statsGrid}>
-          <StatCard
+        <View style={styles.summaryGrid}>
+          <StatSummaryCard
+            title="ما لي"
+            amount={formatAmount(primaryForMe.amount)}
+            symbol={primaryForMe.symbol}
+            note={primaryForMe.extraText}
+            color="#059669"
+            icon={Wallet}
+          />
+          <StatSummaryCard
+            title="ما عليّ"
+            amount={formatAmount(primaryOnMe.amount)}
+            symbol={primaryOnMe.symbol}
+            note={primaryOnMe.extraText}
+            color="#DC2626"
+            icon={TrendingDown}
+          />
+          <StatSummaryCard
+            title="الصافي"
+            amount={primaryNet ? `${primaryNetLabel} ${formatAmount(primaryNet.finalAmount)}` : 'متوازن'}
+            symbol={primaryNetCurrency?.symbol}
+            note={primaryNet ? 'بعد تصفية كل العملاء' : 'لا توجد ديون صافية'}
+            color={primaryNetColor}
+            icon={BarChart3}
+          />
+          <StatSummaryCard
             title="بانتظار موافقتي"
-            value={stats?.actionableStats.awaitingMyApprovalCount || 0}
-            subtitle={currencyLine(stats?.actionableStats.awaitingMyApprovalByCurrency || [])}
+            amount={stats?.actionableStats.awaitingMyApprovalCount || 0}
+            note="حركات تحتاج قرارك"
             color="#D97706"
             icon={Clock}
           />
-          <StatCard
+        </View>
+
+        <SectionHeader title="الصافي النهائي حسب العملة" icon={BarChart3} color="#2563EB" />
+        <View style={styles.cardBlock}>
+          {netDebts.length ? (
+            netDebts.map((item) => <NetCurrencyRow key={item.currency} item={item} />)
+          ) : (
+            <View style={styles.emptyBlock}>
+              <CheckCircle2 size={26} color="#059669" />
+              <Text style={styles.emptyTitle}>لا توجد ديون صافية</Text>
+              <Text style={styles.emptyText}>كل الحسابات متوازنة في الوقت الحالي.</Text>
+            </View>
+          )}
+        </View>
+
+        <SectionHeader title="يحتاج انتباهك" icon={Bell} color="#D97706" />
+        <View style={styles.attentionGrid}>
+          <AttentionTile
+            title="بانتظار موافقتي"
+            value={stats?.actionableStats.awaitingMyApprovalCount || 0}
+            color="#D97706"
+            icon={Clock}
+            onPress={() => router.push('/(tabs)/notifications')}
+          />
+          <AttentionTile
             title="بانتظار الطرف الآخر"
             value={stats?.actionableStats.awaitingOthersApprovalCount || 0}
-            subtitle={currencyLine(stats?.actionableStats.awaitingOthersApprovalByCurrency || [])}
             color="#2563EB"
             icon={RefreshCcw}
+            onPress={() => router.push('/(tabs)/notifications')}
           />
-          <StatCard
-            title="متأخر 24 ساعة"
-            value={stats?.actionableStats.stalePendingCount || 0}
-            subtitle={currencyLine(stats?.actionableStats.stalePendingByCurrency || [])}
-            color="#DC2626"
-            icon={AlertCircle}
+          <AttentionTile
+            title="غير مقروءة"
+            value={unreadCount}
+            color="#7C3AED"
+            icon={Bell}
+            onPress={() => router.push('/(tabs)/notifications')}
           />
-          <StatCard
-            title="نسبة القبول"
-            value={`${stats?.actionableStats.approvalRateLast7Days || 0}%`}
-            subtitle={`${stats?.actionableStats.approvedLast7Days || 0} قبول / ${stats?.actionableStats.rejectedLast7Days || 0} رفض`}
+        </View>
+
+        <SectionHeader title="أكبر العملاء" icon={Users} color="#2563EB" />
+        <View style={styles.topCustomersGrid}>
+          <TopCustomersCard
+            title="أكبر المبالغ لك"
             color="#059669"
-            icon={CheckCircle2}
+            customers={topCustomers.forMe}
+            onOpenCustomer={(customerId) => router.push(`/customer-details?id=${customerId}` as any)}
+          />
+          <TopCustomersCard
+            title="أكبر المبالغ عليك"
+            color="#DC2626"
+            customers={topCustomers.onMe}
+            onOpenCustomer={(customerId) => router.push(`/customer-details?id=${customerId}` as any)}
           />
         </View>
 
-        <SectionHeader title="الصافي النهائي حسب العملة" icon={Wallet} color="#2563EB" />
-        {stats?.debtStats.netByCurrency.length ? (
-          stats.debtStats.netByCurrency.map((item) => <NetDebtCard key={item.currency} item={item} />)
-        ) : (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyTitle}>لا توجد ديون صافية</Text>
-            <Text style={styles.emptyMessage}>لا يوجد فرق بين ما لك وما عليك في العملات الحالية.</Text>
+        <SectionHeader title="ملخص الحركات" icon={CheckCircle2} color="#059669" />
+        <View style={styles.movementSummaryCard}>
+          <View style={styles.movementMetric}>
+            <Text style={styles.movementMetricLabel}>معتمدة</Text>
+            <Text style={[styles.movementMetricValue, { color: '#059669' }]}>{stats?.totalMovements || 0}</Text>
           </View>
-        )}
-
-        <SectionHeader title="تفاصيل الديون قبل التصفية" icon={AlertCircle} color="#DC2626" />
-        <View style={styles.debtBox}>
-          <View style={styles.debtColumn}>
-            <Text style={styles.debtLabel}>إجمالي الذي لك</Text>
-            <Text style={[styles.debtValue, { color: '#059669' }]}>{currencyLine(stats?.debtStats.owedToUsByCurrency || [])}</Text>
+          <View style={styles.metricDivider} />
+          <View style={styles.movementMetric}>
+            <Text style={styles.movementMetricLabel}>معلقة</Text>
+            <Text style={[styles.movementMetricValue, { color: '#D97706' }]}> 
+              {(stats?.actionableStats.awaitingMyApprovalCount || 0) +
+                (stats?.actionableStats.awaitingOthersApprovalCount || 0)}
+            </Text>
           </View>
-          <View style={styles.verticalDivider} />
-          <View style={styles.debtColumn}>
-            <Text style={styles.debtLabel}>إجمالي الذي عليك</Text>
-            <Text style={[styles.debtValue, { color: '#DC2626' }]}>{currencyLine(stats?.debtStats.weOweByCurrency || [])}</Text>
+          <View style={styles.metricDivider} />
+          <View style={styles.movementMetric}>
+            <Text style={styles.movementMetricLabel}>آخر 7 أيام</Text>
+            <Text style={[styles.movementMetricValue, { color: '#2563EB' }]}> 
+              {stats?.periodStats.week.movements || 0}
+            </Text>
           </View>
         </View>
 
-        <SectionHeader title="التدفق المالي حسب الحركة" icon={Wallet} color="#2563EB" />
-        {stats?.cashFlowByCurrency.length ? (
-          stats.cashFlowByCurrency.map((flow) => <CashFlowCard key={flow.currency} flow={flow} />)
-        ) : (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyTitle}>لا يوجد تدفق مالي ظاهر</Text>
-            <Text style={styles.emptyMessage}>إذا كانت هناك حركات فعلية، افتح قسم التشخيص أسفل الصفحة لمعرفة هل المشكلة من النطاق أو من حالة الموافقة.</Text>
-          </View>
-        )}
-
-        <SectionHeader title="إحصائيات الفترات" icon={BarChart3} color="#7C3AED" />
-        {(Object.keys(periodLabels) as PeriodKey[]).map((key) => (
-          <PeriodCard key={key} label={periodLabels[key]} data={stats?.periodStats[key] || {
-            transactions: 0,
-            movements: 0,
-            commissionMovements: 0,
-            transactionAmount: 0,
-            movementAmount: 0,
-            commissionAmount: 0,
-            transactionAmountsByCurrency: [],
-            movementAmountsByCurrency: [],
-            commissionAmountsByCurrency: [],
-          }} />
-        ))}
-
-        {stats?.topCustomers.length ? (
-          <>
-            <SectionHeader title="أكثر العملاء نشاطًا" icon={Users} color="#059669" />
-            {stats.topCustomers.map((customer, index) => (
-              <View key={customer.id} style={styles.customerCard}>
-                <View style={styles.rankCircle}>
-                  <Text style={styles.rankText}>{index + 1}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.customerName}>{customer.name}</Text>
-                  <Text style={styles.customerMeta}>{customer.totalMovements} حركة • {formatAmount(customer.totalVolume)}</Text>
-                  <Text style={styles.customerMeta}>{currencyLine(customer.balanceByCurrency)}</Text>
-                </View>
-              </View>
-            ))}
-          </>
-        ) : null}
-
-        {stats?.debug ? (
-          <View style={styles.debugBox}>
-            <Text style={styles.debugTitle}>تشخيص مصدر البيانات</Text>
-            <Text style={styles.debugText}>المستخدم: {stats.debug.selectedUser?.user_name || 'غير معروف'} / {stats.debug.selectedUser?.role || '-'}</Text>
-            <Text style={styles.debugText}>كل العملاء: {stats.debug.allCustomers} • عملاء النطاق: {stats.debug.scopedCustomers}</Text>
-            <Text style={styles.debugText}>كل الحركات: {stats.debug.allMovements} • حركات النطاق: {stats.debug.scopedMovements}</Text>
-            <Text style={styles.debugText}>إشعارات المستخدم: {stats.debug.allNotificationsForUser}</Text>
-            <Text style={styles.debugText}>الدوال: {stats.debug.functionSignatures.join(' | ')}</Text>
-          </View>
-        ) : null}
-
-        <View style={{ height: 36 }} />
+        <View style={styles.footerSpace} />
       </ScrollView>
     </View>
   );
@@ -452,26 +592,31 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingHorizontal: 18,
     paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
-  backButton: {
-    width: 40,
-    height: 40,
+  headerButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#111827',
+    color: '#0F172A',
+    fontSize: 21,
+    fontWeight: '900',
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 34,
   },
   centerState: {
     flex: 1,
@@ -480,359 +625,300 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   centerText: {
-    color: '#4B5563',
+    color: '#475569',
     fontSize: 15,
-  },
-  sectionHeader: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 22,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'right',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    minHeight: 138,
-  },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  statValue: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#111827',
-    textAlign: 'right',
-  },
-  statTitle: {
-    fontSize: 13,
     fontWeight: '700',
-    color: '#4B5563',
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  statSubtitle: {
-    fontSize: 11,
-    color: '#6B7280',
-    textAlign: 'right',
-    marginTop: 6,
-    lineHeight: 16,
   },
   errorBox: {
-    marginTop: 16,
     backgroundColor: '#FEF2F2',
-    borderRadius: 16,
-    borderWidth: 1,
     borderColor: '#FECACA',
+    borderWidth: 1,
+    borderRadius: 18,
     padding: 14,
     flexDirection: 'row-reverse',
-    gap: 12,
+    gap: 10,
+    marginBottom: 14,
   },
   errorTitle: {
     color: '#991B1B',
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '900',
     textAlign: 'right',
   },
   errorMessage: {
     color: '#7F1D1D',
-    marginTop: 4,
-    lineHeight: 20,
-    textAlign: 'right',
-  },
-  warningBox: {
-    marginTop: 16,
-    backgroundColor: '#FFFBEB',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    padding: 14,
-    flexDirection: 'row-reverse',
-    gap: 12,
-  },
-  warningTitle: {
-    color: '#92400E',
-    fontWeight: '800',
-    textAlign: 'right',
-  },
-  warningMessage: {
-    color: '#92400E',
-    marginTop: 4,
-    lineHeight: 20,
-    textAlign: 'right',
-  },
-  flowCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 12,
-  },
-  flowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  flowCurrency: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#111827',
-  },
-  flowHint: {
     fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  netPill: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  netPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  flowMainRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  flowBox: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  flowBoxLabel: {
-    color: '#4B5563',
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 8,
-    textAlign: 'right',
-  },
-  flowBoxValue: {
-    fontSize: 17,
-    fontWeight: '900',
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  netBox: {
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-  },
-  netLabel: {
-    color: '#6B7280',
-    fontWeight: '700',
-  },
-  netValue: {
-    marginTop: 4,
-    fontSize: 23,
-    fontWeight: '900',
-  },
-  smallGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-  smallInfoBox: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 14,
-    padding: 10,
-  },
-  smallInfoTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'right',
-  },
-  smallInfoText: {
-    fontSize: 11,
-    color: '#4B5563',
-    textAlign: 'right',
-    marginTop: 5,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  chip: {
-    overflow: 'hidden',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  pendingChip: {
-    backgroundColor: '#FEF3C7',
-    color: '#92400E',
-  },
-  internalChip: {
-    backgroundColor: '#DBEAFE',
-    color: '#1D4ED8',
-  },
-  emptyBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  emptyTitle: {
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  emptyMessage: {
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 20,
-  },
-  debtBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  debtColumn: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  debtLabel: {
-    color: '#6B7280',
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  debtValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  verticalDivider: {
-    width: 1,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: 10,
-  },
-  periodCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 14,
-    marginBottom: 10,
-  },
-  periodTitle: {
-    color: '#111827',
-    fontSize: 15,
-    fontWeight: '900',
-    textAlign: 'right',
-    marginBottom: 10,
-  },
-  periodRow: {
-    flexDirection: 'row',
-  },
-  periodMetric: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  periodMetricLabel: {
-    color: '#6B7280',
-    fontWeight: '700',
-  },
-  periodMetricValue: {
-    color: '#2563EB',
-    fontSize: 23,
-    fontWeight: '900',
-    marginTop: 5,
-  },
-  periodMetricHint: {
-    color: '#6B7280',
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  customerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 10,
-    flexDirection: 'row-reverse',
-    gap: 12,
-    alignItems: 'center',
-  },
-  rankCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankText: {
-    color: '#059669',
-    fontWeight: '900',
-  },
-  customerName: {
-    color: '#111827',
-    fontWeight: '900',
-    textAlign: 'right',
-  },
-  customerMeta: {
-    color: '#6B7280',
-    fontSize: 12,
+    lineHeight: 18,
     marginTop: 3,
     textAlign: 'right',
   },
-  debugBox: {
-    marginTop: 20,
-    backgroundColor: '#111827',
-    borderRadius: 18,
-    padding: 14,
+  summaryGrid: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  debugTitle: {
-    color: '#FFFFFF',
+  summaryCard: {
+    width: '48%',
+    minHeight: 142,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 15,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  summaryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  summaryTextBlock: {
+    alignItems: 'flex-end',
+  },
+  summaryTitle: {
+    color: '#0F172A',
+    fontSize: 16,
     fontWeight: '900',
     textAlign: 'right',
-    marginBottom: 8,
   },
-  debugText: {
-    color: '#D1D5DB',
-    fontSize: 12,
+  summaryAmountRow: {
+    marginTop: 7,
+    flexDirection: 'row-reverse',
+    alignItems: 'baseline',
+    gap: 5,
+  },
+  summaryAmount: {
+    fontSize: 23,
+    fontWeight: '900',
     textAlign: 'right',
+  },
+  summarySymbol: {
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  summaryNote: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 5,
+    textAlign: 'right',
+  },
+  sectionHeader: {
+    marginTop: 24,
+    marginBottom: 12,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionTitle: {
+    color: '#0F172A',
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  cardBlock: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  currencyRow: {
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 12,
+  },
+  currencyBadge: {
+    width: 82,
+    alignItems: 'center',
+  },
+  currencyCode: {
+    color: '#0F172A',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  currencyName: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  currencyValuesGroup: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+  },
+  currencyValueBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  currencyValueLabel: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '900',
+    marginBottom: 5,
+  },
+  currencyValue: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  currencyDivider: {
+    width: 1,
+    height: 38,
+    backgroundColor: '#E2E8F0',
+  },
+  emptyBlock: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    marginTop: 8,
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  emptyText: {
     marginTop: 4,
-    lineHeight: 18,
+    color: '#64748B',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  attentionGrid: {
+    flexDirection: 'row-reverse',
+    gap: 10,
+  },
+  attentionTile: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    minHeight: 124,
+  },
+  attentionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 9,
+  },
+  attentionTitle: {
+    color: '#0F172A',
+    fontSize: 12,
+    fontWeight: '900',
+    minHeight: 32,
+    textAlign: 'center',
+  },
+  attentionValue: {
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  topCustomersGrid: {
+    flexDirection: 'row-reverse',
+    gap: 12,
+  },
+  topCustomersCard: {
+    flex: 1,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 13,
+    minHeight: 166,
+  },
+  topCustomersTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'right',
+    marginBottom: 10,
+  },
+  customerLine: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  customerAvatarSmall: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customerLineName: {
+    flex: 1,
+    color: '#0F172A',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'right',
+  },
+  customerLineAmount: {
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'left',
+  },
+  emptySmallText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 28,
+  },
+  movementSummaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 18,
+    paddingHorizontal: 10,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+  },
+  movementMetric: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  movementMetricLabel: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  movementMetricValue: {
+    marginTop: 6,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  metricDivider: {
+    width: 1,
+    height: 44,
+    backgroundColor: '#E2E8F0',
+  },
+  footerSpace: {
+    height: 40,
   },
 });
