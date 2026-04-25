@@ -19,7 +19,7 @@ import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowRight, Phone, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon, Bell } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { buildScopedCustomerFilter } from '@/services/userScopeService';
+import { buildReadableCustomerFilter } from '@/services/userScopeService';
 import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
 import { format, isSameMonth, isSameYear, startOfDay, endOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -261,6 +261,20 @@ function renderMovementApprovalBadge(movement: Pick<AccountMovement, 'approval_s
   return null;
 }
 
+
+function getMovementApprovalLookupIds(movement: AccountMovement): string[] {
+  return Array.from(
+    new Set(
+      [
+        movement.id,
+        movement.mirror_movement_id,
+        movement.related_transfer_id,
+        movement.related_commission_movement_id,
+      ].filter((value): value is string => Boolean(value)),
+    ),
+  );
+}
+
 export default function CustomerDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
@@ -297,7 +311,7 @@ export default function CustomerDetailsScreen() {
           .from('customers')
           .select('*, linked_user:app_security!customers_linked_user_id_fkey(id, user_name, full_name, account_number)')
           .eq('id', id)
-          .or(buildScopedCustomerFilter(currentUser.userId, true))
+          .or(buildReadableCustomerFilter(currentUser.userId, true))
           .maybeSingle(),
         supabase.rpc('get_customer_movements_with_user', {
           p_user_name: currentUser.userName,
@@ -757,7 +771,97 @@ export default function CustomerDetailsScreen() {
     console.log('[CustomerDetails] setShowQuickAdd(true) called');
   };
 
-  const handleMovementPress = (movement: AccountMovement) => {
+  const openNotificationDecisionPage = async (movement: AccountMovement): Promise<boolean> => {
+    if (!currentUser?.userId) {
+      Alert.alert('خطأ', 'لم يتم العثور على المستخدم الحالي');
+      return true;
+    }
+
+    const candidateMovementIds = getMovementApprovalLookupIds(movement);
+
+    try {
+      const { data, error } = await supabase
+        .from('movement_notifications')
+        .select('id, movement_id, notification_type, action_required, status, created_at')
+        .in('movement_id', candidateMovementIds)
+        .eq('notification_type', 'approval_needed')
+        .or(`user_id.eq.${currentUser.userId},recipient_user_id.eq.${currentUser.userId}`)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        throw error;
+      }
+
+      const notification = data?.[0];
+
+      if (notification?.id) {
+        router.push({
+          pathname: '/notification-detail',
+          params: { id: notification.id, returnToCustomerId: String(id) },
+        });
+        return true;
+      }
+
+      if (isMovementCreatedByCurrentUser(movement, currentUser)) {
+        Alert.alert(
+          'بانتظار رد الطرف الآخر',
+          'هذه الحركة قمت بإنشائها أنت، لذلك لا يمكنك قبولها من حسابك. ستدخل في الحساب بعد أن يوافق الطرف الآخر عليها.',
+          [
+            {
+              text: 'فتح الإشعارات',
+              onPress: () => router.push('/(tabs)/notifications'),
+            },
+            {
+              text: 'حسنًا',
+              style: 'cancel',
+            },
+          ],
+        );
+        return true;
+      }
+
+      Alert.alert(
+        'لم يتم العثور على إشعار الموافقة',
+        'هذه الحركة معلّقة، لكن لا يوجد إشعار موافقة مرتبط بحسابك. افتح صفحة الإشعارات أو حدّث الصفحة، وإذا استمرت المشكلة فربما تحتاج الحركة إلى إعادة إنشاء إشعار الموافقة من Supabase.',
+        [
+          {
+            text: 'فتح الإشعارات',
+            onPress: () => router.push('/(tabs)/notifications'),
+          },
+          {
+            text: 'إلغاء',
+            style: 'cancel',
+          },
+        ],
+      );
+      return true;
+    } catch (error) {
+      console.error('[CustomerDetails] Error opening movement approval notification:', error);
+      Alert.alert(
+        'خطأ',
+        'تعذر فتح إشعار الموافقة لهذه الحركة. حاول من صفحة الإشعارات.',
+        [
+          {
+            text: 'فتح الإشعارات',
+            onPress: () => router.push('/(tabs)/notifications'),
+          },
+          {
+            text: 'إلغاء',
+            style: 'cancel',
+          },
+        ],
+      );
+      return true;
+    }
+  };
+
+  const handleMovementPress = async (movement: AccountMovement) => {
+    if (isPendingMovement(movement)) {
+      const handled = await openNotificationDecisionPage(movement);
+      if (handled) return;
+    }
+
     const movementTypeText =
       movement.movement_type === 'outgoing' ? 'عليه' : 'له';
     const currencySymbol = getCurrencySymbol(movement.currency);

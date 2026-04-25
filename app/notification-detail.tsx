@@ -258,7 +258,7 @@ function DetailIcon({ icon, color }: { icon: string; color: string }) {
 
 export default function NotificationDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, returnToCustomerId } = useLocalSearchParams<{ id: string; returnToCustomerId?: string }>();
   const { currentUser } = useAuth();
   const { triggerRefresh } = useDataRefresh();
 
@@ -312,6 +312,18 @@ export default function NotificationDetailScreen() {
     }
   };
 
+  const navigateAfterDecision = () => {
+    if (returnToCustomerId) {
+      router.replace({
+        pathname: '/customer-details',
+        params: { id: returnToCustomerId },
+      });
+      return;
+    }
+
+    router.replace('/(tabs)/notifications');
+  };
+
   const handleApprove = async () => {
     if (!notification?.movement_id || !currentUser?.userName) return;
 
@@ -328,7 +340,7 @@ export default function NotificationDetailScreen() {
       await markAsReadAndRemove(notification.id);
       triggerRefresh('movements');
       Alert.alert('تم القبول', 'تم اعتماد الحركة للطرفين، وأصبحت مؤثرة في الإجماليات بعد الموافقة.', [
-        { text: 'حسنًا', onPress: () => router.back() },
+        { text: 'حسنًا', onPress: navigateAfterDecision },
       ]);
     } catch (error: any) {
       console.error('Error approving:', error);
@@ -364,7 +376,7 @@ export default function NotificationDetailScreen() {
       Alert.alert(
         'تم الرفض',
         `تم رفض الحركة للطرفين، ولن تؤثر في الإجماليات عند أي طرف.\n\nسبب الرفض: ${trimmedRejectReason}`,
-        [{ text: 'حسنًا', onPress: () => router.back() }],
+        [{ text: 'حسنًا', onPress: navigateAfterDecision }],
       );
     } catch (error: any) {
       console.error('Error rejecting:', error);

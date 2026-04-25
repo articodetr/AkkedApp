@@ -63,6 +63,27 @@ export function buildStatisticsCustomerFilter(
   return filters.join(',');
 }
 
+/**
+ * Read/detail customer filter.
+ * Use this when a user opens a specific customer/movement coming from
+ * notifications or linked-account approvals. It allows the record when the
+ * current user is either the owner or the linked counterparty, while keeping the
+ * normal customer list owner-only.
+ */
+export function buildReadableCustomerFilter(
+  userId: string,
+  includeProfitLoss: boolean = false,
+): string {
+  const filters = [buildUserScopeFilter(userId)];
+
+  if (includeProfitLoss) {
+    filters.push('phone.eq.PROFIT_LOSS_ACCOUNT');
+    filters.push('is_profit_loss_account.eq.true');
+  }
+
+  return filters.join(',');
+}
+
 export async function fetchAccessibleCustomers(
   userId: string,
   includeProfitLoss: boolean = false,
@@ -105,7 +126,7 @@ export async function fetchAccessibleCustomerById(
     .from('customers')
     .select('*')
     .eq('id', customerId)
-    .or(buildScopedCustomerFilter(userId, includeProfitLoss))
+    .or(buildReadableCustomerFilter(userId, includeProfitLoss))
     .maybeSingle();
 
   if (error) {
