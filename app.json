@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ArtiCode",
-    "slug": "altarf-money-transfer",
+    "slug": "articodeapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -60,9 +60,9 @@
       "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuYXVkZ2llY3p1enVkdXBsaGtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTE3OTYsImV4cCI6MjA5MDM4Nzc5Nn0.alA4zTeQLwEPcepUVrfyAPaneJNtNaN9QmQJrNJRqm8",
       "router": {},
       "eas": {
-        "projectId": "e882c2a8-6dd9-459f-88da-b57f96684e6f"
+        "projectId": "f6c89bb9-f1ac-4863-91f0-8d02da4f59af"
       }
     },
-    "owner": "arti_codetr"
+    "owner": "arti_codeg"
   }
 }
