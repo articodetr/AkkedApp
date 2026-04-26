@@ -19,6 +19,7 @@ import {
   Users,
   MessageCircle,
   Link as LinkIcon,
+  FileText,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -53,6 +54,13 @@ export default function SettingsScreen() {
       subtitle: 'اسم المحل والشعار',
       color: '#4F46E5',
       onPress: () => router.push('/shop-settings' as any),
+    },
+    {
+      icon: FileText,
+      title: 'ترويسة السندات',
+      subtitle: 'تخصيص الشعار والرقم وألوان الترويسة',
+      color: '#0EA5E9',
+      onPress: () => router.push('/letterhead-settings' as any),
     },
     {
       icon: LinkIcon,

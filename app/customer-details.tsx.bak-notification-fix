@@ -20,7 +20,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ArrowRight, Phone, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon, Bell } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { buildReadableCustomerFilter } from '@/services/userScopeService';
-import { getCustomerNotificationAttentionCount } from '../services/notificationService';
 import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
 import { format, isSameMonth, isSameYear, startOfDay, endOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -372,19 +371,22 @@ export default function CustomerDetailsScreen() {
   }, [id, currentUser]);
 
   const loadUnreadNotifications = useCallback(async () => {
-    if (!currentUser?.userId || !id) {
-      setUnreadNotificationsCount(0);
-      return;
-    }
+    if (!currentUser?.userId) return;
 
     try {
-      const count = await getCustomerNotificationAttentionCount(currentUser.userId, String(id));
-      setUnreadNotificationsCount(count);
+      const { count, error } = await supabase
+        .from('movement_notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', currentUser.userId)
+        .eq('is_read', false);
+
+      if (!error && count !== null) {
+        setUnreadNotificationsCount(count);
+      }
     } catch (error) {
-      console.error("Error loading customer notifications count:", error);
-      setUnreadNotificationsCount(0);
+      console.error('Error loading unread notifications:', error);
     }
-  }, [currentUser?.userId, id]);
+  }, [currentUser]);
 
   useFocusEffect(
     useCallback(() => {
@@ -769,18 +771,6 @@ export default function CustomerDetailsScreen() {
     console.log('[CustomerDetails] setShowQuickAdd(true) called');
   };
 
-  const openCustomerNotifications = useCallback(() => {
-    if (!id) return;
-
-    router.push({
-      pathname: '/customer-notifications',
-      params: {
-        customerId: String(id),
-        customerName: customer?.name || '',
-      },
-    });
-  }, [customer?.name, id, router]);
-
   const openNotificationDecisionPage = async (movement: AccountMovement): Promise<boolean> => {
     if (!currentUser?.userId) {
       Alert.alert('خطأ', 'لم يتم العثور على المستخدم الحالي');
@@ -808,7 +798,7 @@ export default function CustomerDetailsScreen() {
       if (notification?.id) {
         router.push({
           pathname: '/notification-detail',
-          params: { id: notification.id, from: 'customer-details', customerId: String(id), customerName: customer?.name || '', returnToCustomerId: String(id) },
+          params: { id: notification.id, returnToCustomerId: String(id) },
         });
         return true;
       }
@@ -820,7 +810,7 @@ export default function CustomerDetailsScreen() {
           [
             {
               text: 'فتح الإشعارات',
-              onPress: () => openCustomerNotifications(),
+              onPress: () => router.push('/(tabs)/notifications'),
             },
             {
               text: 'حسنًا',
@@ -837,7 +827,7 @@ export default function CustomerDetailsScreen() {
         [
           {
             text: 'فتح الإشعارات',
-            onPress: () => openCustomerNotifications(),
+            onPress: () => router.push('/(tabs)/notifications'),
           },
           {
             text: 'إلغاء',
@@ -854,7 +844,7 @@ export default function CustomerDetailsScreen() {
         [
           {
             text: 'فتح الإشعارات',
-            onPress: () => openCustomerNotifications(),
+            onPress: () => router.push('/(tabs)/notifications'),
           },
           {
             text: 'إلغاء',
@@ -1017,7 +1007,12 @@ export default function CustomerDetailsScreen() {
       isPendingMovement(movement) &&
       !(movement as any).is_voided
   );
-  const customerNotificationsCount = unreadNotificationsCount;
+  const hasCustomerNotifications =
+    unreadNotificationsCount > 0 || pendingMovements.length > 0;
+  const customerNotificationsCount =
+    unreadNotificationsCount > 0
+      ? unreadNotificationsCount
+      : pendingMovements.length;
 
   const groupedMovements = groupMovementsByMonth(filteredMovements);
   const currencyBalances = calculateBalanceByCurrency(approvedMovements);
@@ -1181,16 +1176,17 @@ export default function CustomerDetailsScreen() {
               </View>
             </View>
           </View>
+          {hasCustomerNotifications && (
             <TouchableOpacity
               style={styles.notificationSummaryCard}
               activeOpacity={0.88}
-              onPress={() => openCustomerNotifications()}
+              onPress={() => router.push('/(tabs)/notifications')}
             >
               <View style={styles.notificationSummaryContent}>
                 <View style={styles.notificationSummaryTextWrap}>
                   <Text style={styles.notificationSummaryTitle}>الإشعارات</Text>
                   <Text style={styles.notificationSummarySubtitle}>
-                    إشعارات هذا العميل فقط
+                    اضغط لعرض جميع الإشعارات
                   </Text>
                 </View>
                 <View style={styles.notificationSummaryIcon}>
@@ -1204,6 +1200,7 @@ export default function CustomerDetailsScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
+          )}
         </View>
 
         {currencyTotals.length > 0 && (
@@ -1283,7 +1280,7 @@ export default function CustomerDetailsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.tabButton}
-            onPress={() => openCustomerNotifications()}
+            onPress={() => router.push('/(tabs)/notifications')}
           >
             <View style={{ position: 'relative' }}>
               <Bell size={16} color="#6B7280" />

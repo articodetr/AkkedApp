@@ -1,467 +1,232 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
   Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
   TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ArrowRight,
+  Bell,
   Check,
-  X,
-  TrendingUp,
-  TrendingDown,
-  ArrowLeftRight,
   Clock,
-  User,
   FileText,
   Trash2,
-  Bell,
+  User,
+  X,
 } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
-import { isPendingMovement } from '@/utils/movementApproval';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
+import {
+  approveMovementNotification,
+  canTakeNotificationAction,
+  getNotificationById,
+  getNotificationCustomerId,
+  getNotificationMeta,
+  markNotificationAsRead,
+  MovementNotification,
+  NotificationSource,
+  rejectMovementNotification,
+  softDeleteNotification,
+} from '../services/notificationService';
 
-interface NotificationDetail {
-  id: string;
-  movement_id: string | null;
-  notification_type: string;
-  message: string;
-  is_read: boolean;
-  created_at: string;
-  movement_number?: string;
-  amount?: number;
-  currency?: string;
-  movement_type?: string;
-  customer_name?: string;
-  actor_name?: string;
-  extra_data?: {
-    reason?: string;
-    reject_reason?: string;
-  };
-  movement?: {
-    movement_number: string;
-    customer_id?: string | null;
-    amount: number;
-    currency: string;
-    is_voided?: boolean;
-    approval_status?: string;
-    pending_approval?: boolean;
-    customer: {
-      name: string;
-      linked_user_id?: string | null;
-    };
-  } | null;
-}
-
-function formatAmount(amount?: number, currency?: string) {
-  if (amount == null) return null;
-  return `${amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} ${currency || ''}`.trim();
-}
-
-function getNotificationMeta(notification: NotificationDetail) {
-  const movement = notification.movement as any;
-  const customerName = notification.customer_name || movement?.customer?.name || 'العميل';
-  const actorName = notification.actor_name || 'الطرف الآخر';
-  const amount = notification.amount ?? movement?.amount;
-  const currency = notification.currency || movement?.currency;
-  const amountText = formatAmount(amount, currency);
-  const isIncoming = notification.movement_type === 'incoming';
-  const isOutgoing = notification.movement_type === 'outgoing';
-  const isTransfer = notification.movement_type === 'internal_transfer';
-  const isPending = isPendingMovement(movement);
-
-  if (notification.notification_type === 'approval_needed') {
-    return {
-      title: 'حركة بانتظار الموافقة',
-      subtitle: isOutgoing
-        ? `قيّد عليك ${actorName} مبلغ ${amountText || ''}`.trim()
-        : `قيّد لك ${actorName} مبلغ ${amountText || ''}`.trim(),
-      statusText: 'بانتظار الموافقة',
-      statusColor: '#B45309',
-      statusBg: '#FEF3C7',
-      helperText: 'هذه الحركة لن تؤثر في الإجماليات قبل أن تقبلها أو ترفضها.',
-      actionTitle: 'المطلوب الآن',
-      actionText: 'راجع المبلغ والتفاصيل، ثم اختر قبول لاعتماد الحركة أو رفض لإبقائها خارج الحساب مع توضيح السبب للطرف الآخر.',
-      primaryText: 'قبول واعتماد الحركة',
-      secondaryText: 'رفض الطلب',
-      infoTone: '#F59E0B',
-      iconBg: isOutgoing ? '#FEE2E2' : '#DBEAFE',
-      icon: isTransfer ? 'transfer' : isIncoming ? 'incoming' : 'outgoing',
-      directionLabel: isTransfer ? 'تحويل داخلي' : isIncoming ? 'له' : 'عليه',
-      amountTone: isOutgoing ? '#EF4444' : '#10B981',
-      isAction: true,
-    };
-  }
-
-  if (notification.notification_type === 'deletion_request') {
-    return {
-      title: 'طلب حذف يحتاج موافقتك',
-      subtitle: `يوجد طلب لحذف الحركة ${notification.movement_number || movement?.movement_number || ''}`.trim(),
-      statusText: 'بحاجة موافقتك',
-      statusColor: '#C2410C',
-      statusBg: '#FFEDD5',
-      helperText: 'راجع تفاصيل الحركة قبل الموافقة على حذفها.',
-      actionTitle: 'المطلوب الآن',
-      actionText: 'إذا كانت الحركة يجب أن تُحذف فعلًا فوافق على الحذف، وإلا يمكنك تجاهل الطلب.',
-      primaryText: 'الموافقة على الحذف',
-      secondaryText: 'تجاهل',
-      infoTone: '#F97316',
-      iconBg: '#FFEDD5',
-      icon: 'deletion',
-      directionLabel: 'طلب حذف',
-      amountTone: '#F97316',
-      isAction: true,
-    };
-  }
-
-  if (notification.notification_type === 'movement_rejected') {
-    return {
-      title: `تم رفض الحركة من ${actorName}`,
-      subtitle: amountText
-        ? `تم رفض مبلغ ${amountText} ${isOutgoing ? 'عليه' : 'له'}`
-        : 'تم رفض الطلب المرسل',
-      statusText: 'مرفوضة',
-      statusColor: '#B91C1C',
-      statusBg: '#FEE2E2',
-      helperText: 'تم رفض هذه الحركة، ولم تدخل في الإجماليات.',
-      actionTitle: 'النتيجة',
-      actionText: 'يمكنك مراجعة سبب الرفض واتخاذ الإجراء المناسب إذا احتجت ذلك.',
-      primaryText: 'تمت القراءة',
-      secondaryText: '',
-      infoTone: '#EF4444',
-      iconBg: '#FEE2E2',
-      icon: 'rejected',
-      directionLabel: isTransfer ? 'تحويل داخلي' : isIncoming ? 'له' : 'عليه',
-      amountTone: '#EF4444',
-      isAction: false,
-    };
-  }
-
-  if (notification.notification_type === 'movement_approved') {
-    return {
-      title: `تم اعتماد الحركة من ${actorName}`,
-      subtitle: amountText
-        ? `تم اعتماد مبلغ ${amountText} ${isOutgoing ? 'عليه' : 'له'} مع ${customerName}`
-        : `تم اعتماد الحركة مع ${customerName}`,
-      statusText: 'مقبولة',
-      statusColor: '#15803D',
-      statusBg: '#DCFCE7',
-      helperText: 'تمت الموافقة على هذه الحركة وأصبحت مؤثرة في الإجماليات.',
-      actionTitle: 'النتيجة',
-      actionText: 'أصبحت هذه الحركة الآن جزءًا من الإجماليات ويمكنك الرجوع إليها من كشف الحركات في أي وقت.',
-      primaryText: 'تمت القراءة',
-      secondaryText: '',
-      infoTone: '#10B981',
-      iconBg: '#DCFCE7',
-      icon: isTransfer ? 'transfer' : isIncoming ? 'incoming' : 'outgoing',
-      directionLabel: isTransfer ? 'تحويل داخلي' : isIncoming ? 'له' : 'عليه',
-      amountTone: isOutgoing ? '#EF4444' : '#10B981',
-      isAction: false,
-    };
-  }
-
-  if (notification.notification_type === 'movement_added' && isPending) {
-    return {
-      title: 'حركة بانتظار الموافقة',
-      subtitle: amountText
-        ? `تم تسجيل مبلغ ${amountText} ${isOutgoing ? 'عليه' : 'له'} على ${customerName}`
-        : `تم إرسال الطلب إلى ${customerName}`,
-      statusText: 'بانتظار الموافقة',
-      statusColor: '#B45309',
-      statusBg: '#FEF3C7',
-      helperText: 'تم إرسال الطلب للطرف الآخر، ولن تؤثر الحركة في الإجماليات حتى يوافق عليها.',
-      actionTitle: 'ماذا يعني ذلك؟',
-      actionText: 'الطلب مسجل بانتظار قرار الطرف الآخر. إذا تمت الموافقة فستظهر الحركة في الحساب، وإذا رُفضت فستبقى خارج الإجماليات.',
-      primaryText: 'تمت القراءة',
-      secondaryText: '',
-      infoTone: '#F59E0B',
-      iconBg: '#FEF3C7',
-      icon: isTransfer ? 'transfer' : isIncoming ? 'incoming' : 'outgoing',
-      directionLabel: isTransfer ? 'تحويل داخلي' : isIncoming ? 'له' : 'عليه',
-      amountTone: isOutgoing ? '#EF4444' : '#10B981',
-      isAction: false,
-    };
-  }
-
-  if (notification.notification_type === 'movement_added') {
-    return {
-      title: 'تم تسجيل حركة جديدة',
-      subtitle: amountText
-        ? `تم تسجيل مبلغ ${amountText} ${isOutgoing ? 'عليه' : 'له'} مع ${customerName}`
-        : `تم تسجيل حركة جديدة مع ${customerName}`,
-      statusText: 'مقبولة',
-      statusColor: '#1D4ED8',
-      statusBg: '#DBEAFE',
-      helperText: 'يمكنك مراجعة تفاصيل الحركة في أي وقت.',
-      actionTitle: 'النتيجة',
-      actionText: 'تم حفظ الحركة بنجاح ويمكنك الرجوع إليها لاحقًا من كشف الحركات.',
-      primaryText: 'تمت القراءة',
-      secondaryText: '',
-      infoTone: '#3B82F6',
-      iconBg: '#DBEAFE',
-      icon: isTransfer ? 'transfer' : isIncoming ? 'incoming' : 'outgoing',
-      directionLabel: isTransfer ? 'تحويل داخلي' : isIncoming ? 'له' : 'عليه',
-      amountTone: isOutgoing ? '#EF4444' : '#10B981',
-      isAction: false,
-    };
-  }
-
-  return {
-    title: 'إشعار جديد',
-    subtitle: notification.message,
-    statusText: 'معلومات',
-    statusColor: '#4B5563',
-    statusBg: '#F3F4F6',
-    helperText: 'راجع التفاصيل لمعرفة المزيد.',
-    actionTitle: 'معلومات إضافية',
-    actionText: 'هذا إشعار معلوماتي فقط.',
-    primaryText: 'تمت القراءة',
-    secondaryText: '',
-    infoTone: '#6B7280',
-    iconBg: '#F3F4F6',
-    icon: 'default',
-    directionLabel: 'إشعار',
-    amountTone: '#6B7280',
-    isAction: false,
-  };
-}
-
-function DetailIcon({ icon, color }: { icon: string; color: string }) {
-  switch (icon) {
-    case 'incoming':
-      return <TrendingUp size={32} color={color} />;
-    case 'outgoing':
-      return <TrendingDown size={32} color={color} />;
-    case 'transfer':
-      return <ArrowLeftRight size={32} color={color} />;
-    case 'rejected':
-      return <X size={32} color={color} />;
-    case 'deletion':
-      return <Trash2 size={32} color={color} />;
-    default:
-      return <Bell size={32} color={color} />;
-  }
+function getParamValue(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 export default function NotificationDetailScreen() {
   const router = useRouter();
-  const { id, from, customerId, customerName: paramCustomerName, returnToCustomerId } = useLocalSearchParams<{
-    id: string;
-    from?: 'general' | 'customer' | 'customer-details';
+  const { currentUser } = useAuth();
+  const { triggerRefresh } = useDataRefresh();
+  const params = useLocalSearchParams<{
+    id?: string;
+    from?: NotificationSource;
     customerId?: string;
     customerName?: string;
     returnToCustomerId?: string;
   }>();
-  const { currentUser } = useAuth();
-  const { triggerRefresh } = useDataRefresh();
 
-  const [notification, setNotification] = useState<NotificationDetail | null>(null);
+  const notificationId = getParamValue(params.id);
+  const source = (getParamValue(params.from) || 'general') as NotificationSource;
+  const paramCustomerId = getParamValue(params.customerId) || getParamValue(params.returnToCustomerId) || '';
+  const paramCustomerName = getParamValue(params.customerName) || '';
+
+  const [notification, setNotification] = useState<MovementNotification | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
   const loadNotification = useCallback(async () => {
-    if (!id) return;
+    if (!notificationId) {
+      setNotification(null);
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      const { data, error } = await supabase
-        .from('movement_notifications')
-        .select(
-          `
-          *,
-          movement:account_movements!movement_id(
-            movement_number,
-            customer_id,
-            amount,
-            currency,
-            is_voided,
-            approval_status,
-            pending_approval,
-            customer:customers!customer_id(name, linked_user_id)
-          )
-        `,
-        )
-        .eq('id', id)
-        .is('deleted_at', null)
-        .maybeSingle();
+      const nextNotification = await getNotificationById(notificationId);
+      setNotification(nextNotification);
 
-      if (error) throw error;
-      setNotification(data);
+      if (nextNotification && currentUser?.userId) {
+        await markNotificationAsRead(nextNotification.id, currentUser.userId, nextNotification.status);
+        setNotification({
+          ...nextNotification,
+          is_read: true,
+          status: !nextNotification.status || nextNotification.status === 'unread' ? 'read' : nextNotification.status,
+          read_at: new Date().toISOString(),
+        });
+      }
     } catch (error) {
-      console.error('Error loading notification:', error);
+      console.error('[NotificationDetail] Error loading notification:', error);
+      Alert.alert('خطأ', 'تعذر تحميل تفاصيل الإشعار');
     } finally {
       setIsLoading(false);
     }
-  }, [id]);
+  }, [currentUser?.userId, notificationId]);
 
   useEffect(() => {
     loadNotification();
   }, [loadNotification]);
 
-  const markAsReadOnly = async (notificationId: string) => {
-    try {
-      await supabase
-        .from('movement_notifications')
-        .update({
-          is_read: true,
-          read_at: new Date().toISOString(),
-        })
-        .eq('id', notificationId);
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
-  };
+  const meta = useMemo(
+    () => (notification ? getNotificationMeta(notification, currentUser) : null),
+    [currentUser, notification],
+  );
 
-  const navigateAfterDecision = () => {
-    const targetCustomerId =
-      (Array.isArray(customerId) ? customerId[0] : customerId) ||
-      (Array.isArray(returnToCustomerId) ? returnToCustomerId[0] : returnToCustomerId) ||
-      notification?.movement?.customer_id ||
-      '';
+  const resolvedCustomerId = notification ? getNotificationCustomerId(notification) || paramCustomerId : paramCustomerId;
+  const resolvedCustomerName = notification?.customer_name || notification?.movement?.customer?.name || paramCustomerName || 'العميل';
+  const canTakeAction = notification ? canTakeNotificationAction(notification, currentUser) : false;
 
-    const targetCustomerName = Array.isArray(paramCustomerName) ? paramCustomerName[0] : paramCustomerName;
-    const sourcePage = Array.isArray(from) ? from[0] : from;
-
-    if (sourcePage === 'customer' && targetCustomerId) {
+  const goBackToSource = useCallback(() => {
+    if (source === 'customer' && resolvedCustomerId) {
       router.replace({
         pathname: '/customer-notifications',
         params: {
-          customerId: targetCustomerId,
-          customerName: targetCustomerName || notification?.customer_name || notification?.movement?.customer?.name || '',
+          customerId: resolvedCustomerId,
+          customerName: resolvedCustomerName,
         },
       });
       return;
     }
 
-    if (sourcePage === 'customer-details' && targetCustomerId) {
+    if (source === 'customer-details' && resolvedCustomerId) {
       router.replace({
         pathname: '/customer-details',
-        params: { id: targetCustomerId },
+        params: { id: resolvedCustomerId },
       });
       return;
     }
 
     router.replace('/(tabs)/notifications');
+  }, [resolvedCustomerId, resolvedCustomerName, router, source]);
+
+  const reloadAfterDecision = async () => {
+    await loadNotification();
+    triggerRefresh('movements');
+    triggerRefresh('customers');
   };
 
   const handleApprove = async () => {
-    if (!notification?.movement_id || !currentUser?.userName) return;
+    if (!notification) return;
 
     try {
       setIsProcessing(true);
-
-      const { error } = await supabase.rpc('approve_movement', {
-        p_movement_id: notification.movement_id,
-        p_user_name: currentUser.userName,
-      });
-
-      if (error) throw error;
-
-      await markAsReadOnly(notification.id);
-      triggerRefresh('movements');
-      Alert.alert('تم القبول', 'تم اعتماد الحركة للطرفين. سيبقى الإشعار موجودًا حتى تحذفه من صفحة الإشعارات.', [
-        { text: 'حسنًا', onPress: navigateAfterDecision },
-      ]);
+      await approveMovementNotification(notification, currentUser);
+      await reloadAfterDecision();
+      Alert.alert('تم القبول', 'تم اعتماد الحركة، وبقي الإشعار محفوظًا حتى تحذفه يدويًا.');
     } catch (error: any) {
-      console.error('Error approving:', error);
-      Alert.alert('خطأ', error.message || 'حدث خطأ أثناء القبول');
+      console.error('[NotificationDetail] Error approving movement:', error);
+      Alert.alert('خطأ', error.message || 'حدث خطأ أثناء قبول الحركة');
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleReject = async () => {
-    if (!notification?.movement_id || !currentUser?.userName) return;
-    const trimmedRejectReason = rejectReason.trim();
+    if (!notification) return;
 
-    if (!trimmedRejectReason) {
+    const trimmedReason = rejectReason.trim();
+    if (!trimmedReason) {
       Alert.alert('تنبيه', 'يرجى كتابة سبب الرفض');
       return;
     }
 
     try {
       setIsProcessing(true);
+      await rejectMovementNotification(notification, currentUser, trimmedReason);
       setShowRejectModal(false);
-
-      const { data, error } = await supabase.rpc('reject_movement_with_reason', {
-        p_movement_id: notification.movement_id,
-        p_user_name: currentUser.userName,
-        p_reject_reason: trimmedRejectReason,
-      });
-
-      if (error) throw error;
-
-      await markAsReadOnly(notification.id);
-      triggerRefresh('movements');
-      Alert.alert(
-        'تم الرفض',
-        `تم رفض الحركة للطرفين. سيبقى الإشعار موجودًا حتى تحذفه من صفحة الإشعارات.\n\nسبب الرفض: ${trimmedRejectReason}`,
-        [{ text: 'حسنًا', onPress: navigateAfterDecision }],
-      );
+      setRejectReason('');
+      await reloadAfterDecision();
+      Alert.alert('تم الرفض', 'تم رفض الحركة، وبقي الإشعار محفوظًا حتى تحذفه يدويًا.');
     } catch (error: any) {
-      console.error('Error rejecting:', error);
-      Alert.alert('خطأ', error.message || 'حدث خطأ أثناء الرفض');
+      console.error('[NotificationDetail] Error rejecting movement:', error);
+      Alert.alert('خطأ', error.message || 'حدث خطأ أثناء رفض الحركة');
     } finally {
       setIsProcessing(false);
-      setRejectReason('');
     }
+  };
+
+  const handleDelete = () => {
+    if (!notification || !currentUser?.userId) return;
+
+    Alert.alert(
+      'حذف الإشعار',
+      'سيتم إخفاء هذا الإشعار من القائمة فقط، ولن يتم حذف الحركة المالية. هل تريد المتابعة؟',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'حذف',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsProcessing(true);
+              await softDeleteNotification(notification.id, currentUser.userId);
+              goBackToSource();
+            } catch (error) {
+              console.error('[NotificationDetail] Error deleting notification:', error);
+              Alert.alert('خطأ', 'تعذر حذف الإشعار');
+            } finally {
+              setIsProcessing(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleApproveDeletion = async () => {
     if (!notification?.movement_id || !currentUser?.userName) return;
 
-    Alert.alert('الموافقة على الحذف', 'هل أنت متأكد من الموافقة على حذف هذه الحركة؟', [
-      { text: 'إلغاء', style: 'cancel' },
-      {
-        text: 'موافقة',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setIsProcessing(true);
-            const { error } = await supabase.rpc('approve_movement_deletion', {
-              p_movement_id: notification.movement_id,
-              p_user_name: currentUser.userName,
-            });
+    try {
+      setIsProcessing(true);
+      const { error } = await supabase.rpc('approve_movement_deletion', {
+        p_movement_id: notification.movement_id,
+        p_user_name: currentUser.userName,
+      });
 
-            if (error) throw error;
+      if (error) throw error;
 
-            await markAsReadOnly(notification.id);
-            triggerRefresh('movements');
-            Alert.alert('تمت الموافقة', 'تمت الموافقة على حذف الحركة بنجاح.', [
-              { text: 'حسنًا', onPress: () => router.back() },
-            ]);
-          } catch (error: any) {
-            console.error('Error approving deletion:', error);
-            Alert.alert('خطأ', error.message || 'حدث خطأ أثناء الموافقة');
-          } finally {
-            setIsProcessing(false);
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleAcknowledge = async () => {
-    if (!notification) return;
-    setIsProcessing(true);
-    await markAsReadOnly(notification.id);
-    triggerRefresh('movements');
-    router.back();
+      await markNotificationAsRead(notification.id, currentUser.userId, notification.status);
+      triggerRefresh('movements');
+      Alert.alert('تم حذف الحركة', 'تمت الموافقة على حذف الحركة. سيبقى الإشعار محفوظًا حتى تحذفه يدويًا.', [
+        { text: 'حسنًا', onPress: goBackToSource },
+      ]);
+    } catch (error: any) {
+      console.error('[NotificationDetail] Error approving deletion:', error);
+      Alert.alert('خطأ', error.message || 'حدث خطأ أثناء الموافقة على الحذف');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (isLoading) {
@@ -473,196 +238,113 @@ export default function NotificationDetailScreen() {
     );
   }
 
-  if (!notification) {
+  if (!notification || !meta) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.emptyText}>الإشعار غير موجود أو تم حذفه</Text>
-        <TouchableOpacity style={styles.goBackBtn} onPress={() => router.back()}>
-          <Text style={styles.goBackText}>العودة</Text>
+        <Bell size={42} color="#CBD5E1" />
+        <Text style={styles.emptyTitle}>الإشعار غير موجود</Text>
+        <Text style={styles.emptySubtitle}>قد يكون الإشعار محذوفًا أو غير متاح.</Text>
+        <TouchableOpacity style={styles.darkButton} onPress={goBackToSource}>
+          <Text style={styles.darkButtonText}>العودة</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const movement = notification.movement as any;
-  const customerName = notification.customer_name || movement?.customer?.name || 'عميل';
-  const customerLinkedUserId = movement?.customer?.linked_user_id || null;
-  const amount = notification.amount ?? movement?.amount;
-  const currency = notification.currency || movement?.currency;
-  const amountText = formatAmount(amount, currency);
-  const meta = getNotificationMeta(notification);
-  const needsApproval = notification.notification_type === 'approval_needed';
+  const createdAt = new Date(notification.created_at);
+  const movementNumber = notification.movement_number || notification.movement?.movement_number || '-';
   const isDeletionRequest = notification.notification_type === 'deletion_request';
-  const showInfoAcknowledge = !needsApproval && !isDeletionRequest;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowRight size={24} color="#111827" />
+        <TouchableOpacity style={styles.headerButton} onPress={goBackToSource}>
+          <ArrowRight size={22} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>تفاصيل الإشعار</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity style={[styles.headerButton, styles.deleteHeaderButton]} onPress={handleDelete} disabled={isProcessing}>
+          <Trash2 size={20} color="#EF4444" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.heroCard}>
-          <View style={[styles.heroIcon, { backgroundColor: meta.iconBg }]}>
-            <DetailIcon icon={meta.icon} color={meta.infoTone} />
-          </View>
-
-          <View style={[styles.statusBadge, { backgroundColor: meta.statusBg }]}> 
+        <View style={[styles.heroCard, { borderColor: meta.rowBorderColor, backgroundColor: meta.rowBg }]}> 
+          <View style={[styles.statusBadge, { backgroundColor: meta.statusBg }]}>
             <Text style={[styles.statusText, { color: meta.statusColor }]}>{meta.statusText}</Text>
           </View>
-
           <Text style={styles.heroTitle}>{meta.title}</Text>
           <Text style={styles.heroSubtitle}>{meta.subtitle}</Text>
-
-          {amountText && (
-            <View style={styles.heroAmountBox}>
-              <Text style={[styles.heroDirection, { color: meta.amountTone }]}>{meta.directionLabel}</Text>
-              <Text style={[styles.heroAmount, { color: meta.amountTone }]}>{amountText}</Text>
-            </View>
-          )}
+          <View style={styles.amountBox}>
+            <Text style={[styles.amountDirection, { color: meta.directionColor }]}>{meta.directionLabel}</Text>
+            <Text style={[styles.amountText, { color: meta.directionColor }]}>{meta.amountText}</Text>
+          </View>
         </View>
 
-        <View style={styles.noticeBox}>
-          <Bell size={16} color="#92400E" />
-          <Text style={styles.noticeText}>{meta.helperText}</Text>
-        </View>
-
-        <View style={styles.actionInfoCard}>
-          <Text style={styles.sectionTitle}>{meta.actionTitle}</Text>
-          <Text style={styles.sectionBody}>{meta.actionText}</Text>
-        </View>
+        {canTakeAction && (
+          <View style={styles.warningBox}>
+            <Text style={styles.warningText}>
+              هذه الحركة لا تدخل في الإجماليات قبل الموافقة. راجع التفاصيل جيدًا ثم اختر قبول أو رفض.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.detailsCard}>
-          <View style={styles.detailRow}>
-            <View style={styles.detailValueBlock}>
-              <View style={styles.detailValueHeader}>
-                <CustomerStatusBadge linkedUserId={customerLinkedUserId} />
-                <Text style={styles.detailValue}>{customerName}</Text>
-              </View>
-            </View>
-            <View style={styles.detailLabel}>
-              <Text style={styles.detailLabelText}>العميل</Text>
-              <User size={16} color="#6B7280" />
-            </View>
-          </View>
-
-          {(notification.movement_number || movement?.movement_number) && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailValue}>{notification.movement_number || movement?.movement_number}</Text>
-              <View style={styles.detailLabel}>
-                <Text style={styles.detailLabelText}>رقم الحركة</Text>
-                <FileText size={16} color="#6B7280" />
-              </View>
-            </View>
-          )}
-
-          {notification.actor_name && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailValue}>{notification.actor_name}</Text>
-              <View style={styles.detailLabel}>
-                <Text style={styles.detailLabelText}>بواسطة</Text>
-                <User size={16} color="#6B7280" />
-              </View>
-            </View>
-          )}
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailValue}>
-              {format(new Date(notification.created_at), 'dd MMMM yyyy - HH:mm', { locale: ar })}
-            </Text>
-            <View style={styles.detailLabel}>
-              <Text style={styles.detailLabelText}>التاريخ</Text>
-              <Clock size={16} color="#6B7280" />
-            </View>
-          </View>
+          <DetailRow icon="user" label="العميل" value={resolvedCustomerName} />
+          <DetailRow icon="file" label="رقم الحركة" value={movementNumber} />
+          <DetailRow icon="clock" label="تاريخ الإشعار" value={format(createdAt, 'dd/MM/yyyy - HH:mm', { locale: ar })} />
+          <DetailRow icon="user" label="المنشئ" value={meta.actorName} />
+          <DetailRow icon="file" label="نوع الإشعار" value={notification.notification_type} />
         </View>
 
         <View style={styles.messageCard}>
           <Text style={styles.sectionTitle}>نص الإشعار</Text>
-          <Text style={styles.sectionBody}>{notification.message}</Text>
+          <Text style={styles.sectionBody}>{notification.message || meta.subtitle}</Text>
         </View>
 
-        {(notification.extra_data?.reason || notification.extra_data?.reject_reason) && (
+        {meta.rejectReason && (
           <View style={styles.reasonCard}>
             <Text style={styles.reasonTitle}>سبب الرفض</Text>
-            <Text style={styles.reasonBody}>
-              {notification.extra_data.reason || notification.extra_data.reject_reason}
-            </Text>
+            <Text style={styles.reasonBody}>{meta.rejectReason}</Text>
           </View>
         )}
       </ScrollView>
 
       <View style={styles.actionsBar}>
-        {needsApproval && notification.movement_id && (
+        {canTakeAction && !isDeletionRequest && (
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={[styles.approveBtn, isProcessing && styles.btnDisabled]}
+              style={[styles.approveButton, isProcessing && styles.buttonDisabled]}
               onPress={handleApprove}
               disabled={isProcessing}
             >
-              {isProcessing ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Check size={20} color="#FFFFFF" />
-                  <Text style={styles.approveBtnText}>{meta.primaryText}</Text>
-                </>
-              )}
+              {isProcessing ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Check size={20} color="#FFFFFF" />}
+              <Text style={styles.actionButtonText}>قبول واعتماد</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
-              style={[styles.rejectBtn, isProcessing && styles.btnDisabled]}
+              style={[styles.rejectButton, isProcessing && styles.buttonDisabled]}
               onPress={() => setShowRejectModal(true)}
               disabled={isProcessing}
             >
               <X size={20} color="#FFFFFF" />
-              <Text style={styles.rejectBtnText}>{meta.secondaryText}</Text>
+              <Text style={styles.actionButtonText}>رفض</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {isDeletionRequest && notification.movement_id && (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.approveBtn, isProcessing && styles.btnDisabled]}
-              onPress={handleApproveDeletion}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Check size={20} color="#FFFFFF" />
-                  <Text style={styles.approveBtnText}>{meta.primaryText}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.acknowledgeOutlineBtn, isProcessing && styles.btnDisabled]}
-              onPress={handleAcknowledge}
-              disabled={isProcessing}
-            >
-              <Text style={styles.acknowledgeOutlineText}>{meta.secondaryText}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {showInfoAcknowledge && (
           <TouchableOpacity
-            style={[styles.fullAcknowledgeBtn, isProcessing && styles.btnDisabled]}
-            onPress={handleAcknowledge}
+            style={[styles.approveButton, isProcessing && styles.buttonDisabled]}
+            onPress={handleApproveDeletion}
             disabled={isProcessing}
           >
-            {isProcessing ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.fullAcknowledgeText}>{meta.primaryText}</Text>
-            )}
+            {isProcessing ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Check size={20} color="#FFFFFF" />}
+            <Text style={styles.actionButtonText}>الموافقة على الحذف</Text>
+          </TouchableOpacity>
+        )}
+
+        {!canTakeAction && !isDeletionRequest && (
+          <TouchableOpacity style={styles.darkFullButton} onPress={goBackToSource} disabled={isProcessing}>
+            <Text style={styles.darkFullButtonText}>العودة</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -671,7 +353,7 @@ export default function NotificationDetailScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>سبب الرفض</Text>
-            <Text style={styles.modalSubtitle}>اكتب سببًا واضحًا حتى يفهم الطرف الآخر سبب رفض الطلب.</Text>
+            <Text style={styles.modalSubtitle}>اكتب سببًا واضحًا حتى يظهر للطرف الآخر في سجل الإشعارات.</Text>
             <TextInput
               style={styles.rejectInput}
               multiline
@@ -682,10 +364,10 @@ export default function NotificationDetailScreen() {
               textAlign="right"
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowRejectModal(false)}>
+              <TouchableOpacity style={styles.modalCancelButton} onPress={() => setShowRejectModal(false)} disabled={isProcessing}>
                 <Text style={styles.modalCancelText}>إلغاء</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleReject}>
+              <TouchableOpacity style={[styles.modalConfirmButton, isProcessing && styles.buttonDisabled]} onPress={handleReject} disabled={isProcessing}>
                 <Text style={styles.modalConfirmText}>تأكيد الرفض</Text>
               </TouchableOpacity>
             </View>
@@ -696,60 +378,86 @@ export default function NotificationDetailScreen() {
   );
 }
 
+function DetailRow({ icon, label, value }: { icon: 'user' | 'file' | 'clock'; label: string; value: string }) {
+  const IconComponent = icon === 'user' ? User : icon === 'clock' ? Clock : FileText;
+
+  return (
+    <View style={styles.detailRow}>
+      <View style={styles.detailLabelWrap}>
+        <IconComponent size={16} color="#64748B" />
+        <Text style={styles.detailLabel}>{label}</Text>
+      </View>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F8FAFC',
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 24,
+    backgroundColor: '#F8FAFC',
   },
   loadingText: {
     marginTop: 12,
+    color: '#64748B',
     fontSize: 15,
-    color: '#6B7280',
   },
-  emptyText: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 16,
+  emptyTitle: {
+    marginTop: 12,
+    fontSize: 18,
+    color: '#0F172A',
+    fontWeight: '900',
+    textAlign: 'center',
   },
-  goBackBtn: {
-    backgroundColor: '#111827',
-    paddingHorizontal: 18,
+  emptySubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  darkButton: {
+    marginTop: 18,
+    backgroundColor: '#0F172A',
     paddingVertical: 12,
+    paddingHorizontal: 18,
     borderRadius: 12,
   },
-  goBackText: {
+  darkButtonText: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '800',
   },
   header: {
     backgroundColor: '#FFFFFF',
-    paddingTop: 16,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+  headerButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  deleteHeaderButton: {
+    backgroundColor: '#FEF2F2',
+  },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#111827',
+    fontWeight: '900',
+    color: '#0F172A',
   },
   content: {
     flex: 1,
@@ -760,107 +468,73 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  heroIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    padding: 18,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
   },
   statusBadge: {
+    borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 14,
     marginBottom: 12,
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   heroTitle: {
+    color: '#0F172A',
     fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
+    fontWeight: '900',
     textAlign: 'center',
     marginBottom: 8,
   },
   heroSubtitle: {
+    color: '#475569',
     fontSize: 14,
-    color: '#4B5563',
+    lineHeight: 23,
     textAlign: 'center',
-    lineHeight: 24,
   },
-  heroAmountBox: {
-    width: '100%',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+  amountBox: {
     marginTop: 16,
-    alignItems: 'center',
-  },
-  heroDirection: {
-    fontSize: 13,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  heroAmount: {
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  noticeBox: {
-    backgroundColor: '#FFFBEB',
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.72)',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    flexDirection: 'row-reverse',
+    padding: 14,
     alignItems: 'center',
-    gap: 8,
-  },
-  noticeText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#92400E',
-    textAlign: 'right',
-    lineHeight: 22,
-    fontWeight: '700',
-  },
-  actionInfoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'right',
-    marginBottom: 8,
+  amountDirection: {
+    fontSize: 13,
+    fontWeight: '900',
+    marginBottom: 6,
   },
-  sectionBody: {
-    fontSize: 14,
-    color: '#4B5563',
+  amountText: {
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  warningBox: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 16,
+    padding: 14,
+  },
+  warningText: {
+    color: '#92400E',
+    fontSize: 13,
+    fontWeight: '800',
     textAlign: 'right',
-    lineHeight: 24,
+    lineHeight: 22,
   },
   detailsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    padding: 16,
     gap: 14,
   },
   detailRow: {
@@ -869,51 +543,53 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  detailValue: {
-    flex: 1,
-    fontSize: 14,
-    color: '#111827',
-    textAlign: 'right',
-    fontWeight: '600',
-  },
-  detailValueBlock: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  detailValueHeader: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  detailLabel: {
+  detailLabelWrap: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 6,
   },
-  detailLabelText: {
+  detailLabel: {
+    color: '#64748B',
     fontSize: 13,
-    color: '#6B7280',
-    fontWeight: '700',
+    fontWeight: '800',
+  },
+  detailValue: {
+    flex: 1,
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'right',
   },
   messageCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'right',
+    marginBottom: 8,
+  },
+  sectionBody: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 24,
+    textAlign: 'right',
   },
   reasonCard: {
     backgroundColor: '#FEF2F2',
     borderRadius: 18,
-    padding: 16,
     borderWidth: 1,
     borderColor: '#FECACA',
+    padding: 16,
   },
   reasonTitle: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#991B1B',
     textAlign: 'right',
     marginBottom: 8,
@@ -921,8 +597,8 @@ const styles = StyleSheet.create({
   reasonBody: {
     fontSize: 14,
     color: '#991B1B',
-    textAlign: 'right',
     lineHeight: 24,
+    textAlign: 'right',
   },
   actionsBar: {
     backgroundColor: '#FFFFFF',
@@ -936,99 +612,80 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     gap: 10,
   },
-  approveBtn: {
+  approveButton: {
     flex: 1,
     backgroundColor: '#10B981',
     borderRadius: 14,
     paddingVertical: 14,
-    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row-reverse',
     gap: 8,
   },
-  approveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  rejectBtn: {
+  rejectButton: {
     flex: 1,
     backgroundColor: '#EF4444',
     borderRadius: 14,
     paddingVertical: 14,
-    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row-reverse',
     gap: 8,
   },
-  rejectBtnText: {
+  actionButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  acknowledgeOutlineBtn: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#FFFFFF',
+  buttonDisabled: {
+    opacity: 0.65,
   },
-  acknowledgeOutlineText: {
-    color: '#374151',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  fullAcknowledgeBtn: {
-    backgroundColor: '#111827',
+  darkFullButton: {
+    backgroundColor: '#0F172A',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fullAcknowledgeText: {
+  darkFullButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
-  },
-  btnDisabled: {
-    opacity: 0.6,
+    fontWeight: '900',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    alignItems: 'stretch',
     justifyContent: 'center',
     padding: 20,
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 20,
   },
   modalTitle: {
+    color: '#0F172A',
     fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
+    fontWeight: '900',
     textAlign: 'right',
-    marginBottom: 8,
   },
   modalSubtitle: {
+    color: '#64748B',
     fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'right',
     lineHeight: 22,
+    textAlign: 'right',
+    marginTop: 8,
     marginBottom: 12,
   },
   rejectInput: {
     minHeight: 120,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#D1D5DB',
-    borderRadius: 14,
     padding: 12,
+    color: '#0F172A',
     fontSize: 14,
-    color: '#111827',
     textAlignVertical: 'top',
   },
   modalActions: {
@@ -1036,26 +693,26 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 16,
   },
-  modalCancelBtn: {
+  modalCancelButton: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
     borderRadius: 14,
+    backgroundColor: '#F1F5F9',
     paddingVertical: 14,
     alignItems: 'center',
   },
   modalCancelText: {
-    color: '#374151',
-    fontWeight: '700',
+    color: '#475569',
+    fontWeight: '900',
   },
-  modalConfirmBtn: {
+  modalConfirmButton: {
     flex: 1,
-    backgroundColor: '#EF4444',
     borderRadius: 14,
+    backgroundColor: '#EF4444',
     paddingVertical: 14,
     alignItems: 'center',
   },
   modalConfirmText: {
     color: '#FFFFFF',
-    fontWeight: '800',
+    fontWeight: '900',
   },
 });

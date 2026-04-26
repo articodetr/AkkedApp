@@ -9,7 +9,7 @@ import {
   TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Plus, ArrowDownCircle, ArrowUpCircle, Calendar, ArrowLeftRight, Search, X } from 'lucide-react-native';
+import { ArrowDownCircle, ArrowUpCircle, Calendar, ArrowLeftRight, Search, X } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { AccountMovement } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
@@ -240,12 +240,6 @@ const renderMovement = ({ item }: { item: MovementWithCustomer }) => (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>الحركات المالية</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push('/new-movement' as any)}
-        >
-          <Plus size={24} color="#FFFFFF" />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.searchSection}>
