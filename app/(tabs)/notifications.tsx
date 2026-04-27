@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -70,11 +70,20 @@ export default function NotificationsTabScreen() {
     }, [loadNotifications]),
   );
 
+  // 🔧 ref لأحدث نسخة من loadNotifications بدون إعادة تشغيل useEffect
+  const loadRef = useRef(loadNotifications);
+  useEffect(() => {
+    loadRef.current = loadNotifications;
+  }, [loadNotifications]);
+
+  // 🔧 إصلاح Supabase Realtime: قناة فريدة لكل mount + cleanup آمن
   useEffect(() => {
     if (!currentUser?.userId) return;
 
-    const channel = supabase
-      .channel(`general-notifications-${currentUser.userId}`)
+    const channelName = `general-notifications-${currentUser.userId}-${Date.now()}`;
+    const channel = supabase.channel(channelName);
+
+    channel
       .on(
         'postgres_changes',
         {
@@ -84,15 +93,19 @@ export default function NotificationsTabScreen() {
           filter: `user_id=eq.${currentUser.userId}`,
         },
         () => {
-          loadNotifications();
+          loadRef.current?.();
         },
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch {
+        // تجاهل أخطاء الإغلاق المزدوج
+      }
     };
-  }, [currentUser?.userId, loadNotifications]);
+  }, [currentUser?.userId]);
 
   const visibleNotifications = useMemo(
     () => filterNotifications(notifications, activeFilter, currentUser),

@@ -9,9 +9,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Check, Clock, Trash2, X } from 'lucide-react-native';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import {
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowUp,
+  Bell,
+  Check,
+  Clock,
+  Trash2,
+  X,
+} from 'lucide-react-native';
 import {
   CurrentUserLike,
   getNotificationMeta,
@@ -40,49 +47,71 @@ export default function NotificationCard({
   onReject,
   isDeleting = false,
   isProcessing = false,
-  showCustomer = true,
-  unreadColor = '#2563EB',
+  unreadColor = '#10B981',
 }: NotificationCardProps) {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const meta = getNotificationMeta(notification, currentUser);
-  const createdAt = new Date(notification.created_at);
   const canUseQuickAction = meta.canTakeAction && Boolean(onAccept && onReject);
+
+  // اتجاه الحركة من نفس منطق المشروع
+  const movementType =
+    notification.movement_type || notification.movement?.movement_type || '';
+  const isIncoming = movementType === 'incoming';
+  const isOutgoing = movementType === 'outgoing';
+  const isInternal = movementType === 'internal_transfer';
+
+  const iconBg = isIncoming
+    ? '#DCFCE7'
+    : isOutgoing
+      ? '#FEE2E2'
+      : isInternal
+        ? '#EDE9FE'
+        : '#DBEAFE';
+  const badgeBg = iconBg;
+  const badgeText = isIncoming
+    ? '#047857'
+    : isOutgoing
+      ? '#B91C1C'
+      : isInternal
+        ? '#5B21B6'
+        : '#1E40AF';
+
+  const DirectionIcon = isIncoming
+    ? ArrowUp
+    : isOutgoing
+      ? ArrowDown
+      : isInternal
+        ? ArrowLeftRight
+        : Bell;
 
   const handleAcceptPress = () => {
     if (!onAccept || isProcessing) return;
-
-    Alert.alert(
-      'قبول الحركة',
-      'هل تريد قبول هذه الحركة واعتمادها؟ سيبقى الإشعار محفوظًا في السجل.',
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'قبول',
-          onPress: async () => {
-            try {
-              await onAccept(notification);
-              Alert.alert('تم القبول', 'تم اعتماد الحركة بنجاح.');
-            } catch (error: any) {
-              Alert.alert('خطأ', error?.message || 'تعذر قبول الحركة');
-            }
-          },
+    Alert.alert('قبول الحركة', 'هل تريد قبول هذه الحركة واعتمادها؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'قبول',
+        onPress: async () => {
+          try {
+            await onAccept(notification);
+            Alert.alert('تم القبول', 'تم اعتماد الحركة بنجاح.');
+          } catch (error: any) {
+            Alert.alert('خطأ', error?.message || 'تعذر قبول الحركة');
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const handleRejectConfirm = async () => {
     if (!onReject || isProcessing) return;
-
-    const trimmedReason = rejectReason.trim();
-    if (!trimmedReason) {
+    const trimmed = rejectReason.trim();
+    if (!trimmed) {
       Alert.alert('تنبيه', 'يرجى كتابة سبب الرفض');
       return;
     }
-
     try {
-      await onReject(notification, trimmedReason);
+      await onReject(notification, trimmed);
       setShowRejectModal(false);
       setRejectReason('');
       Alert.alert('تم الرفض', 'تم رفض الحركة وحفظ سبب الرفض.');
@@ -91,102 +120,108 @@ export default function NotificationCard({
     }
   };
 
+  // أيقونة الحالة في الشريط السفلي
+  const renderStatusIcon = () => {
+    const txt = meta.statusText;
+    if (txt === 'مقبولة') return <Check size={14} color={meta.statusColor} strokeWidth={2.5} />;
+    if (txt === 'مرفوضة') return <X size={14} color={meta.statusColor} strokeWidth={2.5} />;
+    if (txt === 'تحتاج إجراء' || txt === 'معلقة')
+      return <Clock size={14} color={meta.statusColor} strokeWidth={2.5} />;
+    return null;
+  };
+
   return (
     <>
-      <TouchableOpacity
-        activeOpacity={0.9}
-        style={[
-          styles.notificationCard,
-          { borderColor: meta.rowBorderColor, backgroundColor: meta.rowBg },
-          meta.isUnread && styles.unreadCard,
-        ]}
-        onPress={onPress}
-      >
-        <View style={styles.cardTopRow}>
-          <View style={styles.titleWrap}>
-            <View style={styles.titleRow}>
-              {meta.isUnread && <View style={[styles.unreadDot, { backgroundColor: unreadColor }]} />}
-              <Text style={styles.cardTitle}>{meta.title}</Text>
-            </View>
-            <Text style={styles.cardSubtitle} numberOfLines={2}>
-              {meta.subtitle}
+      <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.card}>
+        {/* الصف العلوي: أيقونة + مبلغ + منشئ + شارة + حذف */}
+        <View style={styles.topRow}>
+          {meta.isUnread && (
+            <View style={[styles.unreadDot, { backgroundColor: unreadColor }]} />
+          )}
+
+          <View style={[styles.iconCircle, { backgroundColor: iconBg }]}>
+            <DirectionIcon size={20} color={badgeText} strokeWidth={2.5} />
+          </View>
+
+          <View style={styles.middle}>
+            <Text
+              style={[styles.amount, { color: meta.directionColor }]}
+              numberOfLines={1}
+            >
+              {meta.amountText}
+            </Text>
+            <Text style={styles.creator} numberOfLines={1}>
+              المنشئ: {meta.actorName}
+            </Text>
+          </View>
+
+          <View style={[styles.directionBadge, { backgroundColor: badgeBg }]}>
+            <Text style={[styles.directionText, { color: badgeText }]}>
+              {meta.directionLabel}
             </Text>
           </View>
 
           <TouchableOpacity
-            style={styles.deleteButton}
+            style={styles.deleteIcon}
             onPress={() => onDelete(notification)}
             disabled={isDeleting || isProcessing}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {isDeleting ? <ActivityIndicator size="small" color="#EF4444" /> : <Trash2 size={18} color="#EF4444" />}
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#EF4444" />
+            ) : (
+              <Trash2 size={16} color="#9CA3AF" />
+            )}
           </TouchableOpacity>
         </View>
 
-        <View style={styles.infoGrid}>
-          {showCustomer ? (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoLabel}>العميل</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{meta.customerName}</Text>
-            </View>
-          ) : (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoLabel}>المنشئ</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{meta.actorName}</Text>
-            </View>
-          )}
-          <View style={styles.infoBox}>
-            <Text style={styles.infoLabel}>المبلغ</Text>
-            <Text style={[styles.infoValue, { color: meta.directionColor }]} numberOfLines={1}>{meta.amountText}</Text>
+        {/* الشريط السفلي: حالة العملية + أزرار قبول/رفض */}
+        <View
+          style={[
+            styles.statusRow,
+            {
+              backgroundColor: meta.statusBg,
+              borderTopColor: meta.rowBorderColor,
+            },
+          ]}
+        >
+          <View style={styles.statusLeft}>
+            {renderStatusIcon()}
+            <Text style={[styles.statusText, { color: meta.statusColor }]}>
+              {meta.statusText}
+            </Text>
           </View>
-          <View style={styles.infoBox}>
-            <Text style={styles.infoLabel}>النوع</Text>
-            <Text style={[styles.infoValue, { color: meta.directionColor }]}>{meta.directionLabel}</Text>
-          </View>
-        </View>
 
-        <View style={styles.cardFooter}>
-          <View style={[styles.statusBadge, { backgroundColor: meta.statusBg }]}> 
-            <Text style={[styles.statusText, { color: meta.statusColor }]}>{meta.statusText}</Text>
-          </View>
-          <View style={styles.dateWrap}>
-            <Clock size={14} color="#6B7280" />
-            <Text style={styles.dateText}>{format(createdAt, 'dd/MM/yyyy - HH:mm', { locale: ar })}</Text>
-          </View>
-        </View>
-
-        {meta.rejectReason && (
-          <View style={styles.reasonBox}>
-            <Text style={styles.reasonText} numberOfLines={2}>سبب الرفض: {meta.rejectReason}</Text>
-          </View>
-        )}
-
-        {canUseQuickAction && (
-          <View style={styles.quickActionsBox}>
-            <Text style={styles.quickActionsHint}>يمكنك القبول أو الرفض مباشرة، أو الضغط على الكرت لعرض التفاصيل.</Text>
-            <View style={styles.quickActionsRow}>
+          {canUseQuickAction ? (
+            <View style={styles.actionButtons}>
               <TouchableOpacity
-                style={[styles.acceptButton, isProcessing && styles.disabledButton]}
+                style={[styles.actionBtn, styles.acceptBtn]}
                 onPress={handleAcceptPress}
                 disabled={isProcessing}
               >
-                {isProcessing ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Check size={18} color="#FFFFFF" />}
-                <Text style={styles.acceptButtonText}>قبول</Text>
+                {isProcessing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                    <Text style={styles.actionText}>قبول</Text>
+                  </>
+                )}
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[styles.rejectButton, isProcessing && styles.disabledButton]}
+                style={[styles.actionBtn, styles.rejectBtn]}
                 onPress={() => setShowRejectModal(true)}
                 disabled={isProcessing}
               >
-                <X size={18} color="#FFFFFF" />
-                <Text style={styles.rejectButtonText}>رفض</Text>
+                <X size={12} color="#FFFFFF" strokeWidth={3} />
+                <Text style={styles.actionText}>رفض</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
+          ) : null}
+        </View>
       </TouchableOpacity>
 
+      {/* مودال سبب الرفض */}
       <Modal
         visible={showRejectModal}
         transparent
@@ -194,21 +229,25 @@ export default function NotificationCard({
         onRequestClose={() => setShowRejectModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>سبب رفض الحركة</Text>
-            <Text style={styles.modalSubtitle}>اكتب السبب بشكل واضح حتى يظهر في تفاصيل الإشعار.</Text>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>سبب الرفض</Text>
+            <Text style={styles.modalSubtitle}>
+              يرجى كتابة سبب رفض هذه الحركة لإبلاغ المنشئ
+            </Text>
             <TextInput
-              style={styles.rejectInput}
+              style={styles.reasonInput}
+              placeholder="اكتب سبب الرفض هنا..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              numberOfLines={4}
               value={rejectReason}
               onChangeText={setRejectReason}
-              placeholder="مثال: المبلغ غير صحيح"
-              placeholderTextColor="#94A3B8"
-              multiline
+              textAlignVertical="top"
               textAlign="right"
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={styles.modalCancelButton}
+                style={[styles.modalBtn, styles.modalCancelBtn]}
                 onPress={() => {
                   setShowRejectModal(false);
                   setRejectReason('');
@@ -218,11 +257,15 @@ export default function NotificationCard({
                 <Text style={styles.modalCancelText}>إلغاء</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalConfirmButton, isProcessing && styles.disabledButton]}
+                style={[styles.modalBtn, styles.modalConfirmBtn]}
                 onPress={handleRejectConfirm}
-                disabled={isProcessing}
+                disabled={isProcessing || !rejectReason.trim()}
               >
-                {isProcessing ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalConfirmText}>تأكيد الرفض</Text>}
+                {isProcessing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>تأكيد الرفض</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -233,245 +276,165 @@ export default function NotificationCard({
 }
 
 const styles = StyleSheet.create({
-  notificationCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 14,
-    shadowColor: '#000000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
-  },
-  unreadCard: {
-    borderWidth: 1.5,
-  },
-  cardTopRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  titleWrap: {
-    flex: 1,
-  },
-  titleRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 8,
-  },
-  unreadDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-  },
-  cardTitle: {
-    flex: 1,
-    color: '#0F172A',
-    fontSize: 16,
-    fontWeight: '900',
-    textAlign: 'right',
-  },
-  cardSubtitle: {
-    color: '#475569',
-    fontSize: 13,
-    lineHeight: 21,
-    textAlign: 'right',
-    marginTop: 6,
-  },
-  deleteButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: '#FEF2F2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoGrid: {
-    flexDirection: 'row-reverse',
-    gap: 8,
-    marginTop: 12,
-  },
-  infoBox: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+  card: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    overflow: 'hidden',
+    marginBottom: 8,
   },
-  infoLabel: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '700',
+  topRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: -4,
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  middle: {
+    flex: 1,
+    minWidth: 0,
+  },
+  amount: {
+    fontSize: 22,
+    fontWeight: '500',
     textAlign: 'right',
-    marginBottom: 4,
   },
-  infoValue: {
-    color: '#0F172A',
+  creator: {
     fontSize: 13,
-    fontWeight: '900',
+    color: '#6B7280',
+    marginTop: 4,
     textAlign: 'right',
   },
-  cardFooter: {
-    marginTop: 12,
+  directionBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  directionText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  deleteIcon: {
+    padding: 4,
+  },
+  statusRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    minHeight: 36,
   },
-  statusBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  statusLeft: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '500',
   },
-  dateWrap: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 5,
-  },
-  dateText: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  reasonBox: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  reasonText: {
-    color: '#991B1B',
-    fontSize: 12,
-    fontWeight: '800',
-    textAlign: 'right',
-    lineHeight: 19,
-  },
-  quickActionsBox: {
-    marginTop: 12,
-    backgroundColor: '#FFFBEB',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    padding: 10,
-  },
-  quickActionsHint: {
-    color: '#92400E',
-    fontSize: 12,
-    fontWeight: '800',
-    textAlign: 'right',
-    lineHeight: 19,
-    marginBottom: 10,
-  },
-  quickActionsRow: {
+  actionButtons: {
     flexDirection: 'row-reverse',
     gap: 8,
   },
-  acceptButton: {
-    flex: 1,
+  actionBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+    minWidth: 60,
+    justifyContent: 'center',
+  },
+  acceptBtn: {
     backgroundColor: '#059669',
-    borderRadius: 12,
-    paddingVertical: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row-reverse',
-    gap: 6,
   },
-  rejectButton: {
-    flex: 1,
+  rejectBtn: {
     backgroundColor: '#DC2626',
-    borderRadius: 12,
-    paddingVertical: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row-reverse',
-    gap: 6,
   },
-  acceptButtonText: {
+  actionText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  rejectButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  disabledButton: {
-    opacity: 0.65,
+    fontSize: 12,
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'center',
-    padding: 22,
+    alignItems: 'center',
+    padding: 20,
   },
-  modalContent: {
-    width: '100%',
-    borderRadius: 20,
+  modalContainer: {
     backgroundColor: '#FFFFFF',
-    padding: 18,
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
   },
   modalTitle: {
+    fontSize: 18,
+    fontWeight: '500',
     color: '#0F172A',
-    fontSize: 19,
-    fontWeight: '900',
     textAlign: 'right',
+    marginBottom: 6,
   },
   modalSubtitle: {
-    marginTop: 6,
-    color: '#64748B',
     fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 20,
+    color: '#6B7280',
     textAlign: 'right',
+    marginBottom: 12,
   },
-  rejectInput: {
-    marginTop: 14,
-    minHeight: 95,
-    borderRadius: 14,
+  reasonInput: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
     padding: 12,
-    color: '#0F172A',
     fontSize: 14,
-    textAlignVertical: 'top',
+    minHeight: 100,
+    color: '#0F172A',
+    backgroundColor: '#F9FAFB',
   },
   modalActions: {
-    marginTop: 14,
     flexDirection: 'row-reverse',
     gap: 10,
+    marginTop: 16,
   },
-  modalCancelButton: {
+  modalBtn: {
     flex: 1,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
     paddingVertical: 12,
+    borderRadius: 8,
     alignItems: 'center',
+  },
+  modalCancelBtn: {
+    backgroundColor: '#F3F4F6',
   },
   modalCancelText: {
-    color: '#334155',
+    color: '#374151',
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '500',
   },
-  modalConfirmButton: {
-    flex: 1,
-    borderRadius: 12,
+  modalConfirmBtn: {
     backgroundColor: '#DC2626',
-    paddingVertical: 12,
-    alignItems: 'center',
   },
   modalConfirmText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '500',
   },
 });

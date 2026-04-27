@@ -1,68 +1,69 @@
 {
-  "expo": {
-    "name": "ArtiCode",
-    "slug": "articodeapp",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
-    "scheme": "myapp",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.altaraf.moneytransfer"
-    },
-    "android": {
-      "package": "com.altaraf.moneytransfer",
-      "versionCode": 1,
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#2E3A8E"
-      },
-      "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ],
-      "userInterfaceStyle": "automatic"
-    },
-    "web": {
-      "bundler": "metro",
-      "output": "single",
-      "favicon": "./assets/images/favicon.png"
-    },
-    "plugins": [
-      "expo-router",
-      "expo-font",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 220,
-          "resizeMode": "contain",
-          "backgroundColor": "#FFFFFF"
-        }
-      ],
-      "expo-web-browser",
-      "@react-native-community/datetimepicker",
-      "expo-asset",
-      "expo-sharing"
-    ],
-    "experiments": {
-      "typedRoutes": true
-    },
-    "extra": {
-      "EXPO_PUBLIC_SUPABASE_URL": "https://hnaudgieczuzuduplhkp.supabase.co",
-      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuYXVkZ2llY3p1enVkdXBsaGtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTE3OTYsImV4cCI6MjA5MDM4Nzc5Nn0.alA4zTeQLwEPcepUVrfyAPaneJNtNaN9QmQJrNJRqm8",
-      "router": {},
-      "eas": {
-        "projectId": "f6c89bb9-f1ac-4863-91f0-8d02da4f59af"
-      }
-    },
-    "owner": "arti_codeg"
+  "name": "articodeapp",
+  "main": "expo-router/entry",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "expo start -c",
+    "dev": "expo start -c --port 8081",
+    "dev:lan": "expo start -c --port 8081 --host lan",
+    "dev:tunnel": "expo start -c --port 8081 --tunnel",
+    "build:web": "expo export --platform web",
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "doctor": "npx expo-doctor"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "@lucide/lab": "^0.1.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "8.6.0",
+    "@react-navigation/bottom-tabs": "^7.2.0",
+    "@react-navigation/native": "^7.0.14",
+    "@supabase/supabase-js": "^2.58.0",
+    "date-fns": "^4.1.0",
+    "expo": "^55.0.17",
+    "expo-asset": "~55.0.16",
+    "expo-blur": "~55.0.14",
+    "expo-camera": "~55.0.16",
+    "expo-constants": "~55.0.15",
+    "expo-crypto": "~55.0.14",
+    "expo-document-picker": "~55.0.13",
+    "expo-file-system": "~55.0.17",
+    "expo-font": "~55.0.6",
+    "expo-haptics": "~55.0.14",
+    "expo-image-picker": "~55.0.19",
+    "expo-linear-gradient": "~55.0.13",
+    "expo-linking": "~55.0.14",
+    "expo-print": "~55.0.13",
+    "expo-router": "~55.0.13",
+    "expo-sharing": "~55.0.18",
+    "expo-splash-screen": "~55.0.19",
+    "expo-status-bar": "~55.0.5",
+    "expo-symbols": "~55.0.7",
+    "expo-system-ui": "~55.0.16",
+    "expo-web-browser": "~55.0.14",
+    "lucide-react-native": "^0.544.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.6",
+    "react-native-gesture-handler": "~2.30.0",
+    "react-native-qrcode-svg": "^6.3.21",
+    "react-native-reanimated": "~3.16.0",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.23.0",
+    "react-native-svg": "15.15.3",
+    "react-native-url-polyfill": "^2.0.0",
+    "react-native-view-shot": "^4.0.3",
+    "react-native-web": "^0.21.0",
+    "react-native-webview": "13.16.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~19.2.10",
+    "supabase": "^2.84.4",
+    "typescript": "~5.9.2"
   }
 }

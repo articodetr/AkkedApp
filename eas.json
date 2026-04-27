@@ -12,8 +12,7 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk",
-        "credentialsSource": "remote",
-        "gradleCommand": ":app:assembleRelease"
+        "credentialsSource": "remote"
       },
       "autoIncrement": true,
       "env": {
@@ -23,7 +22,7 @@
     },
     "production": {
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://hnaudgieczuzuduplhkp.supabase.co",

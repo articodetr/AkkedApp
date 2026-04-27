@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -77,11 +77,20 @@ export default function CustomerNotificationsScreen() {
     }, [loadNotifications]),
   );
 
+  // 🔧 ref لأحدث نسخة من loadNotifications بدون إعادة تشغيل useEffect
+  const loadRef = useRef(loadNotifications);
+  useEffect(() => {
+    loadRef.current = loadNotifications;
+  }, [loadNotifications]);
+
+  // 🔧 إصلاح Supabase Realtime: قناة فريدة لكل mount + cleanup آمن
   useEffect(() => {
     if (!currentUser?.userId || !customerId) return;
 
-    const channel = supabase
-      .channel(`customer-notifications-${currentUser.userId}-${customerId}`)
+    const channelName = `customer-notifications-${currentUser.userId}-${customerId}-${Date.now()}`;
+    const channel = supabase.channel(channelName);
+
+    channel
       .on(
         'postgres_changes',
         {
@@ -91,15 +100,19 @@ export default function CustomerNotificationsScreen() {
           filter: `user_id=eq.${currentUser.userId}`,
         },
         () => {
-          loadNotifications();
+          loadRef.current?.();
         },
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch {
+        // تجاهل أخطاء الإغلاق المزدوج
+      }
     };
-  }, [currentUser?.userId, customerId, loadNotifications]);
+  }, [currentUser?.userId, customerId]);
 
   const visibleNotifications = useMemo(
     () => filterNotifications(notifications, activeFilter, currentUser),
