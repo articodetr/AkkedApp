@@ -651,7 +651,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statCurrencyRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     justifyContent: 'flex-end',
@@ -665,7 +665,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     flex: 1,
-    textAlign: 'left',
+    textAlign: 'right',
   },
   statLabel: {
     fontSize: 12,
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   customerHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   balanceRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
@@ -815,7 +815,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   amountContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
@@ -826,7 +826,7 @@ const styles = StyleSheet.create({
   balanceAmount: {
     fontSize: 16,
     fontWeight: 'bold',
-    textAlign: 'left',
+    textAlign: 'right',
   },
   customerFooter: {
     marginTop: 12,
@@ -839,7 +839,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   currencyFooterRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     justifyContent: 'space-between',
@@ -861,7 +861,7 @@ const styles = StyleSheet.create({
   totalIncoming: {
     fontSize: 11,
     color: '#10B981',
-    textAlign: 'left',
+    textAlign: 'right',
     flex: 1,
   },
   totalOutgoingLabel: {
@@ -874,7 +874,7 @@ const styles = StyleSheet.create({
   totalOutgoing: {
     fontSize: 11,
     color: '#EF4444',
-    textAlign: 'left',
+    textAlign: 'right',
     flex: 1,
   },
   emptyContainer: {

@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 16,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     borderBottomWidth: 1,
@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   filtersRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,

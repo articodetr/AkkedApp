@@ -1,38 +1,22 @@
-import { useEffect, useState } from 'react';
+import '@/utils/arabicRTL';
+import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { I18nManager, View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { DataRefreshProvider } from '@/contexts/DataRefreshContext';
+import { setupArabicRTL } from '@/utils/rtl';
 
-// ⚠️ مهم: لا تستدعي forceRTL في كل re-render.
-// نستدعيها مرة واحدة فقط، وفقط إذا لم تكن RTL مفعّلة بالفعل.
-// استدعاؤها كل مرة في Expo Go على Android يسبب reload-loop.
-if (!I18nManager.isRTL) {
-  I18nManager.allowRTL(true);
-  // forceRTL على iOS يحتاج إعادة تشغيل، لذلك نتجنب حلقة لا نهائية.
-  try {
-    I18nManager.forceRTL(true);
-  } catch {}
-}
+setupArabicRTL();
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const [navReady, setNavReady] = useState(false);
-
-  // انتظار جاهزية المسارات قبل أي router.replace لتجنب
-  // "Attempted to navigate before mounting the Root Layout component"
-  useEffect(() => {
-    setNavReady(true);
-  }, []);
 
   useEffect(() => {
-    if (!navReady || isLoading) return;
+    if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -41,15 +25,7 @@ function RootLayoutNav() {
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isLoading, segments, navReady]);
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  }, [isAuthenticated, isLoading, segments]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -86,17 +62,15 @@ export default function RootLayout() {
   useFrameworkReady();
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <DataRefreshProvider>
-            <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-              <RootLayoutNav />
-              <StatusBar style="auto" />
-            </SafeAreaView>
-          </DataRefreshProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <DataRefreshProvider>
+          <SafeAreaView style={{ flex: 1, direction: 'rtl' }} edges={['top']}>
+            <RootLayoutNav />
+            <StatusBar style="auto" />
+          </SafeAreaView>
+        </DataRefreshProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

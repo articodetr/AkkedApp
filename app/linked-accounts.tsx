@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     borderLeftWidth: 4,
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   accountHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },

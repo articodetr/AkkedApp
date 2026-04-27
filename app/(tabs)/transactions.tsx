@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     borderColor: '#FCA5A5',
   },
   statusRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     marginBottom: 10,
   },
   statusBadge: {
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   customerHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,

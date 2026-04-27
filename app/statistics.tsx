@@ -1007,7 +1007,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 18,
     padding: 14,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 10,
     marginBottom: 14,
   },
@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   dashboardHeroTop: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -1079,7 +1079,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   summaryGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 12,
   },
   primarySummaryCard: {
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
   },
   primarySummaryAmountRow: {
     marginTop: 7,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'baseline',
     gap: 5,
   },
@@ -1135,7 +1135,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     marginTop: 24,
     marginBottom: 12,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
   },
@@ -1164,7 +1164,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   attentionGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 9,
   },
   attentionTile: {
@@ -1204,7 +1204,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     padding: 13,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 11,
   },
@@ -1243,7 +1243,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   currencyDecisionTop: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
@@ -1283,7 +1283,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   currencyMiniGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     marginTop: 14,
     backgroundColor: '#F8FAFC',
     borderRadius: 16,
@@ -1321,7 +1321,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   cashFlowHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
@@ -1360,7 +1360,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cashFlowDetailsGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 13,
@@ -1388,7 +1388,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     borderRadius: 18,
     padding: 4,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 4,
   },
   periodTab: {
@@ -1416,7 +1416,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     paddingVertical: 16,
     paddingHorizontal: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   periodMetric: {
@@ -1441,7 +1441,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
   },
   amountListsGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 12,
     marginTop: 12,
   },
@@ -1462,7 +1462,7 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
   amountListRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 6,
@@ -1480,7 +1480,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontSize: 12,
     fontWeight: '900',
-    textAlign: 'left',
+    textAlign: 'right',
   },
   amountListEmpty: {
     color: '#64748B',
@@ -1491,7 +1491,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   topCustomersGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 12,
   },
   topCustomersCard: {
@@ -1509,7 +1509,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   customerLine: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
     paddingVertical: 8,
@@ -1534,7 +1534,7 @@ const styles = StyleSheet.create({
   customerLineAmount: {
     fontSize: 11,
     fontWeight: '900',
-    textAlign: 'left',
+    textAlign: 'right',
   },
   emptySmallText: {
     color: '#64748B',
@@ -1551,7 +1551,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     paddingVertical: 16,
     paddingHorizontal: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   quickStatItem: {
@@ -1580,7 +1580,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB',
     borderRadius: 22,
     padding: 16,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },

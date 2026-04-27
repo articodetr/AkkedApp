@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 14,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     borderBottomWidth: 1,
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   filtersRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -440,13 +440,13 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontSize: 18,
     fontWeight: '900',
-    textAlign: 'center',
+    textAlign: 'right',
   },
   emptySubtitle: {
     marginTop: 6,
     color: '#64748B',
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: 'right',
     lineHeight: 22,
   },
   backHomeButton: {

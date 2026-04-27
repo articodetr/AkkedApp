@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   selectedCustomerHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   customerHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 4,

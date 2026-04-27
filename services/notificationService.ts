@@ -7,6 +7,9 @@ export type NotificationVisualState = 'action' | 'pending' | 'approved' | 'rejec
 export interface NotificationExtraData {
   reason?: string;
   reject_reason?: string;
+  note?: string;
+  notes?: string;
+  description?: string;
   created_by_name?: string;
   created_by_user_id?: string;
   source_user_id?: string;
@@ -30,6 +33,7 @@ export interface NotificationMovement {
   amount?: number | null;
   currency?: string | null;
   movement_type?: string | null;
+  notes?: string | null;
   is_voided?: boolean | null;
   approval_status?: string | null;
   pending_approval?: boolean | null;
@@ -79,6 +83,7 @@ export interface NotificationMeta {
   customerName: string;
   actorName: string;
   amountText: string;
+  amountSentenceText: string;
   directionLabel: string;
   directionColor: string;
   statusText: string;
@@ -89,8 +94,10 @@ export interface NotificationMeta {
   visualState: NotificationVisualState;
   isUnread: boolean;
   canTakeAction: boolean;
+  createdByCurrentUser: boolean;
+  noteText?: string;
   rejectReason?: string;
-}
+  }
 
 export const NOTIFICATION_SELECT = `
   id,
@@ -123,6 +130,7 @@ export const NOTIFICATION_SELECT = `
     amount,
     currency,
     movement_type,
+    notes,
     is_voided,
     approval_status,
     pending_approval,
@@ -136,6 +144,7 @@ export const NOTIFICATION_SELECT = `
 
 function normalizeNotification(item: MovementNotification): MovementNotification {
   const movement = item.movement || null;
+
   return {
     ...item,
     customer_id: item.customer_id || movement?.customer_id || null,
@@ -144,11 +153,14 @@ function normalizeNotification(item: MovementNotification): MovementNotification
     amount: item.amount ?? movement?.amount ?? null,
     currency: item.currency || movement?.currency || null,
     movement_type: item.movement_type || movement?.movement_type || null,
-    extra_data: item.extra_data || {},
+    extra_data: {
+      ...(item.extra_data || {}),
+      movement_notes: movement?.notes || (item.extra_data as any)?.movement_notes || (item.extra_data as any)?.notes || null,
+    },
   };
 }
 
-function normalizeText(value?: string | null) {
+function normalizeText(value?: unknown) {
   return String(value || '').trim().toLowerCase();
 }
 
@@ -156,12 +168,83 @@ function sameId(a?: string | null, b?: string | null) {
   return Boolean(a && b && String(a).toLowerCase() === String(b).toLowerCase());
 }
 
+function pickText(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',
+  SAR: 'ر.س',
+  TRY: '₺',
+  YER: 'ر.ي',
+  YER_SANA: 'ر.ي',
+  YER_ADEN: 'ر.ي',
+};
+
+const CURRENCY_ARABIC_NAMES: Record<string, string> = {
+  USD: 'دولار',
+  SAR: 'ريال سعودي',
+  TRY: 'ليرة تركية',
+  YER: 'ريال يمني',
+  YER_SANA: 'ريال يمني',
+  YER_ADEN: 'ريال يمني',
+};
+
+function formatSmartNumber(amount: number) {
+  return Number(amount).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function getCurrencySymbol(currency?: string | null) {
+  const key = String(currency || 'USD').toUpperCase();
+  return CURRENCY_SYMBOLS[key] || currency || '';
+}
+
+export function getCurrencyArabicName(currency?: string | null) {
+  const key = String(currency || 'USD').toUpperCase();
+  return CURRENCY_ARABIC_NAMES[key] || currency || '';
+}
+
 export function formatNotificationAmount(amount?: number | null, currency?: string | null) {
   if (amount == null) return 'بدون مبلغ';
-  return `${Number(amount).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} ${currency || ''}`.trim();
+  const numberValue = Number(amount);
+  if (!Number.isFinite(numberValue)) return 'بدون مبلغ';
+  return `${formatSmartNumber(numberValue)} ${getCurrencySymbol(currency)}`.trim();
+}
+
+export function formatNotificationAmountForSentence(amount?: number | null, currency?: string | null) {
+  if (amount == null) return 'بدون مبلغ';
+  const numberValue = Number(amount);
+  if (!Number.isFinite(numberValue)) return 'بدون مبلغ';
+  return `${formatSmartNumber(numberValue)} ${getCurrencyArabicName(currency)}`.trim();
+}
+
+
+function getCleanNotificationNote(item: MovementNotification): string {
+  const extra = item.extra_data || {};
+  const possibleValues = [
+    (item as any).notes,
+    item.movement?.notes,
+    extra.notes,
+    extra.note,
+    extra.movement_notes,
+    extra.movement_note,
+  ];
+
+  for (const value of possibleValues) {
+    const text = String(value || '').trim();
+    if (text && text !== 'null' && text !== 'undefined') {
+      return text;
+    }
+  }
+
+  return 'لا توجد ملاحظة';
 }
 
 export function getNotificationCustomerId(item: MovementNotification) {
@@ -181,7 +264,11 @@ export function isNotificationUnread(item: MovementNotification) {
 
 export function isNotificationPending(item: MovementNotification) {
   const rawStatus = getNotificationRawStatus(item);
-  if (rawStatus === 'approved' || rawStatus === 'rejected' || rawStatus === 'done') return false;
+
+  if (rawStatus === 'approved' || rawStatus === 'rejected' || rawStatus === 'done') {
+    return false;
+  }
+
   return (
     rawStatus === 'pending' ||
     item.notification_type === 'approval_needed' ||
@@ -228,8 +315,7 @@ export function canTakeNotificationAction(
   currentUser?: CurrentUserLike | null,
 ) {
   const rawStatus = getNotificationRawStatus(item);
-  const isRecipient =
-    sameId(item.user_id, currentUser?.userId) || sameId(item.recipient_user_id, currentUser?.userId);
+  const isRecipient = sameId(item.user_id, currentUser?.userId) || sameId(item.recipient_user_id, currentUser?.userId);
 
   return (
     item.notification_type === 'approval_needed' &&
@@ -243,6 +329,43 @@ export function canTakeNotificationAction(
   );
 }
 
+export function getNotificationNote(item: MovementNotification) {
+  return pickText(
+    item.extra_data?.note,
+    item.extra_data?.notes,
+    item.extra_data?.description,
+    item.movement?.notes,
+  );
+}
+
+function buildArabicNotificationTitle(params: {
+  actorName: string;
+  customerName: string;
+  amountSentenceText: string;
+  movementType: string;
+  createdByCurrentUser: boolean;
+  fallbackTitle?: string | null;
+}) {
+  const { actorName, customerName, amountSentenceText, movementType, createdByCurrentUser, fallbackTitle } = params;
+  const isIncoming = movementType === 'incoming';
+  const isOutgoing = movementType === 'outgoing';
+
+  if (!isIncoming && !isOutgoing && fallbackTitle) {
+    return fallbackTitle;
+  }
+
+  if (createdByCurrentUser) {
+    if (isOutgoing) return `أنت قيدت على ${customerName} مبلغ ${amountSentenceText}`;
+    if (isIncoming) return `أنت قيدت لـ ${customerName} مبلغ ${amountSentenceText}`;
+    return `أنت قيدت حركة للعميل ${customerName} بمبلغ ${amountSentenceText}`;
+  }
+
+  if (isOutgoing) return `${actorName} قيد عليك مبلغ ${amountSentenceText}`;
+  if (isIncoming) return `${actorName} قيد لك مبلغ ${amountSentenceText}`;
+
+  return `${actorName} أنشأ حركة بقيمة ${amountSentenceText}`;
+}
+
 export function getNotificationMeta(
   item: MovementNotification,
   currentUser?: CurrentUserLike | null,
@@ -251,13 +374,16 @@ export function getNotificationMeta(
   const currency = item.currency || item.movement?.currency || '';
   const movementType = item.movement_type || item.movement?.movement_type || '';
   const amountText = formatNotificationAmount(amount, currency);
+  const amountSentenceText = formatNotificationAmountForSentence(amount, currency);
   const customerName = item.customer_name || item.movement?.customer?.name || 'العميل';
   const actorName = item.actor_name || item.movement?.created_by_user_name || 'الطرف الآخر';
   const rawStatus = getNotificationRawStatus(item);
   const pending = isNotificationPending(item);
   const canTakeAction = canTakeNotificationAction(item, currentUser);
-  const rejectReason = item.extra_data?.reject_reason || item.extra_data?.reason || item.movement?.reject_reason || undefined;
-  const isIncoming = movementType === 'incoming';
+  const createdByCurrentUser = isNotificationCreatedByCurrentUser(item, currentUser);
+  const rejectReason = pickText(item.extra_data?.reject_reason, item.extra_data?.reason, item.movement?.reject_reason) || undefined;
+  const noteText = getCleanNotificationNote(item) || getNotificationNote(item) || undefined;
+const isIncoming = movementType === 'incoming';
   const isOutgoing = movementType === 'outgoing';
 
   let directionLabel = 'حركة';
@@ -274,8 +400,16 @@ export function getNotificationMeta(
     directionColor = '#7C3AED';
   }
 
-  let title = item.title || 'إشعار جديد';
-  let subtitle = item.message || 'يوجد تحديث جديد';
+  const title = buildArabicNotificationTitle({
+    actorName,
+    customerName,
+    amountSentenceText,
+    movementType,
+    createdByCurrentUser,
+    fallbackTitle: item.title,
+  });
+
+  let subtitle = item.message || '';
   let statusText = 'معلومات';
   let statusColor = '#475569';
   let statusBg = '#F1F5F9';
@@ -284,8 +418,7 @@ export function getNotificationMeta(
   let visualState: NotificationVisualState = 'info';
 
   if (canTakeAction) {
-    title = 'حركة تحتاج موافقتك';
-    subtitle = `راجع حركة ${customerName} قبل اعتمادها.`;
+    subtitle = 'هذه الحركة تحتاج موافقتك قبل أن تدخل في الإجماليات.';
     statusText = 'تحتاج إجراء';
     statusColor = '#B45309';
     statusBg = '#FEF3C7';
@@ -293,8 +426,7 @@ export function getNotificationMeta(
     rowBg = '#FFFBEB';
     visualState = 'action';
   } else if (rawStatus === 'approved' || item.notification_type === 'movement_approved') {
-    title = item.title || 'تمت الموافقة على الحركة';
-    subtitle = `تم اعتماد حركة ${customerName}.`;
+    subtitle = createdByCurrentUser ? `تمت موافقة ${customerName} على الحركة.` : 'تمت الموافقة على هذه الحركة.';
     statusText = 'مقبولة';
     statusColor = '#047857';
     statusBg = '#DCFCE7';
@@ -302,8 +434,7 @@ export function getNotificationMeta(
     rowBg = '#F0FDF4';
     visualState = 'approved';
   } else if (rawStatus === 'rejected' || item.notification_type === 'movement_rejected') {
-    title = item.title || 'تم رفض الحركة';
-    subtitle = `تم رفض حركة ${customerName}.`;
+    subtitle = createdByCurrentUser ? `رفض ${customerName} هذه الحركة.` : 'تم رفض هذه الحركة.';
     statusText = 'مرفوضة';
     statusColor = '#B91C1C';
     statusBg = '#FEE2E2';
@@ -311,14 +442,15 @@ export function getNotificationMeta(
     rowBg = '#FEF2F2';
     visualState = 'rejected';
   } else if (pending) {
-    title = item.title || 'حركة بانتظار الموافقة';
-    subtitle = `حركة ${customerName} ما زالت معلقة.`;
+    subtitle = createdByCurrentUser ? `بانتظار موافقة ${customerName}.` : 'بانتظار الموافقة.';
     statusText = 'معلقة';
     statusColor = '#B45309';
     statusBg = '#FEF3C7';
     rowBorderColor = '#FBBF24';
     rowBg = '#FFFBEB';
     visualState = 'pending';
+  } else if (!subtitle) {
+    subtitle = 'يوجد تحديث جديد على هذه الحركة.';
   }
 
   return {
@@ -327,6 +459,7 @@ export function getNotificationMeta(
     customerName,
     actorName,
     amountText,
+    amountSentenceText,
     directionLabel,
     directionColor,
     statusText,
@@ -337,6 +470,8 @@ export function getNotificationMeta(
     visualState,
     isUnread: isNotificationUnread(item),
     canTakeAction,
+    createdByCurrentUser,
+    noteText,
     rejectReason,
   };
 }
@@ -454,7 +589,6 @@ export async function getGeneralNotificationAttentionCount(userId: string) {
   if (error) throw error;
   return count || 0;
 }
-
 
 export async function approveMovementNotification(
   item: MovementNotification,

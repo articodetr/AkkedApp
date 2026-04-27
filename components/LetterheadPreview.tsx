@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   preview: {
     borderWidth: 1.5,
     overflow: 'hidden',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     shadowColor: '#000',

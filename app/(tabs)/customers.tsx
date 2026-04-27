@@ -149,6 +149,12 @@ export default function CustomersScreen() {
     return currency?.symbol || code;
   };
 
+  const formatBalanceAmount = (amount: number, currencyCode: string) => {
+    const rounded = Math.round(Number(amount) || 0);
+    const symbol = getCurrencySymbol(currencyCode);
+    return rounded.toLocaleString('en-US') + ' ' + symbol;
+  };
+
   const handleDeleteCustomer = async (customer: CustomerWithBalances) => {
     const hasBalances = customer.balances.length > 0;
     let message = `هل تريد حذف ${customer.name}؟\n\n`;
@@ -336,10 +342,7 @@ export default function CustomersScreen() {
                       idx > 0 && { fontSize: 13 },
                     ]}
                   >
-                    {balanceAmount > 0
-                      ? `+${Math.round(balanceAmount)}`
-                      : `${Math.round(balanceAmount)}`}{' '}
-                    {getCurrencySymbol(balance.currency)}
+                    {formatBalanceAmount(balanceAmount, balance.currency)}
                   </Text>
                 );
               })}
@@ -418,7 +421,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   searchContainer: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
@@ -437,6 +440,8 @@ const styles = StyleSheet.create({
     height: 48,
     fontSize: 16,
     color: '#111827',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   listContent: {
     padding: 16,
@@ -491,32 +496,39 @@ const styles = StyleSheet.create({
   },
   customerInfo: {
     flex: 1,
+    minWidth: 0,
+    alignItems: 'stretch',
   },
   customerHeaderRow: {
     flexDirection: 'row-reverse',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 10,
+    justifyContent: 'flex-start',
+    gap: 8,
+    alignSelf: 'stretch',
   },
   customerName: {
     fontSize: 17,
     fontWeight: '800',
     color: '#111827',
     textAlign: 'right',
+    writingDirection: 'rtl',
     flex: 1,
+    alignSelf: 'stretch',
   },
   customerMetaRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     gap: 6,
     marginTop: 8,
     flexWrap: 'wrap',
+    alignSelf: 'stretch',
   },
   customerMetaText: {
     fontSize: 12,
     color: '#64748B',
     textAlign: 'right',
+    writingDirection: 'rtl',
     lineHeight: 18,
   },
   customerMetaDivider: {
@@ -524,12 +536,16 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
   },
   balanceContainer: {
+    minWidth: 88,
     alignItems: 'flex-start',
+    justifyContent: 'center',
     gap: 2,
   },
   balanceText: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '700',
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   emptyContainer: {
     flex: 1,

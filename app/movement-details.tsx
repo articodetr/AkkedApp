@@ -827,7 +827,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   customerValueHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
@@ -985,7 +985,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   modalActions: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 10,
     marginTop: 12,
   },

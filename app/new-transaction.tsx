@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   customerValueHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
@@ -608,7 +608,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   modalItemHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,

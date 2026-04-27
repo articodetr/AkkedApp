@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   customerValueHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,

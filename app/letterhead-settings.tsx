@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   backButton: {
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardHeaderRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   switchRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 10,
@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   uploadButtonText: {
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   removeButtonText: {
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     color: '#EF4444',
   },
   presetsGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   presetDots: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 8,
@@ -597,7 +597,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   actionsRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 10,
     marginTop: 4,
   },
@@ -608,7 +608,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   saveButtonText: {
@@ -623,7 +623,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   resetButtonText: {

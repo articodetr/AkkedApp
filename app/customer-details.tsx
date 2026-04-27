@@ -1749,7 +1749,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   summaryCardsRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   summaryCard: {
@@ -1775,7 +1775,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   summaryCardHeaderSide: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
@@ -1794,7 +1794,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#94A3B8',
-    textAlign: 'left',
+    textAlign: 'right',
   },
   summaryCardTitle: {
     fontSize: 14,
@@ -1808,7 +1808,7 @@ const styles = StyleSheet.create({
     color: '#DC2626',
   },
   summaryCardRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 6,
@@ -1835,7 +1835,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     lineHeight: 18,
-    textAlign: 'left',
+    textAlign: 'right',
     flexShrink: 1,
   },
   summaryCardAmountPositive: {
@@ -1931,13 +1931,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '400',
     color: '#10B981',
-    textAlign: 'left',
+    textAlign: 'right',
   },
   currencyDetailsValueRed: {
     fontSize: 12,
     fontWeight: '400',
     color: '#EF4444',
-    textAlign: 'left',
+    textAlign: 'right',
   },
   tabButtons: {
     flexDirection: 'row',
@@ -2495,7 +2495,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   notificationSummaryCard: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
@@ -2509,7 +2509,7 @@ const styles = StyleSheet.create({
   },
   notificationSummaryContent: {
     flex: 1,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
@@ -2560,7 +2560,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   pendingSectionHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
@@ -2583,7 +2583,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   pendingSectionButton: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#FFFBEB',
@@ -2607,7 +2607,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   pendingMovementTop: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
@@ -2632,7 +2632,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   pendingMovementRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,

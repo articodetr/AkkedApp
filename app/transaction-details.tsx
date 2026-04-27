@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   customerValueHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,

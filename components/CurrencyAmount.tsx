@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TextStyle, ViewStyle, StyleSheet } from 'react-native';
+import { formatAmountArabic } from '../utils/arabicFormat';
 
 interface CurrencyAmountProps {
   amount: number | string;
@@ -18,39 +19,30 @@ export default function CurrencyAmount({
   containerStyle,
   showSign = false,
 }: CurrencyAmountProps) {
-  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-  const isNegative = numericAmount < 0;
-  const absAmount = Math.abs(numericAmount);
-
-  const formattedAmount = absAmount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
-  const displayAmount = showSign
-    ? `${isNegative ? '-' : '+'} ${formattedAmount}`
-    : formattedAmount;
+  const numericAmount = Number(amount);
+  const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+  const signedAmount = showSign && safeAmount > 0 ? `+${safeAmount}` : safeAmount;
 
   return (
     <View style={[styles.container, containerStyle]}>
-      <Text style={[styles.currency, currencyStyle]}>{currency}</Text>
-      <Text style={[styles.amount, amountStyle]}>{displayAmount}</Text>
+      <Text style={[styles.amount, currencyStyle, amountStyle]}>
+        {formatAmountArabic(signedAmount, currency)}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     width: '100%',
   },
-  currency: {
-    textAlign: 'right',
-  },
   amount: {
-    writingDirection: 'ltr',
-    textAlign: 'left',
+    writingDirection: 'rtl',
+    textAlign: 'right',
+    color: '#0F172A',
+    fontWeight: '900',
   },
 });

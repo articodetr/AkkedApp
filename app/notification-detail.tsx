@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -538,13 +538,13 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   detailRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
   detailLabelWrap: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#E5E7EB',
   },
   actionRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 10,
   },
   approveButton: {
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   rejectButton: {
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   actionButtonText: {
@@ -689,7 +689,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   modalActions: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 10,
     marginTop: 16,
   },

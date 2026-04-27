@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   },
   userMessage: {
     justifyContent: 'flex-end',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
   },
   aiMessage: {
     justifyContent: 'flex-start',

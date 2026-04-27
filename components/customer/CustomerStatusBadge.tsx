@@ -72,7 +72,7 @@ export function CustomerStatusBadge({
 
 const styles = StyleSheet.create({
   badge: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
     borderRadius: 999,

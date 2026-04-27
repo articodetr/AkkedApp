@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#111827',
-    textAlign: 'left',
+    textAlign: 'right',
   },
   rateDivider: {
     height: 1,
