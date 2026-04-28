@@ -481,7 +481,6 @@ export default function NotificationsTabScreen() {
         {FILTERS.map((filter) => {
           const isActive = activeFilter === filter.key;
           const count = filterCounts[filter.key];
-          const shouldShowCount = filter.key === 'pending' && count > 0;
 
           return (
             <TouchableOpacity
@@ -494,18 +493,16 @@ export default function NotificationsTabScreen() {
                 {filter.label}
               </Text>
 
-              {shouldShowCount && (
-                <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-                  <Text
-                    style={[
-                      styles.filterCountText,
-                      isActive && styles.filterCountTextActive,
-                    ]}
-                  >
-                    {count}
-                  </Text>
-                </View>
-              )}
+              <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
+                <Text
+                  style={[
+                    styles.filterCountText,
+                    isActive && styles.filterCountTextActive,
+                  ]}
+                >
+                  {count}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}

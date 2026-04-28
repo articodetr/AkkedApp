@@ -4,7 +4,8 @@ import {
   Alert,
   FlatList,
   RefreshControl,
-StyleSheet,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -43,8 +44,11 @@ type CurrentUserLike = {
 
 const FILTERS: Array<{ key: LocalNotificationFilter; label: string }> = [
   { key: 'all', label: 'الكل' },
+  { key: 'action', label: 'بحاجة إجراء' },
   { key: 'pending', label: 'معلقة' },
+  { key: 'approved', label: 'مقبولة' },
   { key: 'rejected', label: 'مرفوضة' },
+  { key: 'unread', label: 'غير مقروءة' },
 ];
 
 function normalizeText(value?: unknown) {
@@ -477,11 +481,15 @@ export default function NotificationsTabScreen() {
         )}
       </View>
 
-      <View style={styles.filtersRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersScroller}
+        contentContainerStyle={styles.filtersRow}
+      >
         {FILTERS.map((filter) => {
           const isActive = activeFilter === filter.key;
           const count = filterCounts[filter.key];
-          const shouldShowCount = filter.key === 'pending' && count > 0;
 
           return (
             <TouchableOpacity
@@ -494,22 +502,20 @@ export default function NotificationsTabScreen() {
                 {filter.label}
               </Text>
 
-              {shouldShowCount && (
-                <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-                  <Text
-                    style={[
-                      styles.filterCountText,
-                      isActive && styles.filterCountTextActive,
-                    ]}
-                  >
-                    {count}
-                  </Text>
-                </View>
-              )}
+              <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
+                <Text
+                  style={[
+                    styles.filterCountText,
+                    isActive && styles.filterCountTextActive,
+                  ]}
+                >
+                  {count}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       <FlatList
         data={visibleNotifications}
@@ -637,23 +643,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
   },
+  filtersScroller: {
+    maxHeight: 48,
+    marginTop: 8,
+  },
   filtersRow: {
-    minHeight: 48,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'flex-start',
     gap: 8,
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingBottom: 8,
   },
   filterChip: {
-    minHeight: 32,
+    minHeight: 34,
     borderRadius: 999,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row-reverse',
@@ -695,7 +703,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 14,
-    paddingTop: 4,
+    paddingTop: 6,
     paddingBottom: 32,
     gap: 10,
   },

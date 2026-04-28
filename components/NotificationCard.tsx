@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Check, Clock, FileText, Trash2, X } from 'lucide-react-native';
+import { Check, Clock, Trash2, X } from 'lucide-react-native';
+
 import {
   CurrentUserLike,
   getNotificationMeta,
@@ -31,6 +32,7 @@ interface NotificationCardProps {
 
 function formatArabicDateTime(value?: string | null) {
   if (!value) return '';
+
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
 
@@ -43,6 +45,12 @@ function formatArabicDateTime(value?: string | null) {
   const displayHours = String(hours % 12 || 12).padStart(2, '0');
 
   return `${day}/${month}/${year} - ${displayHours}:${minutes} ${period}`;
+}
+
+function hasUsefulText(value?: string | null) {
+  const text = String(value || '').trim();
+
+  return Boolean(text && text !== 'لا توجد ملاحظة' && text !== 'null' && text !== 'undefined');
 }
 
 export default function NotificationCard({
@@ -58,9 +66,12 @@ export default function NotificationCard({
 }: NotificationCardProps) {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+
   const meta = getNotificationMeta(notification, currentUser);
   const canUseQuickAction = meta.canTakeAction && Boolean(onAccept && onReject);
   const createdAtText = formatArabicDateTime(notification.created_at);
+  const noteText = String(meta.noteText || '').trim();
+  const rejectReasonText = String(meta.rejectReason || '').trim();
 
   const handleAcceptPress = () => {
     if (!onAccept || isProcessing) return;
@@ -89,6 +100,7 @@ export default function NotificationCard({
     if (!onReject || isProcessing) return;
 
     const trimmedReason = rejectReason.trim();
+
     if (!trimmedReason) {
       Alert.alert('تنبيه', 'يرجى كتابة سبب الرفض');
       return;
@@ -107,21 +119,33 @@ export default function NotificationCard({
   return (
     <>
       <TouchableOpacity
-        activeOpacity={0.92}
-        onPress={onPress}
         style={[
           styles.notificationCard,
-          { backgroundColor: meta.rowBg, borderColor: meta.rowBorderColor },
+          {
+            backgroundColor: meta.rowBg,
+            borderColor: meta.rowBorderColor,
+          },
+          meta.isUnread && { borderColor: unreadColor },
           meta.isUnread && styles.unreadCard,
         ]}
+        onPress={onPress}
+        activeOpacity={0.82}
       >
         <View style={styles.cardTopRow}>
           <View style={styles.titleWrap}>
             <View style={styles.titleRow}>
-              <Text style={styles.cardTitle}>{meta.title}</Text>
-              {meta.isUnread && <View style={[styles.unreadDot, { backgroundColor: unreadColor }]} />}
+              {meta.isUnread && (
+                <View style={[styles.unreadDot, { backgroundColor: unreadColor }]} />
+              )}
+
+              <Text style={styles.cardTitle} numberOfLines={2}>
+                {meta.title}
+              </Text>
             </View>
-            <Text style={styles.cardSubtitle}>{meta.subtitle}</Text>
+
+            <Text style={styles.cardSubtitle} numberOfLines={1}>
+              {meta.subtitle}
+            </Text>
           </View>
 
           <TouchableOpacity
@@ -130,57 +154,74 @@ export default function NotificationCard({
             disabled={isDeleting || isProcessing}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {isDeleting ? <ActivityIndicator size="small" color="#DC2626" /> : <Trash2 size={17} color="#64748B" />}
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#64748B" />
+            ) : (
+              <Trash2 size={16} color="#94A3B8" />
+            )}
           </TouchableOpacity>
         </View>
 
-        <View style={styles.noteBox}>
-          <View style={styles.noteHeader}>
-            <Text style={styles.noteTitle}>ملاحظة</Text>
-            <FileText size={15} color="#334155" />
-          </View>
-          <Text style={styles.noteText}>{meta.noteText || 'لا توجد ملاحظة'}</Text>
-        </View>
+        {hasUsefulText(noteText) && (
+          <Text style={styles.noteLine} numberOfLines={2}>
+            <Text style={styles.noteLabel}>ملاحظة: </Text>
+            {noteText}
+          </Text>
+        )}
 
-        {meta.rejectReason && (
-          <View style={styles.reasonBox}>
-            <Text style={styles.reasonText}>سبب الرفض: {meta.rejectReason}</Text>
-          </View>
+        {hasUsefulText(rejectReasonText) && (
+          <Text style={styles.reasonLine} numberOfLines={2}>
+            <Text style={styles.reasonLabel}>سبب الرفض: </Text>
+            {rejectReasonText}
+          </Text>
         )}
 
         <View style={styles.cardFooter}>
           <View style={[styles.statusBadge, { backgroundColor: meta.statusBg }]}>
-            <Text style={[styles.statusText, { color: meta.statusColor }]}>{meta.statusText}</Text>
+            <Text style={[styles.statusText, { color: meta.statusColor }]}>
+              {meta.statusText}
+            </Text>
           </View>
 
-          <View style={styles.dateWrap}>
-            <Text style={styles.dateText}>{createdAtText}</Text>
-            <Clock size={13} color="#64748B" />
-          </View>
+          {!!createdAtText && (
+            <View style={styles.dateWrap}>
+              <Clock size={13} color="#94A3B8" />
+              <Text style={styles.dateText}>{createdAtText}</Text>
+            </View>
+          )}
         </View>
 
         {canUseQuickAction && (
-          <View style={styles.quickActionsBox}>
-            <Text style={styles.quickActionsHint}>هذه الحركة تنتظر قرارك. اختر قبول أو رفض.</Text>
-            <View style={styles.quickActionsRow}>
-              <TouchableOpacity
-                style={[styles.acceptButton, isProcessing && styles.disabledButton]}
-                onPress={handleAcceptPress}
-                disabled={isProcessing}
-              >
-                {isProcessing ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Check size={17} color="#FFFFFF" />}
-                <Text style={styles.acceptButtonText}>قبول</Text>
-              </TouchableOpacity>
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity
+              style={[
+                styles.acceptButton,
+                isProcessing && styles.disabledButton,
+              ]}
+              onPress={handleAcceptPress}
+              disabled={isProcessing}
+              activeOpacity={0.85}
+            >
+              {isProcessing ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Check size={17} color="#FFFFFF" />
+              )}
+              <Text style={styles.acceptButtonText}>قبول واعتماد</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.rejectButton, isProcessing && styles.disabledButton]}
-                onPress={() => setShowRejectModal(true)}
-                disabled={isProcessing}
-              >
-                <X size={17} color="#FFFFFF" />
-                <Text style={styles.rejectButtonText}>رفض</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.rejectButton,
+                isProcessing && styles.disabledButton,
+              ]}
+              onPress={() => setShowRejectModal(true)}
+              disabled={isProcessing}
+              activeOpacity={0.85}
+            >
+              <X size={17} color="#FFFFFF" />
+              <Text style={styles.rejectButtonText}>رفض</Text>
+            </TouchableOpacity>
           </View>
         )}
       </TouchableOpacity>
@@ -194,15 +235,18 @@ export default function NotificationCard({
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>سبب رفض الحركة</Text>
-            <Text style={styles.modalSubtitle}>اكتب السبب بشكل واضح حتى يظهر للطرف الآخر.</Text>
+            <Text style={styles.modalSubtitle}>
+              اكتب السبب بشكل واضح حتى يظهر للطرف الآخر.
+            </Text>
 
             <TextInput
               style={styles.rejectInput}
+              placeholder="مثال: المبلغ غير صحيح أو لا يخصني"
+              placeholderTextColor="#94A3B8"
               value={rejectReason}
               onChangeText={setRejectReason}
-              placeholder="مثال: المبلغ غير صحيح أو الحركة مكررة"
-              placeholderTextColor="#94A3B8"
               multiline
+              textAlign="right"
             />
 
             <View style={styles.modalActions}>
@@ -218,12 +262,15 @@ export default function NotificationCard({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.modalConfirmButton, isProcessing && styles.disabledButton]}
+                style={[
+                  styles.modalConfirmButton,
+                  isProcessing && styles.disabledButton,
+                ]}
                 onPress={handleRejectConfirm}
                 disabled={isProcessing}
               >
                 {isProcessing ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.modalConfirmText}>تأكيد الرفض</Text>
                 )}
@@ -238,22 +285,22 @@ export default function NotificationCard({
 
 const styles = StyleSheet.create({
   notificationCard: {
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
-    padding: 14,
+    padding: 10,
     shadowColor: '#000000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.025,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
   unreadCard: {
-    borderWidth: 1.5,
+    borderWidth: 1.4,
   },
   cardTopRow: {
     flexDirection: 'row-reverse',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 8,
   },
   titleWrap: {
     flex: 1,
@@ -263,140 +310,108 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: 8,
+    gap: 6,
   },
   unreadDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   cardTitle: {
     flex: 1,
     color: '#0F172A',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '900',
     textAlign: 'right',
     writingDirection: 'rtl',
-    lineHeight: 26,
+    lineHeight: 21,
   },
   cardSubtitle: {
-    color: '#475569',
-    fontSize: 13,
-    lineHeight: 21,
+    color: '#64748B',
+    fontSize: 12,
+    lineHeight: 18,
     textAlign: 'right',
     writingDirection: 'rtl',
-    marginTop: 6,
+    marginTop: 3,
+    fontWeight: '700',
   },
   deleteButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noteBox: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  noteHeader: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 6,
-    marginBottom: 6,
-  },
-  noteTitle: {
+  noteLine: {
+    marginTop: 7,
     color: '#334155',
-    fontSize: 13,
-    fontWeight: '900',
+    fontSize: 12.5,
+    fontWeight: '600',
+    lineHeight: 19,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
-  noteText: {
+  noteLabel: {
     color: '#0F172A',
-    fontSize: 14,
+    fontWeight: '900',
+  },
+  reasonLine: {
+    marginTop: 6,
+    color: '#991B1B',
+    fontSize: 12.5,
     fontWeight: '700',
-    lineHeight: 23,
+    lineHeight: 19,
     textAlign: 'right',
     writingDirection: 'rtl',
+  },
+  reasonLabel: {
+    color: '#7F1D1D',
+    fontWeight: '900',
   },
   cardFooter: {
-    marginTop: 12,
+    marginTop: 8,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
   },
   statusBadge: {
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     textAlign: 'right',
     writingDirection: 'rtl',
   },
   dateWrap: {
+    flex: 1,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 5,
+    justifyContent: 'flex-start',
+    gap: 4,
   },
   dateText: {
     color: '#64748B',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     textAlign: 'right',
     writingDirection: 'rtl',
   },
-  reasonBox: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  reasonText: {
-    color: '#991B1B',
-    fontSize: 12,
-    fontWeight: '800',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-    lineHeight: 19,
-  },
-  quickActionsBox: {
-    marginTop: 12,
-    backgroundColor: '#FFFBEB',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    padding: 10,
-  },
-  quickActionsHint: {
-    color: '#92400E',
-    fontSize: 12,
-    fontWeight: '800',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-    lineHeight: 19,
-    marginBottom: 10,
-  },
   quickActionsRow: {
+    marginTop: 10,
     flexDirection: 'row-reverse',
     gap: 8,
   },
   acceptButton: {
     flex: 1,
+    minHeight: 40,
     backgroundColor: '#059669',
     borderRadius: 12,
-    paddingVertical: 11,
+    paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row-reverse',
@@ -404,9 +419,10 @@ const styles = StyleSheet.create({
   },
   rejectButton: {
     flex: 1,
+    minHeight: 40,
     backgroundColor: '#DC2626',
     borderRadius: 12,
-    paddingVertical: 11,
+    paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row-reverse',
@@ -414,14 +430,14 @@ const styles = StyleSheet.create({
   },
   acceptButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '900',
     textAlign: 'center',
     writingDirection: 'rtl',
   },
   rejectButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '900',
     textAlign: 'center',
     writingDirection: 'rtl',

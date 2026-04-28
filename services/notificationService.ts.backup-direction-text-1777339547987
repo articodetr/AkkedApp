@@ -355,13 +355,13 @@ function buildArabicNotificationTitle(params: {
   }
 
   if (createdByCurrentUser) {
-    if (isIncoming) return `أنت قيدت على ${customerName} مبلغ ${amountSentenceText}`;
-  if (isOutgoing) return `أنت قيدت لـ ${customerName} مبلغ ${amountSentenceText}`;
+    if (isOutgoing) return `أنت قيدت على ${customerName} مبلغ ${amountSentenceText}`;
+    if (isIncoming) return `أنت قيدت لـ ${customerName} مبلغ ${amountSentenceText}`;
     return `أنت قيدت حركة للعميل ${customerName} بمبلغ ${amountSentenceText}`;
   }
 
-  if (isIncoming) return `${actorName} قيد عليك مبلغ ${amountSentenceText}`;
-  if (isOutgoing) return `${actorName} قيد لك مبلغ ${amountSentenceText}`;
+  if (isOutgoing) return `${actorName} قيد عليك مبلغ ${amountSentenceText}`;
+  if (isIncoming) return `${actorName} قيد لك مبلغ ${amountSentenceText}`;
 
   return `${actorName} أنشأ حركة بقيمة ${amountSentenceText}`;
 }
@@ -390,11 +390,11 @@ const isIncoming = movementType === 'incoming';
   let directionColor = '#2563EB';
 
   if (isIncoming) {
-    directionLabel = 'عليه';
-    directionColor = '#DC2626';
-  } else if (isOutgoing) {
     directionLabel = 'له';
     directionColor = '#059669';
+  } else if (isOutgoing) {
+    directionLabel = 'عليه';
+    directionColor = '#DC2626';
   } else if (movementType === 'internal_transfer') {
     directionLabel = 'تحويل داخلي';
     directionColor = '#7C3AED';

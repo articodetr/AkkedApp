@@ -6,91 +6,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
-
-// =========================================================
-// Pending notifications badge helpers
-// The tab badge should count still-pending approvals,
-// not only unread notifications.
-// =========================================================
-type PendingNotificationRow = {
-  id: string;
-  status?: string | null;
-  action_required?: boolean | null;
-  notification_type?: string | null;
-  extra_data?: {
-    approval_status?: string | null;
-    [key: string]: unknown;
-  } | null;
-  movement?: {
-    approval_status?: string | null;
-    pending_approval?: boolean | null;
-  } | null;
-};
-
-function isStillPendingNotification(item: PendingNotificationRow) {
-  const status = String(
-    item.status ||
-      item.extra_data?.approval_status ||
-      item.movement?.approval_status ||
-      '',
-  ).toLowerCase();
-
-  if (
-    status === 'approved' ||
-    status === 'rejected' ||
-    status === 'done' ||
-    status === 'cancelled' ||
-    status === 'canceled'
-  ) {
-    return false;
-  }
-
-  return (
-    status === 'pending' ||
-    item.notification_type === 'approval_needed' ||
-    item.action_required === true ||
-    item.movement?.pending_approval === true
-  );
-}
-
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { currentUser } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
 
   const loadUnreadCount = useCallback(async () => {
-    if (!currentUser?.userId) {
-      setUnreadCount(0);
-      return;
-    }
-
-    const { data, error } = await supabase
+    if (!currentUser?.userId) return;
+    const { count } = await supabase
       .from('movement_notifications')
-      .select(`
-        id,
-        status,
-        action_required,
-        notification_type,
-        extra_data,
-        movement:account_movements!movement_id(
-          approval_status,
-          pending_approval
-        )
-      `)
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', currentUser.userId)
+      .eq('is_read', false)
       .is('deleted_at', null);
-
-    if (error) {
-      console.error('[TabsLayout] Error loading pending notifications count:', error);
-      setUnreadCount(0);
-      return;
-    }
-
-    const pendingCount = ((data || []) as PendingNotificationRow[]).filter(
-      isStillPendingNotification,
-    ).length;
-
-    setUnreadCount(pendingCount);
+    if (count !== null) setUnreadCount(count);
   }, [currentUser?.userId]);
 
   useEffect(() => {

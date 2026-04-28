@@ -4,28 +4,28 @@ import {
   Alert,
   FlatList,
   RefreshControl,
-StyleSheet,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { Bell, Search, X } from 'lucide-react-native';
+import { ArrowRight, Bell, Search, X } from 'lucide-react-native';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
-import NotificationCard from '../../components/NotificationCard';
+import NotificationCard from '../components/NotificationCard';
 import {
   approveMovementNotification,
-  getGeneralNotifications,
-  getNotificationCustomerId,
+  getCustomerNotifications,
   MovementNotification,
   rejectMovementNotification,
   softDeleteNotification,
-} from '../../services/notificationService';
+} from '../services/notificationService';
 
 type LocalNotificationFilter =
   | 'all'
@@ -43,9 +43,16 @@ type CurrentUserLike = {
 
 const FILTERS: Array<{ key: LocalNotificationFilter; label: string }> = [
   { key: 'all', label: 'الكل' },
+  { key: 'action', label: 'بحاجة إجراء' },
   { key: 'pending', label: 'معلقة' },
+  { key: 'approved', label: 'مقبولة' },
   { key: 'rejected', label: 'مرفوضة' },
+  { key: 'unread', label: 'غير مقروءة' },
 ];
+
+function getParamValue(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 function normalizeText(value?: unknown) {
   return String(value || '')
@@ -260,10 +267,13 @@ function searchNotificationsLocally(
   return notifications.filter((item) => getNotificationSearchText(item).includes(query));
 }
 
-export default function NotificationsTabScreen() {
+export default function CustomerNotificationsScreen() {
   const router = useRouter();
   const { currentUser } = useAuth();
   const { triggerRefresh } = useDataRefresh();
+  const params = useLocalSearchParams<{ customerId?: string; customerName?: string }>();
+  const customerId = getParamValue(params.customerId);
+  const customerName = getParamValue(params.customerName) || 'العميل';
 
   const [notifications, setNotifications] = useState<MovementNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -274,7 +284,7 @@ export default function NotificationsTabScreen() {
   const [processingActionId, setProcessingActionId] = useState<string | null>(null);
 
   const loadNotifications = useCallback(async () => {
-    if (!currentUser?.userId) {
+    if (!currentUser?.userId || !customerId) {
       setNotifications([]);
       setIsLoading(false);
       setIsRefreshing(false);
@@ -282,16 +292,16 @@ export default function NotificationsTabScreen() {
     }
 
     try {
-      const nextNotifications = await getGeneralNotifications(currentUser.userId);
+      const nextNotifications = await getCustomerNotifications(currentUser.userId, customerId);
       setNotifications(nextNotifications);
     } catch (error) {
-      console.error('[Notifications] Error loading general notifications:', error);
-      Alert.alert('خطأ', 'تعذر تحميل الإشعارات العامة');
+      console.error('[CustomerNotifications] Error loading customer notifications:', error);
+      Alert.alert('خطأ', 'تعذر تحميل إشعارات هذا العميل');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentUser?.userId]);
+  }, [currentUser?.userId, customerId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -306,9 +316,9 @@ export default function NotificationsTabScreen() {
   }, [loadNotifications]);
 
   useEffect(() => {
-    if (!currentUser?.userId) return;
+    if (!currentUser?.userId || !customerId) return;
 
-    const channelName = `general-notifications-${currentUser.userId}-${Date.now()}`;
+    const channelName = `customer-notifications-${currentUser.userId}-${customerId}-${Date.now()}`;
     const channel = supabase.channel(channelName);
 
     channel
@@ -333,7 +343,7 @@ export default function NotificationsTabScreen() {
         // Ignore duplicate cleanup errors.
       }
     };
-  }, [currentUser?.userId]);
+  }, [currentUser?.userId, customerId]);
 
   const filteredNotifications = useMemo(
     () => filterNotificationsLocally(notifications, activeFilter, currentUser),
@@ -372,7 +382,7 @@ export default function NotificationsTabScreen() {
 
     Alert.alert(
       'حذف الإشعار',
-      'سيتم إخفاء الإشعار من هذه القائمة فقط، ولن يتم حذف الحركة المالية.\nهل تريد المتابعة؟',
+      'سيتم إخفاء الإشعار من صفحة هذا العميل فقط، ولن يتم حذف الحركة المالية.\nهل تريد المتابعة؟',
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -386,7 +396,7 @@ export default function NotificationsTabScreen() {
                 current.filter((notification) => notification.id !== item.id),
               );
             } catch (error) {
-              console.error('[Notifications] Error deleting notification:', error);
+              console.error('[CustomerNotifications] Error deleting notification:', error);
               Alert.alert('خطأ', 'تعذر حذف الإشعار');
             } finally {
               setDeletingId(null);
@@ -432,8 +442,19 @@ export default function NotificationsTabScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2563EB" />
-        <Text style={styles.loadingText}>جاري تحميل الإشعارات...</Text>
+        <ActivityIndicator size="large" color="#B45309" />
+        <Text style={styles.loadingText}>جاري تحميل إشعارات العميل...</Text>
+      </View>
+    );
+  }
+
+  if (!customerId) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.emptyTitle}>لم يتم تحديد العميل</Text>
+        <TouchableOpacity style={styles.backHomeButton} onPress={() => router.back()}>
+          <Text style={styles.backHomeText}>العودة</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -441,15 +462,21 @@ export default function NotificationsTabScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.75}
+        >
+          <ArrowRight size={21} color="#0F172A" />
+        </TouchableOpacity>
+
         <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>الإشعارات العامة</Text>
-          <Text style={styles.headerSubtitle}>
-            تابع الحركات التي تحتاج مراجعة أو التي تم قبولها أو رفضها.
-          </Text>
+          <Text style={styles.headerTitle}>إشعارات العميل</Text>
+          <Text style={styles.headerSubtitle}>{customerName}</Text>
         </View>
 
         <View style={styles.headerIcon}>
-          <Bell size={22} color="#2563EB" />
+          <Bell size={21} color="#B45309" />
         </View>
       </View>
 
@@ -477,11 +504,15 @@ export default function NotificationsTabScreen() {
         )}
       </View>
 
-      <View style={styles.filtersRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersScroller}
+        contentContainerStyle={styles.filtersRow}
+      >
         {FILTERS.map((filter) => {
           const isActive = activeFilter === filter.key;
           const count = filterCounts[filter.key];
-          const shouldShowCount = filter.key === 'pending' && count > 0;
 
           return (
             <TouchableOpacity
@@ -494,22 +525,20 @@ export default function NotificationsTabScreen() {
                 {filter.label}
               </Text>
 
-              {shouldShowCount && (
-                <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-                  <Text
-                    style={[
-                      styles.filterCountText,
-                      isActive && styles.filterCountTextActive,
-                    ]}
-                  >
-                    {count}
-                  </Text>
-                </View>
-              )}
+              <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
+                <Text
+                  style={[
+                    styles.filterCountText,
+                    isActive && styles.filterCountTextActive,
+                  ]}
+                >
+                  {count}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       <FlatList
         data={visibleNotifications}
@@ -524,8 +553,8 @@ export default function NotificationsTabScreen() {
             onReject={handleRejectNotification}
             isDeleting={deletingId === item.id}
             isProcessing={processingActionId === item.id}
-            showCustomer
-            unreadColor="#2563EB"
+            showCustomer={false}
+            unreadColor="#B45309"
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -534,19 +563,19 @@ export default function NotificationsTabScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={onRefresh}
-            tintColor="#2563EB"
+            tintColor="#B45309"
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Bell size={42} color="#CBD5E1" />
             <Text style={styles.emptyTitle}>
-              {searchQuery.trim() ? 'لا توجد نتائج للبحث' : 'لا توجد إشعارات'}
+              {searchQuery.trim() ? 'لا توجد نتائج للبحث' : 'لا توجد إشعارات لهذا العميل'}
             </Text>
             <Text style={styles.emptySubtitle}>
               {searchQuery.trim()
                 ? 'جرّب البحث باسم آخر أو مبلغ أو رقم حوالة مختلف.'
-                : 'عند وصول إشعارات جديدة ستظهر هنا.'}
+                : 'أي إشعار جديد يخص هذا العميل سيظهر هنا فقط.'}
             </Text>
           </View>
         }
@@ -564,6 +593,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 24,
     backgroundColor: '#F8FAFC',
   },
   loadingText: {
@@ -573,7 +603,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 12,
     flexDirection: 'row-reverse',
@@ -582,11 +612,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+  },
   headerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: '#DBEAFE',
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -594,7 +632,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 19,
     color: '#0F172A',
     fontWeight: '900',
     textAlign: 'right',
@@ -602,11 +640,11 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     marginTop: 3,
-    fontSize: 12,
+    fontSize: 13,
     color: '#64748B',
     textAlign: 'right',
     writingDirection: 'rtl',
-    lineHeight: 18,
+    fontWeight: '800',
   },
   searchBox: {
     marginHorizontal: 14,
@@ -637,31 +675,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
   },
+  filtersScroller: {
+    maxHeight: 48,
+    marginTop: 8,
+  },
   filtersRow: {
-    minHeight: 48,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'flex-start',
     gap: 8,
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingBottom: 8,
   },
   filterChip: {
-    minHeight: 32,
+    minHeight: 34,
     borderRadius: 999,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row-reverse',
     gap: 6,
   },
   filterChipActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: '#B45309',
+    borderColor: '#B45309',
   },
   filterText: {
     color: '#475569',
@@ -695,7 +735,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 14,
-    paddingTop: 4,
+    paddingTop: 6,
     paddingBottom: 32,
     gap: 10,
   },
@@ -720,5 +760,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     writingDirection: 'rtl',
     lineHeight: 22,
+  },
+  backHomeButton: {
+    marginTop: 16,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  backHomeText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
+    writingDirection: 'rtl',
   },
 });

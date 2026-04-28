@@ -4,7 +4,8 @@ import {
   Alert,
   FlatList,
   RefreshControl,
-StyleSheet,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -477,11 +478,15 @@ export default function NotificationsTabScreen() {
         )}
       </View>
 
-      <View style={styles.filtersRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersScroller}
+        contentContainerStyle={styles.filtersRow}
+      >
         {FILTERS.map((filter) => {
           const isActive = activeFilter === filter.key;
           const count = filterCounts[filter.key];
-          const shouldShowCount = filter.key === 'pending' && count > 0;
 
           return (
             <TouchableOpacity
@@ -494,22 +499,20 @@ export default function NotificationsTabScreen() {
                 {filter.label}
               </Text>
 
-              {shouldShowCount && (
-                <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-                  <Text
-                    style={[
-                      styles.filterCountText,
-                      isActive && styles.filterCountTextActive,
-                    ]}
-                  >
-                    {count}
-                  </Text>
-                </View>
-              )}
+              <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
+                <Text
+                  style={[
+                    styles.filterCountText,
+                    isActive && styles.filterCountTextActive,
+                  ]}
+                >
+                  {count}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       <FlatList
         data={visibleNotifications}
@@ -637,11 +640,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
   },
+  filtersScroller: {
+    minHeight: 54,
+    marginTop: 8,
+  },
   filtersRow: {
-    minHeight: 48,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'flex-start',
     gap: 8,
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -695,7 +700,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 14,
-    paddingTop: 4,
+    paddingTop: 6,
     paddingBottom: 32,
     gap: 10,
   },

@@ -17,7 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowRight, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon } from 'lucide-react-native';
+import { ArrowRight, Phone, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { buildReadableCustomerFilter } from '@/services/userScopeService';import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
 import { format, isSameMonth, isSameYear, startOfDay, endOfDay } from 'date-fns';
@@ -404,7 +404,13 @@ export default function CustomerDetailsScreen() {
         // Ignore duplicate cleanup errors.
       }
     };
-  }, [currentUser?.userId]);
+  }, [currentUser?.userId]);
+
+  const handleCall = () => {
+    if (customer?.phone) {
+      Linking.openURL(`tel:${customer.phone}`);
+    }
+  };
 
   const handleWhatsApp = async () => {
     if (customer?.phone) {
@@ -1133,7 +1139,11 @@ export default function CustomerDetailsScreen() {
               <FileText size={16} color="#6B7280" />
             )}
             <Text style={styles.tabButtonText}>طباعة PDF</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabButton} onPress={handleCall}>
+            <Phone size={16} color="#6B7280" />
+            <Text style={styles.tabButtonText}>اتصال</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.tabButton} onPress={handleWhatsApp}>
             <MessageCircle size={16} color="#6B7280" />
             <Text style={styles.tabButtonText}>واتساب</Text>
@@ -1141,7 +1151,28 @@ export default function CustomerDetailsScreen() {
           <TouchableOpacity
             style={styles.tabButton}
             onPress={() => openCustomerNotifications()}
-          >
+          >
+            <View style={{ position: 'relative' }}>
+              <Bell size={16} color="#6B7280" />
+              {unreadNotificationsCount > 0 && (
+                <View style={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -8,
+                  backgroundColor: '#EF4444',
+                  borderRadius: 8,
+                  minWidth: 16,
+                  height: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingHorizontal: 4,
+                }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>
+                    {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.tabButtonText}>الإشعارات</Text>
           </TouchableOpacity>
         </View>
@@ -1406,7 +1437,16 @@ export default function CustomerDetailsScreen() {
             >
               <Text style={styles.menuItemText}>إرسال واتساب</Text>
             </TouchableOpacity>
-
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSettingsMenu(false);
+                handleCall();
+              }}
+            >
+              <Text style={styles.menuItemText}>اتصال</Text>
+            </TouchableOpacity>
 
             <View style={styles.menuDivider} />
 

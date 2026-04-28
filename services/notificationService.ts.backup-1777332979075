@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export type NotificationSource = 'general' | 'customer' | 'customer-details';
-export type NotificationFilter = 'all' | 'action' | 'unread' | 'pending' | 'approved' | 'rejected';
+export type NotificationFilter = 'all' | 'action' | 'unread';
 export type NotificationVisualState = 'action' | 'pending' | 'approved' | 'rejected' | 'info';
 
 export interface NotificationExtraData {
@@ -355,13 +355,13 @@ function buildArabicNotificationTitle(params: {
   }
 
   if (createdByCurrentUser) {
-    if (isIncoming) return `أنت قيدت على ${customerName} مبلغ ${amountSentenceText}`;
-  if (isOutgoing) return `أنت قيدت لـ ${customerName} مبلغ ${amountSentenceText}`;
+    if (isOutgoing) return `أنت قيدت على ${customerName} مبلغ ${amountSentenceText}`;
+    if (isIncoming) return `أنت قيدت لـ ${customerName} مبلغ ${amountSentenceText}`;
     return `أنت قيدت حركة للعميل ${customerName} بمبلغ ${amountSentenceText}`;
   }
 
-  if (isIncoming) return `${actorName} قيد عليك مبلغ ${amountSentenceText}`;
-  if (isOutgoing) return `${actorName} قيد لك مبلغ ${amountSentenceText}`;
+  if (isOutgoing) return `${actorName} قيد عليك مبلغ ${amountSentenceText}`;
+  if (isIncoming) return `${actorName} قيد لك مبلغ ${amountSentenceText}`;
 
   return `${actorName} أنشأ حركة بقيمة ${amountSentenceText}`;
 }
@@ -390,11 +390,11 @@ const isIncoming = movementType === 'incoming';
   let directionColor = '#2563EB';
 
   if (isIncoming) {
-    directionLabel = 'عليه';
-    directionColor = '#DC2626';
-  } else if (isOutgoing) {
     directionLabel = 'له';
     directionColor = '#059669';
+  } else if (isOutgoing) {
+    directionLabel = 'عليه';
+    directionColor = '#DC2626';
   } else if (movementType === 'internal_transfer') {
     directionLabel = 'تحويل داخلي';
     directionColor = '#7C3AED';
@@ -476,66 +476,6 @@ const isIncoming = movementType === 'incoming';
   };
 }
 
-export function getNotificationSearchText(item: MovementNotification) {
-  const movement = item.movement || null;
-  const extra = item.extra_data || {};
-
-  const values: unknown[] = [
-    item.title,
-    item.message,
-    item.customer_name,
-    item.actor_name,
-    item.movement_number,
-    item.amount,
-    item.currency,
-    item.movement_type,
-    item.notification_type,
-    item.status,
-
-    movement?.customer?.name,
-    movement?.created_by_user_name,
-    movement?.movement_number,
-    movement?.amount,
-    movement?.currency,
-    movement?.movement_type,
-    movement?.approval_status,
-    movement?.reject_reason,
-
-    extra.reason,
-    extra.reject_reason,
-    extra.created_by_name,
-    extra.creator_user_name,
-    extra.creator_full_name,
-    extra.note,
-    extra.notes,
-    extra.movement_note,
-    extra.movement_notes,
-  ];
-
-  return values
-    .map((value) => normalizeText(value == null ? '' : String(value)))
-    .filter(Boolean)
-    .join(' ');
-}
-
-export function notificationMatchesSearch(item: MovementNotification, searchQuery: string) {
-  const query = normalizeText(searchQuery).replace(/\s+/g, ' ');
-  if (!query) return true;
-
-  const searchableText = getNotificationSearchText(item);
-  return searchableText.includes(query);
-}
-
-export function searchNotifications(
-  notifications: MovementNotification[],
-  searchQuery: string,
-) {
-  const query = normalizeText(searchQuery);
-  if (!query) return notifications;
-
-  return notifications.filter((item) => notificationMatchesSearch(item, query));
-}
-
 export function filterNotifications(
   notifications: MovementNotification[],
   filter: NotificationFilter,
@@ -547,24 +487,6 @@ export function filterNotifications(
 
   if (filter === 'unread') {
     return notifications.filter((item) => isNotificationUnread(item));
-  }
-
-  if (filter === 'pending') {
-    return notifications.filter((item) => isNotificationPending(item));
-  }
-
-  if (filter === 'approved') {
-    return notifications.filter((item) => {
-      const rawStatus = getNotificationRawStatus(item);
-      return rawStatus === 'approved' || item.notification_type === 'movement_approved';
-    });
-  }
-
-  if (filter === 'rejected') {
-    return notifications.filter((item) => {
-      const rawStatus = getNotificationRawStatus(item);
-      return rawStatus === 'rejected' || item.notification_type === 'movement_rejected';
-    });
   }
 
   return notifications;

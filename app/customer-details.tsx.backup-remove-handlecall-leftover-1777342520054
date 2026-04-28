@@ -1406,7 +1406,16 @@ export default function CustomerDetailsScreen() {
             >
               <Text style={styles.menuItemText}>إرسال واتساب</Text>
             </TouchableOpacity>
-
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSettingsMenu(false);
+                handleCall();
+              }}
+            >
+              <Text style={styles.menuItemText}>اتصال</Text>
+            </TouchableOpacity>
 
             <View style={styles.menuDivider} />
 

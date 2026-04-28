@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   RefreshControl,
-StyleSheet,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from 'react';
+import {
+  ActivityIndicator,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -23,28 +29,18 @@ import {
   getGeneralNotifications,
   getNotificationCustomerId,
   MovementNotification,
+  NotificationFilter,
   rejectMovementNotification,
   softDeleteNotification,
 } from '../../services/notificationService';
 
-type LocalNotificationFilter =
-  | 'all'
-  | 'action'
-  | 'pending'
-  | 'approved'
-  | 'rejected'
-  | 'unread';
-
-type CurrentUserLike = {
-  userId?: string | null;
-  userName?: string | null;
-  fullName?: string | null;
-} | null;
-
-const FILTERS: Array<{ key: LocalNotificationFilter; label: string }> = [
+const FILTERS: Array<{ key: NotificationFilter; label: string }> = [
   { key: 'all', label: 'الكل' },
+  { key: 'action', label: 'بحاجة إجراء' },
   { key: 'pending', label: 'معلقة' },
+  { key: 'approved', label: 'مقبولة' },
   { key: 'rejected', label: 'مرفوضة' },
+  { key: 'unread', label: 'غير مقروءة' },
 ];
 
 function normalizeText(value?: unknown) {
@@ -63,25 +59,20 @@ function sameId(a?: string | null, b?: string | null) {
 }
 
 function getNotificationRawStatus(item: MovementNotification) {
-  const anyItem = item as any;
-
   return normalizeText(
-    anyItem.status ||
-      anyItem.extra_data?.approval_status ||
-      anyItem.movement?.approval_status ||
+    item.status ||
+      item.extra_data?.approval_status ||
+      item.movement?.approval_status ||
       '',
   );
 }
 
 function isNotificationUnread(item: MovementNotification) {
-  const anyItem = item as any;
   const rawStatus = getNotificationRawStatus(item);
-
-  return !anyItem.is_read || rawStatus === 'unread';
+  return !item.is_read || rawStatus === 'unread';
 }
 
 function isNotificationPending(item: MovementNotification) {
-  const anyItem = item as any;
   const rawStatus = getNotificationRawStatus(item);
 
   if (rawStatus === 'approved' || rawStatus === 'rejected' || rawStatus === 'done') {
@@ -90,52 +81,50 @@ function isNotificationPending(item: MovementNotification) {
 
   return (
     rawStatus === 'pending' ||
-    anyItem.notification_type === 'approval_needed' ||
-    Boolean(anyItem.action_required) ||
-    Boolean(anyItem.movement?.pending_approval)
+    item.notification_type === 'approval_needed' ||
+    Boolean(item.action_required) ||
+    Boolean(item.movement?.pending_approval)
   );
 }
 
 function isNotificationApproved(item: MovementNotification) {
-  const anyItem = item as any;
   const rawStatus = getNotificationRawStatus(item);
-
-  return rawStatus === 'approved' || anyItem.notification_type === 'movement_approved';
+  return rawStatus === 'approved' || item.notification_type === 'movement_approved';
 }
 
 function isNotificationRejected(item: MovementNotification) {
-  const anyItem = item as any;
   const rawStatus = getNotificationRawStatus(item);
-
-  return rawStatus === 'rejected' || anyItem.notification_type === 'movement_rejected';
+  return rawStatus === 'rejected' || item.notification_type === 'movement_rejected';
 }
 
 function isNotificationCreatedByCurrentUser(
   item: MovementNotification,
-  currentUser?: CurrentUserLike,
+  currentUser?: {
+    userId?: string | null;
+    userName?: string | null;
+    fullName?: string | null;
+  } | null,
 ) {
   if (!currentUser?.userId && !currentUser?.userName && !currentUser?.fullName) {
     return false;
   }
 
-  const anyItem = item as any;
-  const movement = anyItem.movement || {};
-  const extra = anyItem.extra_data || {};
+  const extra = item.extra_data || {};
 
   const possibleCreatorIds = [
-    movement.source_user_id,
-    movement.created_by_user_id,
-    extra.source_user_id,
-    extra.created_by_user_id,
-    anyItem.sender_user_id,
+    item.movement?.source_user_id,
+    item.movement?.created_by_user_id,
+    extra.source_user_id as string | undefined,
+    extra.created_by_user_id as string | undefined,
+    item.sender_user_id,
   ].filter(Boolean);
 
   const possibleCreatorNames = [
-    movement.created_by_user_name,
-    anyItem.actor_name,
-    extra.created_by_name,
-    extra.creator_user_name,
-    extra.creator_full_name,
+    item.movement?.created_by_user_name,
+    item.actor_name,
+    extra.created_by_name as string | undefined,
+    extra.creator_user_name as string | undefined,
+    extra.creator_full_name as string | undefined,
   ]
     .map((value) => normalizeText(value))
     .filter(Boolean);
@@ -144,7 +133,7 @@ function isNotificationCreatedByCurrentUser(
   const currentFullName = normalizeText(currentUser.fullName);
 
   return (
-    possibleCreatorIds.some((id) => sameId(String(id), currentUser.userId)) ||
+    possibleCreatorIds.some((id) => sameId(id as string, currentUser.userId)) ||
     (Boolean(currentUserName) && possibleCreatorNames.includes(currentUserName)) ||
     (Boolean(currentFullName) && possibleCreatorNames.includes(currentFullName))
   );
@@ -152,19 +141,22 @@ function isNotificationCreatedByCurrentUser(
 
 function canTakeNotificationAction(
   item: MovementNotification,
-  currentUser?: CurrentUserLike,
+  currentUser?: {
+    userId?: string | null;
+    userName?: string | null;
+    fullName?: string | null;
+  } | null,
 ) {
-  const anyItem = item as any;
   const rawStatus = getNotificationRawStatus(item);
 
   const isRecipient =
-    sameId(anyItem.user_id, currentUser?.userId) ||
-    sameId(anyItem.recipient_user_id, currentUser?.userId);
+    sameId(item.user_id, currentUser?.userId) ||
+    sameId(item.recipient_user_id, currentUser?.userId);
 
   return (
-    anyItem.notification_type === 'approval_needed' &&
-    Boolean(anyItem.movement_id) &&
-    anyItem.action_required !== false &&
+    item.notification_type === 'approval_needed' &&
+    Boolean(item.movement_id) &&
+    item.action_required !== false &&
     isRecipient &&
     !isNotificationCreatedByCurrentUser(item, currentUser) &&
     rawStatus !== 'approved' &&
@@ -175,8 +167,12 @@ function canTakeNotificationAction(
 
 function filterNotificationsLocally(
   notifications: MovementNotification[],
-  filter: LocalNotificationFilter,
-  currentUser?: CurrentUserLike,
+  filter: NotificationFilter,
+  currentUser?: {
+    userId?: string | null;
+    userName?: string | null;
+    fullName?: string | null;
+  } | null,
 ) {
   if (filter === 'action') {
     return notifications.filter((item) => canTakeNotificationAction(item, currentUser));
@@ -202,32 +198,30 @@ function filterNotificationsLocally(
 }
 
 function getNotificationSearchText(item: MovementNotification) {
-  const anyItem = item as any;
-  const movement = anyItem.movement || {};
-  const customer = movement.customer || {};
-  const extra = anyItem.extra_data || {};
+  const movement = item.movement || null;
+  const extra = item.extra_data || {};
 
   const values: unknown[] = [
-    anyItem.title,
-    anyItem.message,
-    anyItem.customer_name,
-    anyItem.actor_name,
-    anyItem.movement_number,
-    anyItem.amount,
-    anyItem.currency,
-    anyItem.movement_type,
-    anyItem.notification_type,
-    anyItem.status,
+    item.title,
+    item.message,
+    item.customer_name,
+    item.actor_name,
+    item.movement_number,
+    item.amount,
+    item.currency,
+    item.movement_type,
+    item.notification_type,
+    item.status,
 
-    customer.name,
-    movement.created_by_user_name,
-    movement.movement_number,
-    movement.amount,
-    movement.currency,
-    movement.movement_type,
-    movement.approval_status,
-    movement.reject_reason,
-    movement.notes,
+    movement?.customer?.name,
+    movement?.created_by_user_name,
+    movement?.movement_number,
+    movement?.amount,
+    movement?.currency,
+    movement?.movement_type,
+    movement?.approval_status,
+    movement?.reject_reason,
+    movement?.notes,
 
     extra.reason,
     extra.reject_reason,
@@ -268,7 +262,7 @@ export default function NotificationsTabScreen() {
   const [notifications, setNotifications] = useState<MovementNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<LocalNotificationFilter>('all');
+  const [activeFilter, setActiveFilter] = useState<NotificationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [processingActionId, setProcessingActionId] = useState<string | null>(null);
@@ -345,7 +339,7 @@ export default function NotificationsTabScreen() {
     [filteredNotifications, searchQuery],
   );
 
-  const filterCounts = useMemo<Record<LocalNotificationFilter, number>>(
+  const filterCounts = useMemo<Record<NotificationFilter, number>>(
     () => ({
       all: notifications.length,
       action: filterNotificationsLocally(notifications, 'action', currentUser).length,
@@ -362,9 +356,19 @@ export default function NotificationsTabScreen() {
     loadNotifications();
   };
 
-  const openNotification = (_item: MovementNotification) => {
-    // تم حذف صفحة تفاصيل الإشعار الخاصة.
-    // القبول والرفض والملاحظة تظهر مباشرة داخل بطاقة الإشعار.
+  const openNotification = (item: MovementNotification) => {
+    const customerId = getNotificationCustomerId(item) || '';
+    const customerName = item.customer_name || item.movement?.customer?.name || '';
+
+    router.push({
+      pathname: '/notification-detail',
+      params: {
+        id: item.id,
+        from: 'general',
+        customerId,
+        customerName,
+      },
+    });
   };
 
   const confirmDelete = (item: MovementNotification) => {
@@ -444,22 +448,22 @@ export default function NotificationsTabScreen() {
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>الإشعارات العامة</Text>
           <Text style={styles.headerSubtitle}>
-            تابع الحركات التي تحتاج مراجعة أو التي تم قبولها أو رفضها.
+            كل إشعارات الحساب من جميع العملاء في مكان واحد.
           </Text>
         </View>
 
         <View style={styles.headerIcon}>
-          <Bell size={22} color="#2563EB" />
+          <Bell size={24} color="#2563EB" />
         </View>
       </View>
 
       <View style={styles.searchBox}>
-        <Search size={17} color="#64748B" />
+        <Search size={18} color="#64748B" />
 
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="بحث بالاسم، المبلغ، رقم الحوالة أو الملاحظة"
+          placeholder="بحث بالاسم أو المبلغ أو رقم الحوالة أو الملاحظة"
           placeholderTextColor="#94A3B8"
           style={styles.searchInput}
           textAlign="right"
@@ -472,21 +476,25 @@ export default function NotificationsTabScreen() {
             onPress={() => setSearchQuery('')}
             activeOpacity={0.75}
           >
-            <X size={15} color="#64748B" />
+            <X size={16} color="#64748B" />
           </TouchableOpacity>
         )}
       </View>
 
-      <View style={styles.filtersRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersScroller}
+        contentContainerStyle={styles.filtersRow}
+      >
         {FILTERS.map((filter) => {
           const isActive = activeFilter === filter.key;
           const count = filterCounts[filter.key];
-          const shouldShowCount = filter.key === 'pending' && count > 0;
 
           return (
             <TouchableOpacity
               key={filter.key}
-              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              style={[styles.filterButton, isActive && styles.filterButtonActive]}
               onPress={() => setActiveFilter(filter.key)}
               activeOpacity={0.75}
             >
@@ -494,39 +502,37 @@ export default function NotificationsTabScreen() {
                 {filter.label}
               </Text>
 
-              {shouldShowCount && (
-                <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-                  <Text
-                    style={[
-                      styles.filterCountText,
-                      isActive && styles.filterCountTextActive,
-                    ]}
-                  >
-                    {count}
-                  </Text>
-                </View>
-              )}
+              <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
+                <Text
+                  style={[
+                    styles.filterCountText,
+                    isActive && styles.filterCountTextActive,
+                  ]}
+                >
+                  {count}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       <FlatList
         data={visibleNotifications}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <NotificationCard
-            notification={item}
-            currentUser={currentUser}
-            onPress={() => openNotification(item)}
-            onDelete={confirmDelete}
-            onAccept={handleAcceptNotification}
-            onReject={handleRejectNotification}
-            isDeleting={deletingId === item.id}
-            isProcessing={processingActionId === item.id}
-            showCustomer
-            unreadColor="#2563EB"
-          />
+  notification={item}
+  currentUser={currentUser}
+  onPress={() => openNotification(item)}
+  onDelete={confirmDelete}
+  onAccept={handleAcceptNotification}
+  onReject={handleRejectNotification}
+  isDeleting={deletingId === item.id}
+  isProcessing={processingActionId === item.id}
+  showCustomer
+  unreadColor="#2563EB"
+/>
         )}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
@@ -573,9 +579,9 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 10,
@@ -583,8 +589,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   headerIcon: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: 14,
     backgroundColor: '#DBEAFE',
     alignItems: 'center',
@@ -594,14 +600,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 19,
     color: '#0F172A',
     fontWeight: '900',
     textAlign: 'right',
     writingDirection: 'rtl',
   },
   headerSubtitle: {
-    marginTop: 3,
+    marginTop: 2,
     fontSize: 12,
     color: '#64748B',
     textAlign: 'right',
@@ -609,13 +615,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   searchBox: {
-    marginHorizontal: 14,
+    marginHorizontal: 16,
     marginTop: 10,
-    borderRadius: 14,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
-    minHeight: 44,
+    minHeight: 42,
     paddingHorizontal: 12,
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -638,16 +644,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   filtersRow: {
-    minHeight: 48,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    gap: 7,
+    paddingHorizontal: 16,
+    paddingTop: 0,
+    paddingBottom: 2,
   },
-  filterChip: {
-    minHeight: 32,
+  filterButton: {
+    minHeight: 34,
     borderRadius: 999,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -659,14 +664,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     gap: 6,
   },
-  filterChipActive: {
+  filterButtonActive: {
     backgroundColor: '#2563EB',
     borderColor: '#2563EB',
   },
   filterText: {
     color: '#475569',
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -695,12 +700,12 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 14,
-    paddingTop: 4,
-    paddingBottom: 32,
+    paddingTop: 10,
+    paddingBottom: 28,
     gap: 10,
   },
   emptyState: {
-    minHeight: 320,
+    minHeight: 340,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -710,15 +715,12 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontSize: 18,
     fontWeight: '900',
-    textAlign: 'center',
-    writingDirection: 'rtl',
   },
   emptySubtitle: {
     marginTop: 6,
     color: '#64748B',
     fontSize: 14,
     textAlign: 'center',
-    writingDirection: 'rtl',
     lineHeight: 22,
   },
 });

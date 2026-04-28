@@ -1,266 +1,50 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   RefreshControl,
-StyleSheet,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from 'react';
+import {
+  ActivityIndicator,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { ArrowRight, Bell, Search, X } from 'lucide-react-native';
-
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import NotificationCard from '../components/NotificationCard';
 import {
   approveMovementNotification,
+  filterNotifications,
   getCustomerNotifications,
   MovementNotification,
+  NotificationFilter,
   rejectMovementNotification,
+  searchNotifications,
   softDeleteNotification,
 } from '../services/notificationService';
 
-type LocalNotificationFilter =
-  | 'all'
-  | 'action'
-  | 'pending'
-  | 'approved'
-  | 'rejected'
-  | 'unread';
-
-type CurrentUserLike = {
-  userId?: string | null;
-  userName?: string | null;
-  fullName?: string | null;
-} | null;
-
-const FILTERS: Array<{ key: LocalNotificationFilter; label: string }> = [
+const FILTERS: Array<{ key: NotificationFilter; label: string }> = [
   { key: 'all', label: 'الكل' },
+  { key: 'action', label: 'بحاجة إجراء' },
   { key: 'pending', label: 'معلقة' },
+  { key: 'approved', label: 'مقبولة' },
   { key: 'rejected', label: 'مرفوضة' },
+  { key: 'unread', label: 'غير مقروءة' },
 ];
 
 function getParamValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function normalizeText(value?: unknown) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[أإآا]/g, 'ا')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .replace(/[^\p{L}\p{N}\s.$₺ر]/gu, ' ')
-    .replace(/\s+/g, ' ');
-}
-
-function sameId(a?: string | null, b?: string | null) {
-  return Boolean(a && b && String(a).toLowerCase() === String(b).toLowerCase());
-}
-
-function getNotificationRawStatus(item: MovementNotification) {
-  const anyItem = item as any;
-
-  return normalizeText(
-    anyItem.status ||
-      anyItem.extra_data?.approval_status ||
-      anyItem.movement?.approval_status ||
-      '',
-  );
-}
-
-function isNotificationUnread(item: MovementNotification) {
-  const anyItem = item as any;
-  const rawStatus = getNotificationRawStatus(item);
-
-  return !anyItem.is_read || rawStatus === 'unread';
-}
-
-function isNotificationPending(item: MovementNotification) {
-  const anyItem = item as any;
-  const rawStatus = getNotificationRawStatus(item);
-
-  if (rawStatus === 'approved' || rawStatus === 'rejected' || rawStatus === 'done') {
-    return false;
-  }
-
-  return (
-    rawStatus === 'pending' ||
-    anyItem.notification_type === 'approval_needed' ||
-    Boolean(anyItem.action_required) ||
-    Boolean(anyItem.movement?.pending_approval)
-  );
-}
-
-function isNotificationApproved(item: MovementNotification) {
-  const anyItem = item as any;
-  const rawStatus = getNotificationRawStatus(item);
-
-  return rawStatus === 'approved' || anyItem.notification_type === 'movement_approved';
-}
-
-function isNotificationRejected(item: MovementNotification) {
-  const anyItem = item as any;
-  const rawStatus = getNotificationRawStatus(item);
-
-  return rawStatus === 'rejected' || anyItem.notification_type === 'movement_rejected';
-}
-
-function isNotificationCreatedByCurrentUser(
-  item: MovementNotification,
-  currentUser?: CurrentUserLike,
-) {
-  if (!currentUser?.userId && !currentUser?.userName && !currentUser?.fullName) {
-    return false;
-  }
-
-  const anyItem = item as any;
-  const movement = anyItem.movement || {};
-  const extra = anyItem.extra_data || {};
-
-  const possibleCreatorIds = [
-    movement.source_user_id,
-    movement.created_by_user_id,
-    extra.source_user_id,
-    extra.created_by_user_id,
-    anyItem.sender_user_id,
-  ].filter(Boolean);
-
-  const possibleCreatorNames = [
-    movement.created_by_user_name,
-    anyItem.actor_name,
-    extra.created_by_name,
-    extra.creator_user_name,
-    extra.creator_full_name,
-  ]
-    .map((value) => normalizeText(value))
-    .filter(Boolean);
-
-  const currentUserName = normalizeText(currentUser.userName);
-  const currentFullName = normalizeText(currentUser.fullName);
-
-  return (
-    possibleCreatorIds.some((id) => sameId(String(id), currentUser.userId)) ||
-    (Boolean(currentUserName) && possibleCreatorNames.includes(currentUserName)) ||
-    (Boolean(currentFullName) && possibleCreatorNames.includes(currentFullName))
-  );
-}
-
-function canTakeNotificationAction(
-  item: MovementNotification,
-  currentUser?: CurrentUserLike,
-) {
-  const anyItem = item as any;
-  const rawStatus = getNotificationRawStatus(item);
-
-  const isRecipient =
-    sameId(anyItem.user_id, currentUser?.userId) ||
-    sameId(anyItem.recipient_user_id, currentUser?.userId);
-
-  return (
-    anyItem.notification_type === 'approval_needed' &&
-    Boolean(anyItem.movement_id) &&
-    anyItem.action_required !== false &&
-    isRecipient &&
-    !isNotificationCreatedByCurrentUser(item, currentUser) &&
-    rawStatus !== 'approved' &&
-    rawStatus !== 'rejected' &&
-    rawStatus !== 'done'
-  );
-}
-
-function filterNotificationsLocally(
-  notifications: MovementNotification[],
-  filter: LocalNotificationFilter,
-  currentUser?: CurrentUserLike,
-) {
-  if (filter === 'action') {
-    return notifications.filter((item) => canTakeNotificationAction(item, currentUser));
-  }
-
-  if (filter === 'pending') {
-    return notifications.filter((item) => isNotificationPending(item));
-  }
-
-  if (filter === 'approved') {
-    return notifications.filter((item) => isNotificationApproved(item));
-  }
-
-  if (filter === 'rejected') {
-    return notifications.filter((item) => isNotificationRejected(item));
-  }
-
-  if (filter === 'unread') {
-    return notifications.filter((item) => isNotificationUnread(item));
-  }
-
-  return notifications;
-}
-
-function getNotificationSearchText(item: MovementNotification) {
-  const anyItem = item as any;
-  const movement = anyItem.movement || {};
-  const customer = movement.customer || {};
-  const extra = anyItem.extra_data || {};
-
-  const values: unknown[] = [
-    anyItem.title,
-    anyItem.message,
-    anyItem.customer_name,
-    anyItem.actor_name,
-    anyItem.movement_number,
-    anyItem.amount,
-    anyItem.currency,
-    anyItem.movement_type,
-    anyItem.notification_type,
-    anyItem.status,
-
-    customer.name,
-    movement.created_by_user_name,
-    movement.movement_number,
-    movement.amount,
-    movement.currency,
-    movement.movement_type,
-    movement.approval_status,
-    movement.reject_reason,
-    movement.notes,
-
-    extra.reason,
-    extra.reject_reason,
-    extra.created_by_name,
-    extra.creator_user_name,
-    extra.creator_full_name,
-    extra.note,
-    extra.notes,
-    extra.description,
-    extra.movement_note,
-    extra.movement_notes,
-  ];
-
-  return values
-    .map((value) => normalizeText(value))
-    .filter(Boolean)
-    .join(' ');
-}
-
-function searchNotificationsLocally(
-  notifications: MovementNotification[],
-  searchQuery: string,
-) {
-  const query = normalizeText(searchQuery);
-
-  if (!query) {
-    return notifications;
-  }
-
-  return notifications.filter((item) => getNotificationSearchText(item).includes(query));
 }
 
 export default function CustomerNotificationsScreen() {
@@ -274,9 +58,8 @@ export default function CustomerNotificationsScreen() {
   const [notifications, setNotifications] = useState<MovementNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<LocalNotificationFilter>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<NotificationFilter>('all');
+  const [searchQuery, setSearchQuery] = useState(''); const [deletingId, setDeletingId] = useState<string | null>(null);
   const [processingActionId, setProcessingActionId] = useState<string | null>(null);
 
   const loadNotifications = useCallback(async () => {
@@ -305,12 +88,13 @@ export default function CustomerNotificationsScreen() {
     }, [loadNotifications]),
   );
 
+  // 🔧 ref لأحدث نسخة من loadNotifications بدون إعادة تشغيل useEffect
   const loadRef = useRef(loadNotifications);
-
   useEffect(() => {
     loadRef.current = loadNotifications;
   }, [loadNotifications]);
 
+  // 🔧 إصلاح Supabase Realtime: قناة فريدة لكل mount + cleanup آمن
   useEffect(() => {
     if (!currentUser?.userId || !customerId) return;
 
@@ -336,29 +120,27 @@ export default function CustomerNotificationsScreen() {
       try {
         supabase.removeChannel(channel);
       } catch {
-        // Ignore duplicate cleanup errors.
+        // تجاهل أخطاء الإغلاق المزدوج
       }
     };
   }, [currentUser?.userId, customerId]);
 
-  const filteredNotifications = useMemo(
-    () => filterNotificationsLocally(notifications, activeFilter, currentUser),
-    [activeFilter, currentUser, notifications],
-  );
-
   const visibleNotifications = useMemo(
-    () => searchNotificationsLocally(filteredNotifications, searchQuery),
-    [filteredNotifications, searchQuery],
+    () => searchNotifications(
+      filterNotifications(notifications, activeFilter, currentUser),
+      searchQuery,
+    ),
+    [activeFilter, currentUser, notifications, searchQuery],
   );
 
-  const filterCounts = useMemo<Record<LocalNotificationFilter, number>>(
+  const filterCounts = useMemo<Record<NotificationFilter, number>>(
     () => ({
       all: notifications.length,
-      action: filterNotificationsLocally(notifications, 'action', currentUser).length,
-      pending: filterNotificationsLocally(notifications, 'pending', currentUser).length,
-      approved: filterNotificationsLocally(notifications, 'approved', currentUser).length,
-      rejected: filterNotificationsLocally(notifications, 'rejected', currentUser).length,
-      unread: filterNotificationsLocally(notifications, 'unread', currentUser).length,
+      action: filterNotifications(notifications, 'action', currentUser).length,
+      pending: filterNotifications(notifications, 'pending', currentUser).length,
+      approved: filterNotifications(notifications, 'approved', currentUser).length,
+      rejected: filterNotifications(notifications, 'rejected', currentUser).length,
+      unread: filterNotifications(notifications, 'unread', currentUser).length,
     }),
     [currentUser, notifications],
   );
@@ -368,9 +150,16 @@ export default function CustomerNotificationsScreen() {
     loadNotifications();
   };
 
-  const openNotification = (_item: MovementNotification) => {
-    // تم حذف صفحة تفاصيل الإشعار الخاصة.
-    // القبول والرفض والملاحظة تظهر مباشرة داخل بطاقة الإشعار.
+  const openNotification = (item: MovementNotification) => {
+    router.push({
+      pathname: '/notification-detail',
+      params: {
+        id: item.id,
+        from: 'customer',
+        customerId: customerId || '',
+        customerName,
+      },
+    });
   };
 
   const confirmDelete = (item: MovementNotification) => {
@@ -378,7 +167,7 @@ export default function CustomerNotificationsScreen() {
 
     Alert.alert(
       'حذف الإشعار',
-      'سيتم إخفاء الإشعار من صفحة هذا العميل فقط، ولن يتم حذف الحركة المالية.\nهل تريد المتابعة؟',
+      'سيتم إخفاء الإشعار من صفحة هذا العميل فقط، ولن يتم حذف الحركة المالية. هل تريد المتابعة؟',
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -388,9 +177,7 @@ export default function CustomerNotificationsScreen() {
             try {
               setDeletingId(item.id);
               await softDeleteNotification(item.id, currentUser.userId);
-              setNotifications((current) =>
-                current.filter((notification) => notification.id !== item.id),
-              );
+              setNotifications((current) => current.filter((notification) => notification.id !== item.id));
             } catch (error) {
               console.error('[CustomerNotifications] Error deleting notification:', error);
               Alert.alert('خطأ', 'تعذر حذف الإشعار');
@@ -438,7 +225,7 @@ export default function CustomerNotificationsScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#B45309" />
+        <ActivityIndicator size="large" color="#2563EB" />
         <Text style={styles.loadingText}>جاري تحميل إشعارات العميل...</Text>
       </View>
     );
@@ -458,81 +245,64 @@ export default function CustomerNotificationsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.75}
-        >
-          <ArrowRight size={21} color="#0F172A" />
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <ArrowRight size={22} color="#0F172A" />
         </TouchableOpacity>
-
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>إشعارات العميل</Text>
           <Text style={styles.headerSubtitle}>{customerName}</Text>
         </View>
-
         <View style={styles.headerIcon}>
-          <Bell size={21} color="#B45309" />
+          <Bell size={22} color="#B45309" />
         </View>
       </View>
-
-      <View style={styles.searchBox}>
-        <Search size={17} color="#64748B" />
-
+<View style={styles.searchBox}>
+        <Search size={18} color="#64748B" />
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="بحث بالاسم، المبلغ، رقم الحوالة أو الملاحظة"
+          placeholder="بحث بالاسم أو المبلغ أو رقم الحوالة أو الملاحظة"
           placeholderTextColor="#94A3B8"
           style={styles.searchInput}
           textAlign="right"
           returnKeyType="search"
         />
-
         {searchQuery.trim().length > 0 && (
           <TouchableOpacity
             style={styles.clearSearchButton}
             onPress={() => setSearchQuery('')}
             activeOpacity={0.75}
           >
-            <X size={15} color="#64748B" />
+            <X size={16} color="#64748B" />
           </TouchableOpacity>
         )}
       </View>
-
-      <View style={styles.filtersRow}>
+<ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersScroller}
+        contentContainerStyle={styles.filtersRow}
+      >
         {FILTERS.map((filter) => {
           const isActive = activeFilter === filter.key;
           const count = filterCounts[filter.key];
-          const shouldShowCount = filter.key === 'pending' && count > 0;
 
           return (
             <TouchableOpacity
               key={filter.key}
-              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              style={[styles.filterButton, isActive && styles.filterButtonActive]}
               onPress={() => setActiveFilter(filter.key)}
-              activeOpacity={0.75}
             >
               <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
                 {filter.label}
               </Text>
-
-              {shouldShowCount && (
-                <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-                  <Text
-                    style={[
-                      styles.filterCountText,
-                      isActive && styles.filterCountTextActive,
-                    ]}
-                  >
-                    {count}
-                  </Text>
-                </View>
-              )}
+              <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
+                <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>{count}</Text>
+              </View>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       <FlatList
         data={visibleNotifications}
@@ -552,25 +322,12 @@ export default function CustomerNotificationsScreen() {
           />
         )}
         contentContainerStyle={styles.listContent}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={onRefresh}
-            tintColor="#B45309"
-          />
-        }
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Bell size={42} color="#CBD5E1" />
-            <Text style={styles.emptyTitle}>
-              {searchQuery.trim() ? 'لا توجد نتائج للبحث' : 'لا توجد إشعارات لهذا العميل'}
-            </Text>
-            <Text style={styles.emptySubtitle}>
-              {searchQuery.trim()
-                ? 'جرّب البحث باسم آخر أو مبلغ أو رقم حوالة مختلف.'
-                : 'أي إشعار جديد يخص هذا العميل سيظهر هنا فقط.'}
-            </Text>
+            <Text style={styles.emptyTitle}>لا توجد إشعارات لهذا العميل</Text>
+            <Text style={styles.emptySubtitle}>أي إشعار جديد يخص هذا العميل سيظهر هنا فقط.</Text>
           </View>
         }
       />
@@ -597,9 +354,9 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 10,
@@ -607,9 +364,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
@@ -617,7 +374,7 @@ const styles = StyleSheet.create({
   headerIcon: {
     width: 40,
     height: 40,
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
@@ -633,21 +390,23 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   headerSubtitle: {
-    marginTop: 3,
-    fontSize: 13,
+    marginTop: 2,
+    fontSize: 12,
     color: '#64748B',
     textAlign: 'right',
     writingDirection: 'rtl',
-    fontWeight: '800',
+    lineHeight: 18,
   },
+  
+  
   searchBox: {
-    marginHorizontal: 14,
+    marginHorizontal: 16,
     marginTop: 10,
-    borderRadius: 14,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
-    minHeight: 44,
+    minHeight: 42,
     paddingHorizontal: 12,
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -670,16 +429,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   filtersRow: {
-    minHeight: 48,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    gap: 7,
+    paddingHorizontal: 16,
+    paddingTop: 0,
+    paddingBottom: 2,
   },
-  filterChip: {
-    minHeight: 32,
+  filterButton: {
+    minHeight: 34,
     borderRadius: 999,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -691,14 +449,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     gap: 6,
   },
-  filterChipActive: {
+  filterButtonActive: {
     backgroundColor: '#B45309',
     borderColor: '#B45309',
   },
   filterText: {
     color: '#475569',
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -727,8 +485,8 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 14,
-    paddingTop: 4,
-    paddingBottom: 32,
+    paddingTop: 10,
+    paddingBottom: 28,
     gap: 10,
   },
   emptyState: {
@@ -742,15 +500,13 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontSize: 18,
     fontWeight: '900',
-    textAlign: 'center',
-    writingDirection: 'rtl',
+    textAlign: 'right',
   },
   emptySubtitle: {
     marginTop: 6,
     color: '#64748B',
     fontSize: 14,
-    textAlign: 'center',
-    writingDirection: 'rtl',
+    textAlign: 'right',
     lineHeight: 22,
   },
   backHomeButton: {
@@ -764,7 +520,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
-    textAlign: 'center',
-    writingDirection: 'rtl',
   },
 });

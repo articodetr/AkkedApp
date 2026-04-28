@@ -17,9 +17,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowRight, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon } from 'lucide-react-native';
+import { ArrowRight, Phone, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon, Bell } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { buildReadableCustomerFilter } from '@/services/userScopeService';import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
+import { buildReadableCustomerFilter } from '@/services/userScopeService';
+import { getCustomerNotificationAttentionCount } from '../services/notificationService';
+import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
 import { format, isSameMonth, isSameYear, startOfDay, endOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import * as Print from 'expo-print';
@@ -291,7 +293,10 @@ export default function CustomerDetailsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
   const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null); const loadCustomerData = useCallback(async () => {
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+
+  const loadCustomerData = useCallback(async () => {
     try {
       if (!currentUser?.userId || !currentUser?.userName) {
         console.error('[CustomerDetails] Missing user data:', currentUser);
@@ -364,12 +369,31 @@ export default function CustomerDetailsScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [id, currentUser]); useFocusEffect(
+  }, [id, currentUser]);
+
+  const loadUnreadNotifications = useCallback(async () => {
+    if (!currentUser?.userId || !id) {
+      setUnreadNotificationsCount(0);
+      return;
+    }
+
+    try {
+      const count = await getCustomerNotificationAttentionCount(currentUser.userId, String(id));
+      setUnreadNotificationsCount(count);
+    } catch (error) {
+      console.error("Error loading customer notifications count:", error);
+      setUnreadNotificationsCount(0);
+    }
+  }, [currentUser?.userId, id]);
+
+  useFocusEffect(
     useCallback(() => {
       if (id) {
         setIsLoading(true);
-        loadCustomerData(); }
-    }, [id, loadCustomerData]),
+        loadCustomerData();
+        loadUnreadNotifications();
+      }
+    }, [id, loadCustomerData, loadUnreadNotifications]),
   );
 
   useEffect(() => {
@@ -393,7 +417,9 @@ export default function CustomerDetailsScreen() {
           table: 'movement_notifications',
           filter: `user_id=eq.${currentUser.userId}`,
         },
-        () => { },
+        () => {
+          loadUnreadNotifications();
+        },
       )
       .subscribe();
 
@@ -404,7 +430,13 @@ export default function CustomerDetailsScreen() {
         // Ignore duplicate cleanup errors.
       }
     };
-  }, [currentUser?.userId]);
+  }, [currentUser?.userId, loadUnreadNotifications]);
+
+  const handleCall = () => {
+    if (customer?.phone) {
+      Linking.openURL(`tel:${customer.phone}`);
+    }
+  };
 
   const handleWhatsApp = async () => {
     if (customer?.phone) {
@@ -903,7 +935,10 @@ export default function CustomerDetailsScreen() {
       !(movement as any).is_commission_movement &&
       isPendingMovement(movement) &&
       !(movement as any).is_voided
-  ); const groupedMovements = groupMovementsByMonth(filteredMovements);
+  );
+  const customerNotificationsCount = unreadNotificationsCount;
+
+  const groupedMovements = groupMovementsByMonth(filteredMovements);
   const currencyBalances = calculateBalanceByCurrency(approvedMovements);
   const currencyTotals = calculateCurrencyTotals(approvedMovements);
   const balancesOwedToCustomer = currencyBalances.filter((currBalance) => currBalance.balance > 0);
@@ -1064,7 +1099,24 @@ export default function CustomerDetailsScreen() {
                 )}
               </View>
             </View>
-          </View>
+          </View>
+            <TouchableOpacity
+              style={styles.notificationSummaryCard}
+              activeOpacity={0.88}
+              onPress={() => openCustomerNotifications()}
+            >
+              <View style={styles.notificationSummaryContent}>
+                <View style={styles.notificationSummaryIcon}>
+                  <Bell size={18} color="#B45309" />
+                </View>
+              </View>
+
+              <View style={styles.notificationSummaryCountBadge}>
+                <Text style={styles.notificationSummaryCountText}>
+                  {customerNotificationsCount > 99 ? '99+' : customerNotificationsCount}
+                </Text>
+              </View>
+            </TouchableOpacity>
         </View>
 
         {currencyTotals.length > 0 && (
@@ -1133,7 +1185,11 @@ export default function CustomerDetailsScreen() {
               <FileText size={16} color="#6B7280" />
             )}
             <Text style={styles.tabButtonText}>طباعة PDF</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabButton} onPress={handleCall}>
+            <Phone size={16} color="#6B7280" />
+            <Text style={styles.tabButtonText}>اتصال</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.tabButton} onPress={handleWhatsApp}>
             <MessageCircle size={16} color="#6B7280" />
             <Text style={styles.tabButtonText}>واتساب</Text>
@@ -1141,7 +1197,28 @@ export default function CustomerDetailsScreen() {
           <TouchableOpacity
             style={styles.tabButton}
             onPress={() => openCustomerNotifications()}
-          >
+          >
+            <View style={{ position: 'relative' }}>
+              <Bell size={16} color="#6B7280" />
+              {unreadNotificationsCount > 0 && (
+                <View style={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -8,
+                  backgroundColor: '#EF4444',
+                  borderRadius: 8,
+                  minWidth: 16,
+                  height: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingHorizontal: 4,
+                }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>
+                    {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.tabButtonText}>الإشعارات</Text>
           </TouchableOpacity>
         </View>
@@ -1406,7 +1483,16 @@ export default function CustomerDetailsScreen() {
             >
               <Text style={styles.menuItemText}>إرسال واتساب</Text>
             </TouchableOpacity>
-
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSettingsMenu(false);
+                handleCall();
+              }}
+            >
+              <Text style={styles.menuItemText}>اتصال</Text>
+            </TouchableOpacity>
 
             <View style={styles.menuDivider} />
 
