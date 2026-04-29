@@ -12,6 +12,16 @@ export interface Customer {
   linked_user_id?: string;
   created_at: string;
   updated_at: string;
+  receipt_header_mode?: 'default' | 'full_banner' | 'generated';
+receipt_header_banner_url?: string | null;
+receipt_header_logo_url?: string | null;
+receipt_header_left_title?: string | null;
+receipt_header_left_subtitle?: string | null;
+receipt_header_right_title?: string | null;
+receipt_header_right_subtitle?: string | null;
+receipt_header_primary_color?: string | null;
+receipt_header_secondary_color?: string | null;
+receipt_header_text_color?: string | null;
 }
 
 export interface Transaction {
