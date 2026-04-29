@@ -11,3 +11,19 @@ ios/build/
 
 expo-env.d.ts
 # @end expo-cli
+
+# Local/editor
+.vscode/
+
+# Temporary backups
+*.backup
+*.bak
+.add-customer-*-backup/
+.customer-header-auto-backup/
+.keyboard-aware-view-backup/
+.letterhead-duplicate-fix-backup/
+.logo-helper-default-fallback-backup/
+.notification-detail-removal-backup/
+
+# Local archived native backup
+android_backup/
