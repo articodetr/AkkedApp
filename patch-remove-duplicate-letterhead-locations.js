@@ -1,4 +1,70 @@
-import { useEffect, useState } from 'react';
+const fs = require('fs');
+const path = require('path');
+
+const root = process.cwd();
+
+const settingsPath = path.join(root, 'app', '(tabs)', 'settings.tsx');
+const shopSettingsPath = path.join(root, 'app', 'shop-settings.tsx');
+
+const backupDir = path.join(root, '.letterhead-duplicate-fix-backup');
+
+function ensureBackupDir() {
+  if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+  }
+}
+
+function backup(filePath) {
+  ensureBackupDir();
+
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  const backupName = `${path.basename(filePath)}.${Date.now()}.bak`;
+  const backupPath = path.join(backupDir, backupName);
+
+  fs.copyFileSync(filePath, backupPath);
+  console.log(`Backup created: ${backupPath}`);
+
+  return backupPath;
+}
+
+function writeFile(filePath, content) {
+  fs.writeFileSync(filePath, content, 'utf8');
+  console.log(`Updated: ${filePath}`);
+}
+
+function patchSettingsScreen() {
+  if (!fs.existsSync(settingsPath)) {
+    throw new Error(`Missing file: ${settingsPath}`);
+  }
+
+  backup(settingsPath);
+
+  let content = fs.readFileSync(settingsPath, 'utf8');
+
+  content = content.replace(
+    /title:\s*'إعدادات المحل',\s*subtitle:\s*'اسم المحل والشعار'/g,
+    `title: 'إعدادات المحل', subtitle: 'اسم المحل والهاتف والعنوان'`
+  );
+
+  content = content.replace(
+    /title:\s*'ترويسة السندات',\s*subtitle:\s*'تخصيص الشعار والرقم وألوان الترويسة'/g,
+    `title: 'الترويسة والطباعة', subtitle: 'الشعار والألوان والترويسة الكاملة للسندات'`
+  );
+
+  writeFile(settingsPath, content);
+}
+
+function replaceShopSettingsFile() {
+  if (!fs.existsSync(shopSettingsPath)) {
+    throw new Error(`Missing file: ${shopSettingsPath}`);
+  }
+
+  backup(shopSettingsPath);
+
+  const newContent = `import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -288,3 +354,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+`;
+
+  writeFile(shopSettingsPath, newContent);
+}
+
+try {
+  patchSettingsScreen();
+  replaceShopSettingsFile();
+
+  console.log('');
+  console.log('Done. Duplicate letterhead editing has been removed from shop settings.');
+  console.log('');
+  console.log('Now run:');
+  console.log('npm run typecheck');
+  console.log('npx expo start -c --port 8082');
+} catch (error) {
+  console.error('');
+  console.error('Patch failed:');
+  console.error(error.message || error);
+  process.exit(1);
+}

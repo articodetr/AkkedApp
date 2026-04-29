@@ -47,8 +47,6 @@ const EMPTY_FORM: FormDataState = {
   notes: '',
 };
 
-const ACCOUNT_NUMBER_LENGTH = 7;
-
 export default function AddCustomerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -136,11 +134,8 @@ export default function AddCustomerScreen() {
   };
 
   const searchUsers = async (query: string) => {
-    const cleanedQuery = query.replace(/\D/g, '').trim();
-
-    if (!cleanedQuery) {
+    if (!query.trim()) {
       setSearchResults([]);
-      setIsSearching(false);
       return;
     }
 
@@ -148,18 +143,12 @@ export default function AddCustomerScreen() {
 
     try {
       const { data, error } = await supabase.rpc('search_users_by_account_number', {
-        p_account_number: cleanedQuery,
+        p_account_number: query.trim(),
         p_current_user_id: currentUser?.userId,
       });
 
       if (error) throw error;
-
-      const exactResults = (data || []).filter(
-        (user: SearchUserResult) =>
-          String(user.account_number ?? '').trim() === cleanedQuery
-      );
-
-      setSearchResults(exactResults);
+      setSearchResults(data || []);
     } catch (error) {
       console.error('Error searching users:', error);
       Alert.alert('خطأ', 'حدث خطأ أثناء البحث');
@@ -169,17 +158,14 @@ export default function AddCustomerScreen() {
   };
 
   const handleSearchQueryChange = (text: string) => {
-    const cleanedText = text.replace(/\D/g, '');
+    setSearchQuery(text);
 
-    setSearchQuery(cleanedText);
-    setSelectedUser(null);
-
-    if (cleanedText) {
-      searchUsers(cleanedText);
-    } else {
+    if (!text.trim()) {
       setSearchResults([]);
-      setIsSearching(false);
+      return;
     }
+
+    searchUsers(text);
   };
 
   const handleSelectUser = (user: SearchUserResult) => {
@@ -435,10 +421,10 @@ export default function AddCustomerScreen() {
                   style={styles.searchInput}
                   value={searchQuery}
                   onChangeText={handleSearchQueryChange}
-                  placeholder="أدخل رقم الحساب كاملًا"
+                  placeholder="ابحث برقم الحساب"
                   placeholderTextColor="#9CA3AF"
                   textAlign="right"
-          />
+                />
                 {isSearching ? (
                   <ActivityIndicator size="small" color="#4F46E5" />
                 ) : null}
@@ -509,7 +495,7 @@ export default function AddCustomerScreen() {
                   }
                   placeholderTextColor="#9CA3AF"
                   textAlign="right"
-                  editable={customerType === 'regular' || isEditMode || !!selectedUser}
+                  editable={customerType === 'regular' || isEditMode}
                 />
               </View>
 

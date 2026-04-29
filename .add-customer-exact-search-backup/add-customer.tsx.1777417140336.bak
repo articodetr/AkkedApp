@@ -136,9 +136,9 @@ export default function AddCustomerScreen() {
   };
 
   const searchUsers = async (query: string) => {
-    const cleanedQuery = query.replace(/\D/g, '').trim();
+    const cleanedQuery = query.replace(/\D/g, '');
 
-    if (!cleanedQuery) {
+    if (cleanedQuery.length !== ACCOUNT_NUMBER_LENGTH) {
       setSearchResults([]);
       setIsSearching(false);
       return;
@@ -154,12 +154,7 @@ export default function AddCustomerScreen() {
 
       if (error) throw error;
 
-      const exactResults = (data || []).filter(
-        (user: SearchUserResult) =>
-          String(user.account_number ?? '').trim() === cleanedQuery
-      );
-
-      setSearchResults(exactResults);
+      setSearchResults(data || []);
     } catch (error) {
       console.error('Error searching users:', error);
       Alert.alert('خطأ', 'حدث خطأ أثناء البحث');
@@ -174,7 +169,7 @@ export default function AddCustomerScreen() {
     setSearchQuery(cleanedText);
     setSelectedUser(null);
 
-    if (cleanedText) {
+    if (cleanedText.length === ACCOUNT_NUMBER_LENGTH) {
       searchUsers(cleanedText);
     } else {
       setSearchResults([]);
@@ -435,9 +430,11 @@ export default function AddCustomerScreen() {
                   style={styles.searchInput}
                   value={searchQuery}
                   onChangeText={handleSearchQueryChange}
-                  placeholder="أدخل رقم الحساب كاملًا"
+                  placeholder="ابحث برقم الحساب"
                   placeholderTextColor="#9CA3AF"
                   textAlign="right"
+                
+            maxLength={ACCOUNT_NUMBER_LENGTH}
           />
                 {isSearching ? (
                   <ActivityIndicator size="small" color="#4F46E5" />
@@ -509,7 +506,7 @@ export default function AddCustomerScreen() {
                   }
                   placeholderTextColor="#9CA3AF"
                   textAlign="right"
-                  editable={customerType === 'regular' || isEditMode || !!selectedUser}
+                  editable={customerType === 'regular' || isEditMode}
                 />
               </View>
 

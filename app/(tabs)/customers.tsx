@@ -10,12 +10,11 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Plus, Search, TrendingUp } from 'lucide-react-native';
+import { Link2, Plus, Search } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { Customer, CustomerBalanceByCurrency, CURRENCIES } from '@/types/database';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { buildScopedCustomerFilter } from '@/services/userScopeService';
 import { sortCustomersKeepingOriginalOrder } from '@/utils/customerDisplay';
 
@@ -27,6 +26,7 @@ export default function CustomersScreen() {
   const router = useRouter();
   const { lastRefreshTime } = useDataRefresh();
   const { currentUser } = useAuth();
+
   const [customers, setCustomers] = useState<CustomerWithBalances[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<CustomerWithBalances[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -120,8 +120,9 @@ export default function CustomersScreen() {
     const filtered = customers.filter(
       (customer) =>
         customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.phone.includes(searchQuery)
+        customer.phone.includes(searchQuery),
     );
+
     setFilteredCustomers(filtered);
   };
 
@@ -129,19 +130,6 @@ export default function CustomersScreen() {
     setRefreshing(true);
     await loadCustomers();
     setRefreshing(false);
-  };
-
-  const getAvatarColor = (index: number) => {
-    const colors = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
-    return colors[index % colors.length];
-  };
-
-  const getInitials = (name: string) => {
-    const words = name.split(' ');
-    if (words.length >= 2) {
-      return words[0][0] + words[1][0];
-    }
-    return name.substring(0, 2);
   };
 
   const getCurrencySymbol = (code: string) => {
@@ -244,7 +232,7 @@ export default function CustomersScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -272,7 +260,7 @@ export default function CustomersScreen() {
     ]);
   };
 
-  const renderCustomer = ({ item, index }: { item: CustomerWithBalances; index: number }) => {
+  const renderCustomer = ({ item }: { item: CustomerWithBalances; index: number }) => {
     const hasBalances = item.balances.length > 0;
     const displayBalances = item.balances.slice(0, 2);
     const isProfitLoss = item.is_profit_loss_account;
@@ -283,73 +271,68 @@ export default function CustomersScreen() {
         style={[
           styles.customerCard,
           isProfitLoss && styles.profitLossCard,
-          isLinkedUser && styles.linkedUserCard,
           !isProfitLoss && !isLinkedUser && styles.unlinkedUserCard,
+          isLinkedUser && styles.linkedUserCard,
         ]}
         onPress={() => router.push(`/customer-details?id=${item.id}` as any)}
         onLongPress={() => handleCustomerLongPress(item)}
       >
-        {isProfitLoss ? (
-          <View style={[styles.avatar, styles.profitLossAvatar]}>
-            <TrendingUp size={28} color="#FFFFFF" />
-          </View>
-        ) : (
-          <View style={[styles.avatar, { backgroundColor: getAvatarColor(index) }]}>
-            <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
-          </View>
-        )}
-
         <View style={styles.customerInfo}>
           <View style={styles.customerHeaderRow}>
-            <CustomerStatusBadge customer={item} />
-            <Text style={[styles.customerName, isProfitLoss && styles.profitLossName]}>
+            <Text
+              style={[styles.customerName, isProfitLoss && styles.profitLossName]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {item.name}
-              {isProfitLoss && ' 💰'}
             </Text>
+
+            {isLinkedUser && !isProfitLoss ? (
+              <View style={styles.linkIndicator}>
+                <Link2 size={12} color="#6366F1" />
+              </View>
+            ) : null}
           </View>
-          {isProfitLoss ? (
-            <Text style={styles.customerMetaText}>حساب الأرباح والخسائر</Text>
-          ) : isLinkedUser ? (
-            <View style={styles.customerMetaRow}>
-              <Text style={styles.customerMetaText}>
-                رقم الحساب: {item.account_number}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.customerMetaRow}>
-              <Text style={styles.customerMetaText}>{item.phone}</Text>
-              <Text style={styles.customerMetaDivider}>•</Text>
-              <Text style={styles.customerMetaText}>
-                رقم الحساب: {item.account_number}
-              </Text>
-            </View>
-          )}
+
+          <Text
+            style={styles.customerMetaText}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {isProfitLoss
+              ? 'حساب الأرباح والخسائر'
+              : isLinkedUser
+                ? `رقم الحساب: ${item.account_number}`
+                : `${item.phone} • رقم الحساب: ${item.account_number}`}
+          </Text>
         </View>
 
         <View style={styles.balanceContainer}>
           {!hasBalances ? (
-            <Text style={[styles.balanceText, { color: '#9CA3AF' }]}>متساوي</Text>
+            <Text style={[styles.balanceText, { color: '#6B7280' }]}>متساوي</Text>
           ) : (
             <>
               {displayBalances.map((balance, idx) => {
                 const balanceAmount = Number(balance.balance);
+
                 return (
                   <Text
-                    key={balance.currency}
+                    key={`${balance.currency}-${idx}`}
                     style={[
                       styles.balanceText,
-                      { color: balanceAmount > 0 ? '#10B981' : '#EF4444' },
+                      { color: balanceAmount >= 0 ? '#10B981' : '#EF4444' },
                       idx > 0 && { fontSize: 13 },
                     ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
                   >
                     {formatBalanceAmount(balanceAmount, balance.currency)}
                   </Text>
                 );
               })}
+
               {item.balances.length > 2 && (
-                <Text style={[styles.balanceText, { fontSize: 12, color: '#6B7280' }]}>
-                  +{item.balances.length - 2} المزيد
-                </Text>
+                <Text style={styles.moreBalancesText}>+{item.balances.length - 2} المزيد</Text>
               )}
             </>
           )}
@@ -368,11 +351,10 @@ export default function CustomersScreen() {
         <Search size={20} color="#9CA3AF" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="ابحث عن عميل..."
+          placeholder="ابحث بالاسم أو الرقم"
           placeholderTextColor="#9CA3AF"
           value={searchQuery}
           onChangeText={setSearchQuery}
-          textAlign="right"
         />
       </View>
 
@@ -384,9 +366,7 @@ export default function CustomersScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {isLoading ? 'جاري التحميل...' : 'لا يوجد عملاء'}
-            </Text>
+            <Text style={styles.emptyText}>{isLoading ? 'جاري التحميل...' : 'لا يوجد عملاء'}</Text>
           </View>
         }
       />
@@ -450,11 +430,14 @@ const styles = StyleSheet.create({
   customerCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     marginBottom: 12,
     flexDirection: 'row-reverse',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
+    minHeight: 92,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     shadowColor: '#0F172A',
@@ -471,81 +454,69 @@ const styles = StyleSheet.create({
   unlinkedUserCard: {
     borderColor: '#E2E8F0',
   },
-  profitLossAvatar: {
-    backgroundColor: '#F59E0B',
-  },
   profitLossName: {
     fontWeight: 'bold',
     color: '#92400E',
   },
   linkedUserCard: {
-    borderColor: '#C7D2FE',
-    backgroundColor: '#FAFBFF',
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
   },
   customerInfo: {
     flex: 1,
     minWidth: 0,
     alignItems: 'stretch',
+    justifyContent: 'center',
   },
   customerHeaderRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
-    gap: 8,
-    alignSelf: 'stretch',
-  },
-  customerName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-    flex: 1,
-    alignSelf: 'stretch',
-  },
-  customerMetaRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: 6,
-    marginTop: 8,
-    flexWrap: 'wrap',
-    alignSelf: 'stretch',
+  },
+  customerName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   customerMetaText: {
+    marginTop: 6,
     fontSize: 12,
     color: '#64748B',
     textAlign: 'right',
     writingDirection: 'rtl',
     lineHeight: 18,
   },
-  customerMetaDivider: {
-    fontSize: 12,
-    color: '#CBD5E1',
-  },
   balanceContainer: {
-    minWidth: 88,
+    width: 110,
     alignItems: 'flex-start',
     justifyContent: 'center',
     gap: 2,
   },
   balanceText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     textAlign: 'left',
     writingDirection: 'ltr',
+  },
+  linkIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  moreBalancesText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'left',
+    writingDirection: 'rtl',
   },
   emptyContainer: {
     flex: 1,

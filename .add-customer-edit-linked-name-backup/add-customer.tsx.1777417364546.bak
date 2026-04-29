@@ -509,7 +509,7 @@ export default function AddCustomerScreen() {
                   }
                   placeholderTextColor="#9CA3AF"
                   textAlign="right"
-                  editable={customerType === 'regular' || isEditMode || !!selectedUser}
+                  editable={customerType === 'regular' || isEditMode}
                 />
               </View>
 
