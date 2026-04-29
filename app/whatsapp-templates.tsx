@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,274 +13,334 @@ import { useRouter } from 'expo-router';
 import { ChevronRight, Save, RotateCcw, Eye } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import {
+  APP_SETTINGS_FIXED_ID,
+  DEFAULT_WHATSAPP_TEMPLATES,
   fetchWhatsAppTemplates,
-  getAccountStatementVariables,
-  getShareAccountVariables,
   generatePreviewMessage,
   WhatsAppTemplates,
 } from '@/utils/whatsappTemplates';
+import { ArabicTemplateTokenBar } from '../components/ArabicTemplateTokenBar';
+
+type TemplateKey = keyof WhatsAppTemplates;
+
+type SelectionRange = {
+  start: number;
+  end: number;
+};
 
 export default function WhatsAppTemplatesScreen() {
   const router = useRouter();
+
   const [templates, setTemplates] = useState<WhatsAppTemplates>({
     account_statement: '',
     share_account: '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTemplate, setActiveTemplate] = useState<TemplateKey>('account_statement');
+  const [selections, setSelections] = useState<Record<TemplateKey, SelectionRange>>({
+    account_statement: { start: 0, end: 0 },
+    share_account: { start: 0, end: 0 },
+  });
+
+  const accountToolbarItems = useMemo(
+    () => [
+      { label: 'الاسم', token: '{الاسم}' },
+      { label: 'رقم الحساب', token: '{رقم_الحساب}' },
+      { label: 'التاريخ', token: '{التاريخ}' },
+      { label: 'الرصيد', token: '{الرصيد}' },
+    ],
+    []
+  );
+
+  const shareToolbarItems = useMemo(
+    () => [
+      { label: 'الاسم', token: '{الاسم}' },
+      { label: 'رقم الحساب', token: '{رقم_الحساب}' },
+      { label: 'التاريخ', token: '{التاريخ}' },
+      { label: 'الأرصدة', token: '{الأرصدة}' },
+      { label: 'الحركات المالية', token: '{الحركات المالية}' },
+      { label: 'اسم المحل', token: '{اسم_المحل}' },
+    ],
+    []
+  );
 
   useEffect(() => {
     loadTemplates();
   }, []);
 
-  const loadTemplates = async () => {
+  async function loadTemplates() {
     try {
       const loadedTemplates = await fetchWhatsAppTemplates();
       setTemplates(loadedTemplates);
+      setSelections({
+        account_statement: {
+          start: loadedTemplates.account_statement.length,
+          end: loadedTemplates.account_statement.length,
+        },
+        share_account: {
+          start: loadedTemplates.share_account.length,
+          end: loadedTemplates.share_account.length,
+        },
+      });
     } catch (error) {
       console.error('Error loading templates:', error);
       Alert.alert('خطأ', 'حدث خطأ أثناء تحميل القوالب');
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const handleSave = async () => {
+  function updateTemplate(key: TemplateKey, text: string) {
+    setTemplates((prev) => ({
+      ...prev,
+      [key]: text,
+    }));
+  }
+
+  function handleSelectionChange(key: TemplateKey, event: any) {
+    const selection = event?.nativeEvent?.selection;
+    if (!selection) return;
+
+    setSelections((prev) => ({
+      ...prev,
+      [key]: {
+        start: selection.start ?? 0,
+        end: selection.end ?? selection.start ?? 0,
+      },
+    }));
+  }
+
+  function handleInsertToken(key: TemplateKey, token: string) {
+    const currentText = templates[key] || '';
+    const currentSelection = selections[key] || {
+      start: currentText.length,
+      end: currentText.length,
+    };
+
+    const start = Math.max(0, Math.min(currentSelection.start, currentText.length));
+    const end = Math.max(0, Math.min(currentSelection.end, currentText.length));
+
+    const nextValue =
+      currentText.slice(0, start) + token + currentText.slice(end);
+
+    const nextCursor = start + token.length;
+
+    setTemplates((prev) => ({
+      ...prev,
+      [key]: nextValue,
+    }));
+
+    setSelections((prev) => ({
+      ...prev,
+      [key]: {
+        start: nextCursor,
+        end: nextCursor,
+      },
+    }));
+
+    setActiveTemplate(key);
+  }
+
+  async function handleSave() {
     if (!templates.account_statement.trim() || !templates.share_account.trim()) {
-      Alert.alert('تنبيه', 'يجب ملء جميع القوالب');
+      Alert.alert('تنبيه', 'يجب تعبئة القالبين قبل الحفظ');
       return;
     }
 
     setIsSaving(true);
+
     try {
-      const FIXED_SETTINGS_ID = '00000000-0000-0000-0000-000000000000';
-      const { error } = await supabase
-        .from('app_settings')
-        .upsert({
-          id: FIXED_SETTINGS_ID,
+      const { error } = await supabase.from('app_settings').upsert(
+        {
+          id: APP_SETTINGS_FIXED_ID,
           whatsapp_account_statement_template: templates.account_statement,
           whatsapp_share_account_template: templates.share_account,
-        }, {
-          onConflict: 'id'
-        });
+        },
+        { onConflict: 'id' }
+      );
 
       if (error) throw error;
 
-      Alert.alert('نجح', 'تم حفظ القوالب بنجاح', [
-        { text: 'موافق', onPress: () => router.back() },
-      ]);
+      Alert.alert('تم', 'تم حفظ القوالب بنجاح');
     } catch (error) {
       console.error('Error saving templates:', error);
       Alert.alert('خطأ', 'حدث خطأ أثناء حفظ القوالب');
     } finally {
       setIsSaving(false);
     }
-  };
+  }
 
-  const handleResetAccountStatement = () => {
-    Alert.alert(
-      'تأكيد',
-      'هل تريد استعادة القالب الافتراضي لكشف الحساب؟',
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'استعادة',
-          style: 'destructive',
-          onPress: () => {
-            setTemplates((prev) => ({
-              ...prev,
-              account_statement: `مرحباً {customer_name}،
+  function handleReset(key: TemplateKey) {
+    const title =
+      key === 'account_statement'
+        ? 'استعادة القالب الافتراضي للرسالة السريعة'
+        : 'استعادة القالب الافتراضي لكشف الحساب التفصيلي';
 
-كشف حساب رقم: {account_number}
-التاريخ: {date}
-
-الأرصدة:
-{balance}
-
-شكراً لك`,
-            }));
-          },
+    Alert.alert('تأكيد', title, [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'استعادة',
+        style: 'destructive',
+        onPress: () => {
+          const defaultValue = DEFAULT_WHATSAPP_TEMPLATES[key];
+          setTemplates((prev) => ({
+            ...prev,
+            [key]: defaultValue,
+          }));
+          setSelections((prev) => ({
+            ...prev,
+            [key]: {
+              start: defaultValue.length,
+              end: defaultValue.length,
+            },
+          }));
         },
-      ]
-    );
-  };
+      },
+    ]);
+  }
 
-  const handleResetShareAccount = () => {
-    Alert.alert(
-      'تأكيد',
-      'هل تريد استعادة القالب الافتراضي لمشاركة الحساب؟',
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'استعادة',
-          style: 'destructive',
-          onPress: () => {
-            setTemplates((prev) => ({
-              ...prev,
-              share_account: `مرحباً {customer_name}،
-
-كشف حساب تفصيلي
-رقم الحساب: {account_number}
-التاريخ: {date}
-
-{balances}
-
-الحركات المالية:
-{movements}
-
-{shop_name}`,
-            }));
-          },
-        },
-      ]
-    );
-  };
-
-  const handlePreview = (type: 'account_statement' | 'share_account') => {
-    const template = type === 'account_statement' ? templates.account_statement : templates.share_account;
-    const preview = generatePreviewMessage(template, type);
-
-    Alert.alert('معاينة الرسالة', preview, [{ text: 'موافق' }], {
-      cancelable: true,
-    });
-  };
+  function handlePreview(key: TemplateKey) {
+    const preview = generatePreviewMessage(templates[key], key);
+    Alert.alert('معاينة الرسالة', preview);
+  }
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <ChevronRight size={24} color="#007AFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>قوالب رسائل الواتساب</Text>
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2563EB" />
       </View>
     );
   }
-
-  const accountStatementVars = getAccountStatementVariables();
-  const shareAccountVars = getShareAccountVariables();
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ChevronRight size={24} color="#007AFF" />
+          <ChevronRight size={22} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>قوالب رسائل الواتساب</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Account Statement Template */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>قالب كشف الحساب السريع</Text>
-            <Text style={styles.sectionSubtitle}>
-              يُستخدم عند إرسال رسالة واتساب سريعة من صفحة العميل
-            </Text>
-          </View>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>الرسالة السريعة</Text>
+          <Text style={styles.cardSubtitle}>
+            رسالة مختصرة تُرسل من صفحة العميل.
+          </Text>
 
-          <View style={styles.templateCard}>
-            <TextInput
-              style={styles.textArea}
-              value={templates.account_statement}
-              onChangeText={(text) =>
-                setTemplates((prev) => ({ ...prev, account_statement: text }))
-              }
-              multiline
-              numberOfLines={10}
-              textAlignVertical="top"
-              placeholder="أدخل قالب الرسالة..."
-            />
+          <ArabicTemplateTokenBar
+            items={accountToolbarItems}
+            onInsert={(token) => handleInsertToken('account_statement', token)}
+          />
 
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={styles.previewButton}
-                onPress={() => handlePreview('account_statement')}
-              >
-                <Eye size={18} color="#007AFF" />
-                <Text style={styles.previewButtonText}>معاينة</Text>
-              </TouchableOpacity>
+          <TextInput
+            style={styles.textArea}
+            multiline
+            textAlignVertical="top"
+            value={templates.account_statement}
+            onChangeText={(text) => updateTemplate('account_statement', text)}
+            onFocus={() => setActiveTemplate('account_statement')}
+            onSelectionChange={(event) =>
+              handleSelectionChange('account_statement', event)
+            }
+            placeholder="اكتب القالب هنا"
+            placeholderTextColor="#9CA3AF"
+          />
 
-              <TouchableOpacity
-                style={styles.resetButton}
-                onPress={handleResetAccountStatement}
-              >
-                <RotateCcw size={18} color="#FF3B30" />
-                <Text style={styles.resetButtonText}>استعادة الافتراضي</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <Text style={styles.helperText}>
+            اضغط على أي عنصر في الأعلى وسيُضاف مباشرة داخل النص.
+          </Text>
 
-          <View style={styles.variablesCard}>
-            <Text style={styles.variablesTitle}>المتغيرات المتاحة:</Text>
-            {accountStatementVars.map((variable, index) => (
-              <View key={index} style={styles.variableItem}>
-                <Text style={styles.variableKey}>{variable.key}</Text>
-                <Text style={styles.variableDescription}>{variable.description}</Text>
-                <Text style={styles.variableExample}>مثال: {variable.example}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.previewButton]}
+              onPress={() => handlePreview('account_statement')}
+            >
+              <Eye size={16} color="#2563EB" />
+              <Text style={[styles.secondaryButtonText, styles.previewButtonText]}>
+                معاينة
+              </Text>
+            </TouchableOpacity>
 
-        {/* Share Account Template */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>قالب مشاركة الحساب الكامل</Text>
-            <Text style={styles.sectionSubtitle}>
-              يُستخدم عند مشاركة كشف حساب تفصيلي مع جميع الحركات
-            </Text>
-          </View>
-
-          <View style={styles.templateCard}>
-            <TextInput
-              style={styles.textArea}
-              value={templates.share_account}
-              onChangeText={(text) =>
-                setTemplates((prev) => ({ ...prev, share_account: text }))
-              }
-              multiline
-              numberOfLines={10}
-              textAlignVertical="top"
-              placeholder="أدخل قالب الرسالة..."
-            />
-
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={styles.previewButton}
-                onPress={() => handlePreview('share_account')}
-              >
-                <Eye size={18} color="#007AFF" />
-                <Text style={styles.previewButtonText}>معاينة</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.resetButton}
-                onPress={handleResetShareAccount}
-              >
-                <RotateCcw size={18} color="#FF3B30" />
-                <Text style={styles.resetButtonText}>استعادة الافتراضي</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.variablesCard}>
-            <Text style={styles.variablesTitle}>المتغيرات المتاحة:</Text>
-            {shareAccountVars.map((variable, index) => (
-              <View key={index} style={styles.variableItem}>
-                <Text style={styles.variableKey}>{variable.key}</Text>
-                <Text style={styles.variableDescription}>{variable.description}</Text>
-                <Text style={styles.variableExample}>مثال: {variable.example}</Text>
-              </View>
-            ))}
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.resetButton]}
+              onPress={() => handleReset('account_statement')}
+            >
+              <RotateCcw size={16} color="#DC2626" />
+              <Text style={[styles.secondaryButtonText, styles.resetButtonText]}>
+                إعادة الافتراضي
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.bottomPadding} />
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>كشف الحساب التفصيلي</Text>
+          <Text style={styles.cardSubtitle}>
+            رسالة مفصلة مع الأرصدة والحركات المالية.
+          </Text>
+
+          <ArabicTemplateTokenBar
+            items={shareToolbarItems}
+            onInsert={(token) => handleInsertToken('share_account', token)}
+          />
+
+          <TextInput
+            style={styles.textAreaLarge}
+            multiline
+            textAlignVertical="top"
+            value={templates.share_account}
+            onChangeText={(text) => updateTemplate('share_account', text)}
+            onFocus={() => setActiveTemplate('share_account')}
+            onSelectionChange={(event) =>
+              handleSelectionChange('share_account', event)
+            }
+            placeholder="اكتب القالب هنا"
+            placeholderTextColor="#9CA3AF"
+          />
+
+          <Text style={styles.helperText}>
+            يفضّل أن تضع عنوانًا قبل الحركات مثل: الحركات المالية
+          </Text>
+
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.previewButton]}
+              onPress={() => handlePreview('share_account')}
+            >
+              <Eye size={16} color="#2563EB" />
+              <Text style={[styles.secondaryButtonText, styles.previewButtonText]}>
+                معاينة
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.resetButton]}
+              onPress={() => handleReset('share_account')}
+            >
+              <RotateCcw size={16} color="#DC2626" />
+              <Text style={[styles.secondaryButtonText, styles.resetButtonText]}>
+                إعادة الافتراضي
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.smallInfoCard}>
+          <Text style={styles.smallInfoTitle}>ملاحظة</Text>
+          <Text style={styles.smallInfoText}>
+            الأرقام ستظهر بدون فواصل عشرية إلا إذا كان هناك كسر فعلي.
+          </Text>
+          <Text style={styles.smallInfoText}>
+            مثال: 500 دولار بدل 500.00 دولار
+          </Text>
+        </View>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -290,11 +350,11 @@ export default function WhatsAppTemplatesScreen() {
           disabled={isSaving}
         >
           {isSaving ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <>
-              <Save size={20} color="#FFF" />
-              <Text style={styles.saveButtonText}>حفظ القوالب</Text>
+              <Save size={18} color="#FFFFFF" />
+              <Text style={styles.saveButtonText}>حفظ</Text>
             </>
           )}
         </TouchableOpacity>
@@ -306,174 +366,183 @@ export default function WhatsAppTemplatesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-    paddingTop: 16,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'center',
-    marginRight: 32,
-  },
-  content: {
-    flex: 1,
+    backgroundColor: '#F3F4F6',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F3F4F6',
   },
-  section: {
-    marginTop: 16,
-  },
-  sectionHeader: {
+  header: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingTop: 16,
+    paddingBottom: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  sectionTitle: {
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1,
     fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-    textAlign: 'right',
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
   },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'right',
+  headerSpacer: {
+    width: 40,
+    height: 40,
   },
-  templateCard: {
-    backgroundColor: '#FFF',
-    marginHorizontal: 16,
-    borderRadius: 12,
+  content: {
+    flex: 1,
+  },
+  contentContainer: {
     padding: 16,
-    marginBottom: 12,
+    paddingBottom: 120,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'right',
+    marginBottom: 6,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'right',
+    marginBottom: 14,
+    lineHeight: 20,
   },
   textArea: {
-    minHeight: 200,
-    maxHeight: 300,
+    minHeight: 150,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 15,
-    textAlign: 'right',
+    borderColor: '#D1D5DB',
+    borderRadius: 14,
     backgroundColor: '#FAFAFA',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#111827',
+    textAlign: 'right',
   },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    gap: 12,
+  textAreaLarge: {
+    minHeight: 220,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 14,
+    backgroundColor: '#FAFAFA',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#111827',
+    textAlign: 'right',
+  },
+  helperText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'right',
+  },
+  actionRow: {
+    flexDirection: 'row-reverse',
+    marginTop: 14,
+  },
+  secondaryButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row-reverse',
   },
   previewButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-    backgroundColor: '#F0F8FF',
-  },
-  previewButtonText: {
-    color: '#007AFF',
-    fontSize: 15,
-    fontWeight: '500',
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
+    marginLeft: 8,
   },
   resetButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-    backgroundColor: '#FFF5F5',
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 6,
+  },
+  previewButtonText: {
+    color: '#2563EB',
   },
   resetButtonText: {
-    color: '#FF3B30',
-    fontSize: 15,
-    fontWeight: '500',
+    color: '#DC2626',
   },
-  variablesCard: {
-    backgroundColor: '#FFF',
-    marginHorizontal: 16,
-    borderRadius: 12,
+  smallInfoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  variablesTitle: {
+  smallInfoTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontWeight: '700',
+    color: '#111827',
     textAlign: 'right',
+    marginBottom: 8,
   },
-  variableItem: {
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  variableKey: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#007AFF',
-    textAlign: 'right',
-    marginBottom: 4,
-  },
-  variableDescription: {
+  smallInfoText: {
     fontSize: 14,
-    color: '#333',
+    color: '#4B5563',
     textAlign: 'right',
-    marginBottom: 2,
-  },
-  variableExample: {
-    fontSize: 13,
-    color: '#666',
-    textAlign: 'right',
-    fontStyle: 'italic',
-  },
-  bottomPadding: {
-    height: 100,
+    lineHeight: 22,
   },
   footer: {
-    backgroundColor: '#FFF',
-    padding: 16,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 18,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
+    borderTopColor: '#E5E7EB',
   },
   saveButton: {
-    backgroundColor: '#34C759',
-    flexDirection: 'row',
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
+    flexDirection: 'row-reverse',
   },
   saveButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.7,
   },
   saveButtonText: {
-    color: '#FFF',
+    color: '#FFFFFF',
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginRight: 8,
   },
 });

@@ -7,10 +7,10 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  ScrollView,
+  ScrollView
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowRight, Save, Building2, Phone, MapPin } from 'lucide-react-native';
+import { ArrowRight, Save, Building2, Phone, MapPin, FileText, Printer } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ShopSettingsScreen() {
@@ -124,7 +124,85 @@ export default function ShopSettingsScreen() {
             />
           </View>
         </View>
+      
+        {/* settingsStructureSectionMarker */}
+        <View style={styles.extraSettingsCard}>
+          <Text style={styles.extraSettingsTitle}>الترويسة والطباعة</Text>
+          <Text style={styles.extraSettingsSubtitle}>
+            تم جمع إعدادات الترويسة والطباعة داخل إعدادات المحل لتكون أوضح وأسهل.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.extraSettingsButton}
+            onPress={() => router.push('/customer-header-settings')}
+          >
+            <View style={styles.extraSettingsButtonIcon}>
+              <FileText size={18} color="#2563EB" />
+            </View>
+            <View style={styles.extraSettingsButtonTextWrap}>
+              <Text style={styles.extraSettingsButtonTitle}>إعدادات الترويسة</Text>
+              <Text style={styles.extraSettingsButtonSubtitle}>
+                تعديل اسم المحل، البيانات، وترويسة الصفحات
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.extraSettingsButton}
+            onPress={() => router.push('/letterhead-settings')}
+          >
+            <View style={styles.extraSettingsButtonIcon}>
+              <Printer size={18} color="#16A34A" />
+            </View>
+            <View style={styles.extraSettingsButtonTextWrap}>
+              <Text style={styles.extraSettingsButtonTitle}>إعدادات الطباعة</Text>
+              <Text style={styles.extraSettingsButtonSubtitle}>
+                التحكم بشكل الطباعة والترويسة داخل المستندات
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
+
+      
+        {/* shopHeaderPrintLinksMarker */}
+        <View style={styles.extraCard}>
+          <Text style={styles.extraCardTitle}>الترويسة والطباعة</Text>
+          <Text style={styles.extraCardSubtitle}>
+            تم وضع إعدادات الترويسة والطباعة داخل إعدادات المحل لتكون أوضح وأسهل.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => router.push('/customer-header-settings')}
+          >
+            <View style={styles.linkIconWrap}>
+              <FileText size={18} color="#2563EB" />
+            </View>
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>إعدادات الترويسة</Text>
+              <Text style={styles.linkSubtitle}>
+                تعديل بيانات الترويسة والعناصر الظاهرة أعلى الصفحة
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => router.push('/letterhead-settings')}
+          >
+            <View style={[styles.linkIconWrap, styles.linkIconWrapGreen]}>
+              <Printer size={18} color="#16A34A" />
+            </View>
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>إعدادات الطباعة</Text>
+              <Text style={styles.linkSubtitle}>
+                التحكم في شكل الطباعة والورقة والتنسيق العام
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
       <View style={styles.footer}>
         <TouchableOpacity
@@ -287,4 +365,133 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
+
+  extraSettingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    marginTop: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  extraSettingsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'right',
+    marginBottom: 6,
+  },
+  extraSettingsSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'right',
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+  extraSettingsButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginTop: 10,
+  },
+  extraSettingsButtonIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  extraSettingsButtonTextWrap: {
+    flex: 1,
+  },
+  extraSettingsButtonTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'right',
+    marginBottom: 3,
+  },
+  extraSettingsButtonSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'right',
+    lineHeight: 18,
+  },
+
+
+  extraCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  extraCardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'right',
+    marginBottom: 6,
+  },
+  extraCardSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'right',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  linkRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginTop: 10,
+  },
+  linkIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  linkIconWrapGreen: {
+    backgroundColor: '#ECFDF5',
+  },
+  linkTextWrap: {
+    flex: 1,
+  },
+  linkTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  linkSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'right',
+    lineHeight: 18,
+  },
+
 });
