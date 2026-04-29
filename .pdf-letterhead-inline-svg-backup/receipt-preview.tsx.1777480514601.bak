@@ -56,7 +56,7 @@ export default function ReceiptPreviewScreen() {
 
       const { data: movementData, error: movementError } = await supabase
         .from('account_movements')
-        .select('*, customers!customer_id(name, account_number, phone, receipt_header_mode, receipt_header_banner_url, receipt_header_logo_url), commission_recipient:customers!commission_recipient_id(name)')
+        .select('*, customers!customer_id(name, account_number, phone), commission_recipient:customers!commission_recipient_id(name)')
         .eq('id', movementId)
         .maybeSingle();
 

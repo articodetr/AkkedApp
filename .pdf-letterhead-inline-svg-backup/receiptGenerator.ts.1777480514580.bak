@@ -41,43 +41,6 @@ export function generateQRCodeData(receiptData: ReceiptData): string {
   return JSON.stringify(qrData);
 }
 
-
-function escapeHtmlAttribute(value: string): string {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function renderReceiptHeader(logoDataUrl?: string): string {
-  const fallbackHeader = '<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Default Banner" class="header-banner-image" />';
-
-  if (!logoDataUrl) {
-    return fallbackHeader;
-  }
-
-  if (logoDataUrl.startsWith('data:image/svg+xml')) {
-    const commaIndex = logoDataUrl.indexOf(',');
-
-    if (commaIndex !== -1) {
-      const encodedSvg = logoDataUrl.slice(commaIndex + 1);
-
-      try {
-        const decodedSvg = decodeURIComponent(encodedSvg).trim();
-
-        if (decodedSvg.startsWith('<svg')) {
-          return decodedSvg;
-        }
-      } catch (error) {
-        console.warn('[receiptGenerator] Could not decode SVG header, falling back to <img> rendering.', error);
-      }
-    }
-  }
-
-  return `<img src="${escapeHtmlAttribute(logoDataUrl)}" alt="Header Banner" class="header-banner-image" />`;
-}
-
 export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: string, logoDataUrl?: string): string {
   const {
     receipt_number,
@@ -822,7 +785,10 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
     <div class="receipt-container">
       <div class="receipt-inner-frame">
         <div class="receipt-header">
-          ${renderReceiptHeader(logoDataUrl)}
+          ${logoDataUrl
+            ? `<img src="${logoDataUrl}" alt="Header Banner" class="header-banner-image" />`
+            : `<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Default Banner" class="header-banner-image" />`
+          }
         </div>
 
         <div class="receipt-content">
