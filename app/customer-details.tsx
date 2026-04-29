@@ -1,17 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  Linking,
-  ActivityIndicator,
-  Modal,
-  TextInput,
-  I18nManager,
-} from 'react-native';
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, ActivityIndicator, Modal, TextInput, I18nManager, } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -796,6 +785,7 @@ export default function CustomerDetailsScreen() {
         movementId: movement.id,
         customerName: customer?.name,
         customerAccountNumber: customer?.account_number,
+  customerId: customer?.id,
       },
     });
   };

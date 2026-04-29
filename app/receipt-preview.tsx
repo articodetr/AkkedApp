@@ -56,7 +56,7 @@ export default function ReceiptPreviewScreen() {
 
       const { data: movementData, error: movementError } = await supabase
         .from('account_movements')
-        .select('*, customers!customer_id(name, account_number, phone, receipt_header_mode, receipt_header_banner_url, receipt_header_logo_url), commission_recipient:customers!commission_recipient_id(name)')
+        .select('*, customers!customer_id(name, account_number, phone, receipt_header_mode, receipt_header_banner_url, receipt_header_logo_url, receipt_header_left_title, receipt_header_left_subtitle, receipt_header_right_title, receipt_header_right_subtitle, receipt_header_primary_color, receipt_header_secondary_color, receipt_header_text_color), commission_recipient:customers!commission_recipient_id(name)')
         .eq('id', movementId)
         .maybeSingle();
 
@@ -105,9 +105,15 @@ export default function ReceiptPreviewScreen() {
 
       console.log('[ReceiptPreview] Movement data loaded successfully');
       const scopedMovementData = {
-        ...movementData,
-        customers: movementData.customers || accessibleCustomer,
-      };
+
+  ...movementData,
+
+  customers: {
+    ...(accessibleCustomer || {}),
+    ...((movementData.customers as any) || {}),
+  },
+
+  };
 
       setMovement(scopedMovementData);
       await generateReceipt(scopedMovementData);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -16,10 +15,8 @@ import {
   Info,
   ChevronLeft,
   Building2,
-  Users,
   MessageCircle,
   Link as LinkIcon,
-  FileText,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -31,7 +28,7 @@ export default function SettingsScreen() {
     if (!settings) {
       refreshSettings();
     }
-  }, []);
+  }, [settings, refreshSettings]);
 
   const handleLogout = () => {
     Alert.alert('تسجيل الخروج', 'هل أنت متأكد من تسجيل الخروج؟', [
@@ -50,15 +47,10 @@ export default function SettingsScreen() {
   const menuItems = [
     {
       icon: Building2,
-      title: 'إعدادات المحل', subtitle: 'اسم المحل والهاتف والعنوان',
+      title: 'إعدادات المحل',
+      subtitle: 'اسم المحل والهاتف والعنوان والترويسة والطباعة',
       color: '#4F46E5',
       onPress: () => router.push('/shop-settings' as any),
-    },
-    {
-      icon: FileText,
-      title: 'الترويسة والطباعة', subtitle: 'الشعار والألوان والترويسة الكاملة للسندات',
-      color: '#0EA5E9',
-      onPress: () => router.push('/letterhead-settings' as any),
     },
     {
       icon: LinkIcon,
@@ -66,13 +58,6 @@ export default function SettingsScreen() {
       subtitle: 'المستخدمون المربوطون بك كعملاء',
       color: '#3B82F6',
       onPress: () => router.push('/linked-accounts' as any),
-    },
-    {
-      icon: Users,
-      title: 'إدارة المستخدمين',
-      subtitle: 'إضافة وتعديل وحذف المستخدمين',
-      color: '#8B5CF6',
-      onPress: () => router.push('/users-management' as any),
     },
     {
       icon: MessageCircle,
@@ -114,36 +99,46 @@ export default function SettingsScreen() {
         <Text style={styles.headerTitle}>الإعدادات</Text>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         <View style={styles.profileCard}>
-          <View style={styles.profileIconContainer}>
-            <Image
-              source={require('../../assets/images/icon.png')}
-              style={styles.brandLogo}
-              resizeMode="contain"
-            />
-          </View>
-          <Text style={styles.profileName}>{currentUser?.fullName || 'المستخدم'}</Text>
-          {currentUser?.accountNumber && (
-            <Text style={styles.profilePhone}>رقم الحساب: {currentUser.accountNumber}</Text>
-          )}
+          <Text style={styles.profileName}>
+            {currentUser?.fullName || 'المستخدم'}
+          </Text>
+          {currentUser?.accountNumber ? (
+            <Text style={styles.profilePhone}>
+              رقم الحساب: {currentUser.accountNumber}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.menuSection}>
-          {menuItems.map((item, index) => (
-            <TouchableOpacity key={index} style={styles.menuItem} onPress={item.onPress}>
-              <View style={styles.menuItemContent}>
-                <View style={[styles.menuIcon, { backgroundColor: `${item.color}15` }]}>
-                  <item.icon size={24} color={item.color} />
+          {menuItems.map((item, index) => {
+            const IconComponent = item.icon as any;
+
+            return (
+              <TouchableOpacity
+                key={item.title}
+                style={[
+                  styles.menuItem,
+                  index === menuItems.length - 1 && styles.lastMenuItem,
+                ]}
+                onPress={item.onPress}
+                activeOpacity={0.85}
+              >
+                <ChevronLeft size={20} color="#9CA3AF" />
+                <View style={styles.menuItemContent}>
+                  <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
+                    <IconComponent size={22} color={item.color} />
+                  </View>
+
+                  <View style={styles.menuTextContainer}>
+                    <Text style={styles.menuTitle}>{item.title}</Text>
+                    <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+                  </View>
                 </View>
-                <View style={styles.menuTextContainer}>
-                  <Text style={styles.menuTitle}>{item.title}</Text>
-                  <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
-                </View>
-              </View>
-              <ChevronLeft size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -182,6 +177,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  contentContainer: {
+    paddingBottom: 24,
+  },
   profileCard: {
     backgroundColor: '#FFFFFF',
     margin: 16,
@@ -194,26 +192,17 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  profileIconContainer: {
-    width: 96,
-    height: 96,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  brandLogo: {
-    width: 88,
-    height: 88,
-  },
   profileName: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#111827',
     marginBottom: 4,
+    textAlign: 'center',
   },
   profilePhone: {
     fontSize: 16,
     color: '#6B7280',
+    textAlign: 'center',
   },
   menuSection: {
     backgroundColor: '#FFFFFF',
@@ -234,6 +223,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  lastMenuItem: {
+    borderBottomWidth: 0,
   },
   menuItemContent: {
     flexDirection: 'row',
@@ -267,7 +259,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
     backgroundColor: '#FEE2E2',
     marginHorizontal: 16,
     marginBottom: 16,
@@ -278,6 +269,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#EF4444',
+    marginLeft: 8,
   },
   footer: {
     padding: 24,

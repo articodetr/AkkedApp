@@ -136,7 +136,13 @@ export default function CustomerHeaderSettingsScreen() {
 
   const handleSave = async () => {
     try {
-      if (!customer) return;
+      if (!customer) {
+      throw new Error('لم يتم تحميل بيانات العميل بعد');
+    }
+
+    if (!currentUser?.userId) {
+      throw new Error('لم يتم العثور على بيانات الحساب الحالي');
+    }
 
       setSaving(true);
 
@@ -184,10 +190,21 @@ export default function CustomerHeaderSettingsScreen() {
         receipt_header_text_color: textColor.trim() || '#FFFFFF',
       };
 
-      const { error } = await supabase
-        .from('customers')
-        .update(payload)
-        .eq('id', customer.id);
+      const { data: updatedCustomer, error } = await supabase
+      .from('customers')
+      .update(payload)
+      .eq('id', customer.id)
+      .or(buildReadableCustomerFilter(currentUser.userId, true))
+      .select('id')
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!updatedCustomer) {
+      throw new Error('لا تملك صلاحية حفظ ترويسة هذا العميل من هذا الحساب');
+    }
 
       if (error) {
         throw error;
