@@ -209,23 +209,85 @@ async function getAppReceiptLogoBase64(forceRefresh = false): Promise<string> {
   }
 }
 
+async function getUserLetterheadHeaderBase64(
+  userId?: string | null
+): Promise<string | null> {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('letterhead_settings')
+      .select(
+        'logo_url, business_name, phone_number, background_color, primary_color, text_color, border_color, accent_color, show_logo, show_phone'
+      )
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+
+    let centerLogo: string | null = null;
+
+    if (data.show_logo && data.logo_url) {
+      centerLogo = await downloadAndConvertImageToBase64(data.logo_url);
+    }
+
+    const primary = data.primary_color || '#111827';
+    const accent = data.accent_color || primary;
+    const textColor = data.text_color || '#FFFFFF';
+    const businessName = escapeXml(data.business_name || 'ArtiCode');
+    const phoneNumber = escapeXml(data.phone_number || '');
+
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="405" viewBox="0 0 2048 405">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="${primary}" />
+      <stop offset="100%" stop-color="${accent}" />
+    </linearGradient>
+  </defs>
+  <rect width="2048" height="405" fill="url(#bg)" />
+  <rect x="80" y="70" width="560" height="265" rx="28" fill="rgba(255,255,255,0.10)" />
+  <rect x="1408" y="70" width="560" height="265" rx="28" fill="rgba(255,255,255,0.10)" />
+  <circle cx="1024" cy="202.5" r="108" fill="#ffffff" />
+  ${
+    centerLogo
+      ? `<image href="${centerLogo}" x="932" y="110.5" width="184" height="184" preserveAspectRatio="xMidYMid meet" />`
+      : ''
+  }
+  <text x="140" y="155" font-size="52" font-weight="700" fill="${textColor}">${businessName}</text>
+  ${
+    data.show_phone && phoneNumber
+      ? `<text x="140" y="225" font-size="34" font-weight="500" fill="${textColor}">${phoneNumber}</text>`
+      : ''
+  }
+</svg>
+    `;
+
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  } catch (error) {
+    console.error('[logoHelper] Error in getUserLetterheadHeaderBase64:', error);
+    return null;
+  }
+}
+
 export async function getCustomerReceiptHeaderBase64(
   customer?: Partial<Customer> | null,
-  forceRefresh = false
+  forceRefresh = false,
+  userId?: string | null
 ): Promise<string> {
   try {
     const mode = customer?.receipt_header_mode || 'default';
 
-    if (!customer || mode === 'default') {
-      return await getAppReceiptLogoBase64(forceRefresh);
-    }
-
-    if (mode === 'full_banner' && customer.receipt_header_banner_url) {
+    if (customer && mode === 'full_banner' && customer.receipt_header_banner_url) {
       const banner = await downloadAndConvertImageToBase64(customer.receipt_header_banner_url);
       return banner || (await getAppReceiptLogoBase64(forceRefresh));
     }
 
-    if (mode === 'generated') {
+    if (customer && mode === 'generated') {
       let centerLogo: string | null = null;
 
       if (customer.receipt_header_logo_url) {
@@ -233,6 +295,12 @@ export async function getCustomerReceiptHeaderBase64(
       }
 
       return buildGeneratedCustomerHeaderDataUrl(customer, centerLogo);
+    }
+
+    const userLetterhead = await getUserLetterheadHeaderBase64(userId);
+
+    if (userLetterhead) {
+      return userLetterhead;
     }
 
     return await getAppReceiptLogoBase64(forceRefresh);
@@ -244,16 +312,18 @@ export async function getCustomerReceiptHeaderBase64(
 
 export async function getReceiptLogoBase64(
   forceRefresh = false,
-  customer?: Partial<Customer> | null
+  customer?: Partial<Customer> | null,
+  userId?: string | null
 ): Promise<string> {
-  return getCustomerReceiptHeaderBase64(customer, forceRefresh);
+  return getCustomerReceiptHeaderBase64(customer, forceRefresh, userId);
 }
 
 export async function getLogoBase64(
   forceRefresh = false,
-  customer?: Partial<Customer> | null
+  customer?: Partial<Customer> | null,
+  userId?: string | null
 ): Promise<string> {
-  return getCustomerReceiptHeaderBase64(customer, forceRefresh);
+  return getCustomerReceiptHeaderBase64(customer, forceRefresh, userId);
 }
 
 export async function getLogoUrl(): Promise<string> {
