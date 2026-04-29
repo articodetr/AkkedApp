@@ -8,29 +8,6 @@ const BUCKET_NAME = 'shop-logos';
 const FIXED_SETTINGS_ID = '00000000-0000-0000-0000-000000000000';
 const DEFAULT_RECEIPT_HEADER = require('../assets/images/default-header.png');
 
-type ReceiptHeaderContext = {
-  userId?: string | null;
-};
-
-type StoredLetterheadSettings = {
-  logo_url?: string | null;
-  business_name?: string | null;
-  phone_number?: string | null;
-  background_color?: string | null;
-  primary_color?: string | null;
-  text_color?: string | null;
-  border_color?: string | null;
-  accent_color?: string | null;
-  show_logo?: boolean | null;
-  show_phone?: boolean | null;
-};
-
-const DEFAULT_LETTERHEAD_BACKGROUND_COLOR = '#FFFFFF';
-const DEFAULT_LETTERHEAD_PRIMARY_COLOR = '#111827';
-const DEFAULT_LETTERHEAD_TEXT_COLOR = '#374151';
-const DEFAULT_LETTERHEAD_BORDER_COLOR = '#E5E7EB';
-const DEFAULT_LETTERHEAD_ACCENT_COLOR = '#0EA5E9';
-
 function escapeXml(value?: string | null): string {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -194,97 +171,6 @@ function buildGeneratedCustomerHeaderDataUrl(
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-function buildStoredLetterheadHeaderSvg(
-  settings: StoredLetterheadSettings,
-  logoHref?: string | null
-): string {
-  const background = sanitizeHexColor(
-    settings.background_color,
-    DEFAULT_LETTERHEAD_BACKGROUND_COLOR
-  );
-  const primary = sanitizeHexColor(
-    settings.primary_color,
-    DEFAULT_LETTERHEAD_PRIMARY_COLOR
-  );
-  const textColor = sanitizeHexColor(
-    settings.text_color,
-    DEFAULT_LETTERHEAD_TEXT_COLOR
-  );
-  const border = sanitizeHexColor(
-    settings.border_color,
-    DEFAULT_LETTERHEAD_BORDER_COLOR
-  );
-  const accent = sanitizeHexColor(
-    settings.accent_color,
-    DEFAULT_LETTERHEAD_ACCENT_COLOR
-  );
-  const businessName = escapeXml(settings.business_name?.trim() || 'ArtiCode');
-  const phoneNumber = escapeXml(settings.phone_number?.trim() || '');
-  const showLogo = settings.show_logo ?? true;
-  const showPhone = settings.show_phone ?? true;
-  const initials = escapeXml((settings.business_name?.trim()?.charAt(0) || 'A').toUpperCase());
-
-  return `
-  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="405" viewBox="0 0 2048 405">
-    <defs>
-      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="rgba(0,0,0,0.18)" />
-      </filter>
-    </defs>
-    <rect width="2048" height="405" fill="transparent" />
-    <rect x="10" y="10" width="2028" height="385" rx="42" fill="${background}" stroke="${border}" stroke-width="10" filter="url(#shadow)" />
-    <rect x="590" y="120" width="1180" height="14" rx="7" fill="${accent}" fill-opacity="0.14" />
-    <rect x="920" y="275" width="850" height="12" rx="6" fill="${accent}" fill-opacity="0.08" />
-    ${showLogo ? `
-      <circle cx="255" cy="202.5" r="108" fill="${accent}" fill-opacity="0.10" stroke="${accent}" stroke-width="6" />
-      ${logoHref
-        ? `<image href="${logoHref}" x="155" y="102.5" width="200" height="200" preserveAspectRatio="xMidYMid meet" />`
-        : `<text x="255" y="226" text-anchor="middle" font-size="96" font-weight="700" fill="${accent}">${initials}</text>`
-      }
-    ` : ``}
-    <text x="1810" y="186" text-anchor="end" font-size="82" font-weight="800" fill="${primary}">${businessName}</text>
-    ${showPhone && phoneNumber
-      ? `<text x="1810" y="266" text-anchor="end" font-size="44" font-weight="600" fill="${textColor}">رقم الهاتف: ${phoneNumber}</text>`
-      : ``
-    }
-  </svg>
-  `;
-}
-
-function buildStoredLetterheadHeaderDataUrl(
-  settings: StoredLetterheadSettings,
-  logoHref?: string | null
-): string {
-  const svg = buildStoredLetterheadHeaderSvg(settings, logoHref);
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-async function getStoredLetterheadHeaderBase64(
-  userId?: string | null
-): Promise<string | null> {
-  if (!userId) return null;
-
-  try {
-    const { data, error } = await supabase
-      .from('letterhead_settings')
-      .select('logo_url, business_name, phone_number, background_color, primary_color, text_color, border_color, accent_color, show_logo, show_phone')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error || !data) {
-      return null;
-    }
-
-    const logoDataUrl = data.show_logo && data.logo_url
-      ? await downloadAndConvertImageToBase64(data.logo_url)
-      : null;
-
-    return buildStoredLetterheadHeaderDataUrl(data, logoDataUrl);
-  } catch (error) {
-    console.error('[logoHelper] Error loading stored letterhead settings:', error);
-    return null;
-  }
-}
 async function getAppReceiptLogoBase64(forceRefresh = false): Promise<string> {
   try {
     const { data: settings, error } = await supabase
@@ -323,92 +209,19 @@ async function getAppReceiptLogoBase64(forceRefresh = false): Promise<string> {
   }
 }
 
-async function getUserLetterheadHeaderBase64(
-  userId?: string | null
-): Promise<string | null> {
-  if (!userId) {
-    return null;
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('letterhead_settings')
-      .select(
-        'logo_url, business_name, phone_number, background_color, primary_color, text_color, border_color, accent_color, show_logo, show_phone'
-      )
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error || !data) {
-      return null;
-    }
-
-    let centerLogo: string | null = null;
-
-    if (data.show_logo && data.logo_url) {
-      centerLogo = await downloadAndConvertImageToBase64(data.logo_url);
-    }
-
-    const primary = data.primary_color || '#111827';
-    const accent = data.accent_color || primary;
-    const textColor = data.text_color || '#FFFFFF';
-    const businessName = escapeXml(data.business_name || 'ArtiCode');
-    const phoneNumber = escapeXml(data.phone_number || '');
-
-    const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="405" viewBox="0 0 2048 405">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="${primary}" />
-      <stop offset="100%" stop-color="${accent}" />
-    </linearGradient>
-  </defs>
-  <rect width="2048" height="405" fill="url(#bg)" />
-  <rect x="80" y="70" width="560" height="265" rx="28" fill="rgba(255,255,255,0.10)" />
-  <rect x="1408" y="70" width="560" height="265" rx="28" fill="rgba(255,255,255,0.10)" />
-  <circle cx="1024" cy="202.5" r="108" fill="#ffffff" />
-  ${
-    centerLogo
-      ? `<image href="${centerLogo}" x="932" y="110.5" width="184" height="184" preserveAspectRatio="xMidYMid meet" />`
-      : ''
-  }
-  <text x="140" y="155" font-size="52" font-weight="700" fill="${textColor}">${businessName}</text>
-  ${
-    data.show_phone && phoneNumber
-      ? `<text x="140" y="225" font-size="34" font-weight="500" fill="${textColor}">${phoneNumber}</text>`
-      : ''
-  }
-</svg>
-    `;
-
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  } catch (error) {
-    console.error('[logoHelper] Error in getUserLetterheadHeaderBase64:', error);
-    return null;
-  }
-}
-
 export async function getCustomerReceiptHeaderBase64(
   customer?: Partial<Customer> | null,
-  forceRefresh = false,
-  context: ReceiptHeaderContext = {}
+  forceRefresh = false
 ): Promise<string> {
   try {
     const mode = customer?.receipt_header_mode || 'default';
 
     if (!customer || mode === 'default') {
-      const storedLetterhead = await getStoredLetterheadHeaderBase64(context.userId);
-
-      if (storedLetterhead) {
-        return storedLetterhead;
-      }
-
       return await getAppReceiptLogoBase64(forceRefresh);
     }
 
     if (mode === 'full_banner' && customer.receipt_header_banner_url) {
       const banner = await downloadAndConvertImageToBase64(customer.receipt_header_banner_url);
-
       return banner || (await getAppReceiptLogoBase64(forceRefresh));
     }
 
@@ -422,39 +235,27 @@ export async function getCustomerReceiptHeaderBase64(
       return buildGeneratedCustomerHeaderDataUrl(customer, centerLogo);
     }
 
-    const storedLetterhead = await getStoredLetterheadHeaderBase64(context.userId);
-
-    if (storedLetterhead) {
-      return storedLetterhead;
-    }
-
     return await getAppReceiptLogoBase64(forceRefresh);
   } catch (error) {
     console.error('[logoHelper] Error in getCustomerReceiptHeaderBase64:', error);
-
-    const storedLetterhead = await getStoredLetterheadHeaderBase64(context.userId);
-
-    if (storedLetterhead) {
-      return storedLetterhead;
-    }
-
     return await getAppReceiptLogoBase64(forceRefresh);
   }
 }
+
 export async function getReceiptLogoBase64(
   forceRefresh = false,
-  customer?: Partial<Customer> | null,
-  context: ReceiptHeaderContext = {}
+  customer?: Partial<Customer> | null
 ): Promise<string> {
-  return getCustomerReceiptHeaderBase64(customer, forceRefresh, context);
+  return getCustomerReceiptHeaderBase64(customer, forceRefresh);
 }
+
 export async function getLogoBase64(
   forceRefresh = false,
-  customer?: Partial<Customer> | null,
-  context: ReceiptHeaderContext = {}
+  customer?: Partial<Customer> | null
 ): Promise<string> {
-  return getCustomerReceiptHeaderBase64(customer, forceRefresh, context);
+  return getCustomerReceiptHeaderBase64(customer, forceRefresh);
 }
+
 export async function getLogoUrl(): Promise<string> {
   try {
     const defaultAsset = Asset.fromModule(DEFAULT_RECEIPT_HEADER);

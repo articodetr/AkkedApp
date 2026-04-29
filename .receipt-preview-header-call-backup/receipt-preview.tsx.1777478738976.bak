@@ -179,10 +179,10 @@ export default function ReceiptPreviewScreen() {
       console.log('[ReceiptPreview] Loading receipt logo...');
       let logoDataUrl: string | undefined;
       try {
-        logoDataUrl = await getCustomerReceiptHeaderBase64(
-          customerData,
+        logoDataUrl = await getReceiptLogoBase64(
           forceRefresh,
-          { userId: currentUser?.userId }
+          customerData,
+          currentUser?.userId
         );
         console.log('[ReceiptPreview] Receipt logo loaded successfully. Type:', logoDataUrl?.substring(0, 30));
       } catch (logoError) {
