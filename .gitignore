@@ -27,3 +27,14 @@ expo-env.d.ts
 
 # Local archived native backup
 android_backup/
+
+# Extra temporary backups / patch scripts
+*.backup-*
+*.backup_*
+*.backup.*
+*.ts.backup*
+*.tsx.backup*
+.*-backup/
+apply-*.js
+fix-*.js
+repair-*.js

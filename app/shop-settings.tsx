@@ -16,7 +16,6 @@ import {
   Building2,
   Phone,
   MapPin,
-  FileText,
   Printer,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -136,23 +135,8 @@ export default function ShopSettingsScreen() {
         <View style={styles.extraCard}>
           <Text style={styles.extraCardTitle}>الترويسة والطباعة</Text>
           <Text style={styles.extraCardSubtitle}>
-            تم نقل إعدادات الترويسة العامة العامة والطباعة إلى داخل إعدادات المحل لتكون أسهل وأوضح.
+            إعدادات الترويسة العامة والطباعة موجودة هنا في صفحة واحدة لسهولة التعديل.
           </Text>
-
-          <TouchableOpacity
-            style={styles.extraLinkRow}
-            onPress={() => router.push('/customer-header-settings' as any)}
-          >
-            <View style={styles.extraIconWrap}>
-              <FileText size={18} color="#2563EB" />
-            </View>
-            <View style={styles.extraTextWrap}>
-              <Text style={styles.extraLinkTitle}>إعدادات الترويسة العامة العامة</Text>
-              <Text style={styles.extraLinkSubtitle}>
-                تعديل الترويسة والعناصر الظاهرة أعلى الصفحة
-              </Text>
-            </View>
-          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.extraLinkRow}
@@ -162,9 +146,9 @@ export default function ShopSettingsScreen() {
               <Printer size={18} color="#16A34A" />
             </View>
             <View style={styles.extraTextWrap}>
-              <Text style={styles.extraLinkTitle}>إعدادات الطباعة</Text>
+              <Text style={styles.extraLinkTitle}>إعدادات الترويسة والطباعة</Text>
               <Text style={styles.extraLinkSubtitle}>
-                التحكم في شكل الطباعة والتنسيق العام للسندات
+                تعديل الشعار والاسم والهاتف والألوان والتنسيق العام للسندات
               </Text>
             </View>
           </TouchableOpacity>

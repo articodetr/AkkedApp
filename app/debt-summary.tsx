@@ -208,7 +208,7 @@ export default function DebtSummaryScreen() {
     try {
       let logoDataUrl: string | undefined;
       try {
-        logoDataUrl = await getLogoBase64();
+        logoDataUrl = await getLogoBase64(false, null, { userId: currentUser?.userId });
         console.log('[DebtSummary] Logo loaded successfully for PDF');
       } catch (logoError) {
         console.warn('[DebtSummary] Could not load logo, continuing without it:', logoError);

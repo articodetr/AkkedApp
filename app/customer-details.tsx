@@ -460,7 +460,7 @@ export default function CustomerDetailsScreen() {
       let logoDataUrl: string | undefined;
       try {
         console.log('[CustomerDetails] Loading logo for PDF...');
-        logoDataUrl = await getLogoBase64();
+        logoDataUrl = await getLogoBase64(false, null, { userId: currentUser?.userId });
 
         if (logoDataUrl && logoDataUrl.length > 0) {
           console.log('[CustomerDetails] Logo loaded successfully. Length:', logoDataUrl.length);

@@ -12,20 +12,11 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-  ArrowRight,
-  ImageIcon,
-  Palette,
-  RotateCcw,
-  Save,
-  Trash2,
-  Upload,
-} from 'lucide-react-native';
+import { ArrowRight, ImageIcon, Save, Trash2, Upload } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { LetterheadPreview } from '@/components/LetterheadPreview';
 import {
   DEFAULT_LETTERHEAD_SETTINGS,
-  LETTERHEAD_COLOR_PRESETS,
   LetterheadSettings,
   deleteLetterheadLogo,
   getLetterheadSettings,
@@ -46,6 +37,7 @@ export default function LetterheadSettingsScreen() {
     normalizeLetterheadSettings({
       ...DEFAULT_LETTERHEAD_SETTINGS,
       business_name: appSettings?.shop_name || DEFAULT_LETTERHEAD_SETTINGS.business_name,
+      english_name: 'Company Name',
       phone_number: appSettings?.shop_phone || '',
     })
   );
@@ -55,10 +47,11 @@ export default function LetterheadSettingsScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   const previewSettings = useMemo(
-    () => normalizeLetterheadSettings({
-      ...letterhead,
-      logo_url: pendingLogoUri || letterhead.logo_url,
-    }),
+    () =>
+      normalizeLetterheadSettings({
+        ...letterhead,
+        logo_url: pendingLogoUri || letterhead.logo_url,
+      }),
     [letterhead, pendingLogoUri]
   );
 
@@ -119,36 +112,7 @@ export default function LetterheadSettingsScreen() {
         onPress: () => {
           setPendingLogoUri(null);
           updateField('logo_url', null);
-        },
-      },
-    ]);
-  };
-
-  const applyPreset = (preset: (typeof LETTERHEAD_COLOR_PRESETS)[number]) => {
-    setLetterhead((current) => ({
-      ...current,
-      background_color: preset.background_color,
-      primary_color: preset.primary_color,
-      text_color: preset.text_color,
-      border_color: preset.border_color,
-      accent_color: preset.accent_color,
-    }));
-  };
-
-  const handleReset = () => {
-    Alert.alert('إعادة التصميم الافتراضي', 'هل تريد إعادة ألوان الترويسة للوضع الافتراضي؟', [
-      { text: 'إلغاء', style: 'cancel' },
-      {
-        text: 'إعادة',
-        onPress: () => {
-          setLetterhead((current) => ({
-            ...normalizeLetterheadSettings({
-              ...DEFAULT_LETTERHEAD_SETTINGS,
-              business_name: current.business_name,
-              phone_number: current.phone_number,
-              logo_url: current.logo_url,
-            }),
-          }));
+          updateField('show_logo', false);
         },
       },
     ]);
@@ -161,7 +125,12 @@ export default function LetterheadSettingsScreen() {
     }
 
     if (!letterhead.business_name.trim()) {
-      Alert.alert('تنبيه', 'الرجاء إدخال اسم الشركة أو الصراف');
+      Alert.alert('تنبيه', 'الرجاء إدخال الاسم العربي');
+      return;
+    }
+
+    if (!letterhead.english_name.trim()) {
+      Alert.alert('تنبيه', 'الرجاء إدخال الاسم الإنجليزي');
       return;
     }
 
@@ -185,7 +154,7 @@ export default function LetterheadSettingsScreen() {
       setLetterhead(saved);
       setSavedLogoUrl(saved.logo_url);
       setPendingLogoUri(null);
-      Alert.alert('تم الحفظ', 'تم حفظ إعدادات الترويسة بنجاح');
+      Alert.alert('تم الحفظ', 'تم حفظ الترويسة بنجاح');
     } catch (error) {
       console.error('[LetterheadSettings] Save error:', error);
       Alert.alert('خطأ', error instanceof Error ? error.message : 'فشل حفظ إعدادات الترويسة');
@@ -194,30 +163,10 @@ export default function LetterheadSettingsScreen() {
     }
   };
 
-  const renderColorInput = (
-    label: string,
-    key: 'background_color' | 'primary_color' | 'text_color' | 'border_color' | 'accent_color'
-  ) => (
-    <View style={styles.colorInputRow}>
-      <Text style={styles.colorInputLabel}>{label}</Text>
-      <View style={styles.colorInputBox}>
-        <View style={[styles.colorPreviewDot, { backgroundColor: letterhead[key] }]} />
-        <TextInput
-          value={letterhead[key]}
-          onChangeText={(value) => updateField(key, value.toUpperCase() as any)}
-          placeholder="#FFFFFF"
-          autoCapitalize="characters"
-          style={styles.colorInput}
-          textAlign="left"
-        />
-      </View>
-    </View>
-  );
-
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0EA5E9" />
+        <ActivityIndicator size="large" color="#111111" />
         <Text style={styles.loadingText}>جاري تحميل إعدادات الترويسة...</Text>
       </View>
     );
@@ -227,64 +176,81 @@ export default function LetterheadSettingsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowRight size={24} color="#111827" />
+          <ArrowRight size={24} color="#111111" />
         </TouchableOpacity>
         <View style={styles.headerTextBox}>
           <Text style={styles.headerTitle}>ترويسة السندات</Text>
-          <Text style={styles.headerSubtitle}>تخصيص الشعار والرقم والألوان</Text>
+          <Text style={styles.headerSubtitle}>يمين عربي، وسط شعار، يسار إنجليزي</Text>
         </View>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         <View style={styles.previewCard}>
-          <Text style={styles.sectionTitle}>المعاينة المباشرة</Text>
-          <Text style={styles.sectionSubtitle}>المقاس المعتمد للترويسة هو 534 × 106</Text>
+          <Text style={styles.sectionTitle}>المعاينة</Text>
+          <Text style={styles.sectionSubtitle}>الشعار في الوسط بحجم أكبر وترويسة أحادية اللون</Text>
           <LetterheadPreview settings={previewSettings} previewWidth={previewWidth} showSizeLabel />
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>بيانات الترويسة</Text>
+          <Text style={styles.sectionTitle}>البيانات العربية</Text>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>اسم الشركة / الصراف</Text>
+            <Text style={styles.inputLabel}>الاسم العربي</Text>
             <TextInput
               value={letterhead.business_name}
               onChangeText={(value) => updateField('business_name', value)}
-              placeholder="مثال: ArtiCode Exchange"
+              placeholder="اسم الشركة"
               style={styles.input}
               textAlign="right"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>الرقم الذي يظهر في الترويسة</Text>
+            <Text style={styles.inputLabel}>الهاتف</Text>
             <TextInput
               value={letterhead.phone_number}
               onChangeText={(value) => updateField('phone_number', value)}
-              placeholder="مثال: +90 535 000 00 00"
+              placeholder="+90 500 000 0000"
               keyboardType="phone-pad"
               style={styles.input}
               textAlign="right"
             />
           </View>
 
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>إظهار الشعار</Text>
-            <Switch
-              value={letterhead.show_logo}
-              onValueChange={(value) => updateField('show_logo', value)}
-              trackColor={{ false: '#D1D5DB', true: '#BAE6FD' }}
-              thumbColor={letterhead.show_logo ? '#0EA5E9' : '#F9FAFB'}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>العنوان العربي</Text>
+            <TextInput
+              value={letterhead.address_ar}
+              onChangeText={(value) => updateField('address_ar', value)}
+              placeholder="إسطنبول - تركيا"
+              style={styles.input}
+              textAlign="right"
+            />
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>English side</Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabelLeft}>English name</Text>
+            <TextInput
+              value={letterhead.english_name}
+              onChangeText={(value) => updateField('english_name', value)}
+              placeholder="Company Name"
+              style={[styles.input, styles.inputLeft]}
+              textAlign="left"
             />
           </View>
 
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>إظهار الرقم</Text>
-            <Switch
-              value={letterhead.show_phone}
-              onValueChange={(value) => updateField('show_phone', value)}
-              trackColor={{ false: '#D1D5DB', true: '#BAE6FD' }}
-              thumbColor={letterhead.show_phone ? '#0EA5E9' : '#F9FAFB'}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabelLeft}>English address</Text>
+            <TextInput
+              value={letterhead.address_en}
+              onChangeText={(value) => updateField('address_en', value)}
+              placeholder="Istanbul - Türkiye"
+              style={[styles.input, styles.inputLeft]}
+              textAlign="left"
             />
           </View>
         </View>
@@ -293,9 +259,9 @@ export default function LetterheadSettingsScreen() {
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardHeaderText}>
               <Text style={styles.sectionTitle}>الشعار</Text>
-              <Text style={styles.sectionSubtitle}>يمكن رفع شعار خاص بالترويسة</Text>
+              <Text style={styles.sectionSubtitle}>يظهر في الوسط وبحجم أكبر</Text>
             </View>
-            <ImageIcon size={24} color="#0EA5E9" />
+            <ImageIcon size={24} color="#111111" />
           </View>
 
           <TouchableOpacity style={styles.uploadButton} onPress={handlePickLogo} disabled={isSaving}>
@@ -305,81 +271,64 @@ export default function LetterheadSettingsScreen() {
 
           {(letterhead.logo_url || pendingLogoUri) && (
             <TouchableOpacity style={styles.removeButton} onPress={handleRemoveLogo} disabled={isSaving}>
-              <Trash2 size={18} color="#EF4444" />
+              <Trash2 size={18} color="#111111" />
               <Text style={styles.removeButtonText}>إزالة الشعار</Text>
             </TouchableOpacity>
           )}
-        </View>
 
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.cardHeaderText}>
-              <Text style={styles.sectionTitle}>الألوان الجاهزة</Text>
-              <Text style={styles.sectionSubtitle}>اختر تصميمًا سريعًا ثم عدّل الألوان إذا أردت</Text>
-            </View>
-            <Palette size={24} color="#0EA5E9" />
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>إظهار الشعار</Text>
+            <Switch
+              value={letterhead.show_logo}
+              onValueChange={(value) => updateField('show_logo', value)}
+              trackColor={{ false: '#D1D5DB', true: '#D1D5DB' }}
+              thumbColor="#111111"
+            />
           </View>
 
-          <View style={styles.presetsGrid}>
-            {LETTERHEAD_COLOR_PRESETS.map((preset) => (
-              <TouchableOpacity
-                key={preset.name}
-                style={[styles.presetCard, { borderColor: preset.border_color }]}
-                onPress={() => applyPreset(preset)}
-              >
-                <View style={styles.presetDots}>
-                  <View style={[styles.presetDot, { backgroundColor: preset.background_color }]} />
-                  <View style={[styles.presetDot, { backgroundColor: preset.primary_color }]} />
-                  <View style={[styles.presetDot, { backgroundColor: preset.accent_color }]} />
-                </View>
-                <Text style={styles.presetName}>{preset.name}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>إظهار الهاتف</Text>
+            <Switch
+              value={letterhead.show_phone}
+              onValueChange={(value) => updateField('show_phone', value)}
+              trackColor={{ false: '#D1D5DB', true: '#D1D5DB' }}
+              thumbColor="#111111"
+            />
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>تعديل الألوان يدويًا</Text>
-          <Text style={styles.sectionSubtitle}>استخدم صيغة HEX مثل #0EA5E9</Text>
-
-          {renderColorInput('لون الخلفية', 'background_color')}
-          {renderColorInput('لون الاسم الرئيسي', 'primary_color')}
-          {renderColorInput('لون الرقم', 'text_color')}
-          {renderColorInput('لون الإطار', 'border_color')}
-          {renderColorInput('لون الشعار الافتراضي', 'accent_color')}
-        </View>
-
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.resetButton} onPress={handleReset} disabled={isSaving}>
-            <RotateCcw size={18} color="#6B7280" />
-            <Text style={styles.resetButtonText}>إعادة الألوان</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={isSaving}>
-            {isSaving ? <ActivityIndicator color="#FFFFFF" /> : <Save size={20} color="#FFFFFF" />}
-            <Text style={styles.saveButtonText}>{isSaving ? 'جاري الحفظ...' : 'حفظ الترويسة'}</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={isSaving}>
+          {isSaving ? <ActivityIndicator color="#FFFFFF" /> : <Save size={20} color="#FFFFFF" />}
+          <Text style={styles.saveButtonText}>{isSaving ? 'جاري الحفظ...' : 'حفظ الترويسة'}</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
+const cardShadow = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.05,
+  shadowRadius: 8,
+  elevation: 2,
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F5F5F5',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F5F5F5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 15,
-    color: '#6B7280',
+    color: '#4B5563',
   },
   header: {
     backgroundColor: '#FFFFFF',
@@ -407,7 +356,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#111827',
+    color: '#111111',
     textAlign: 'right',
   },
   headerSubtitle: {
@@ -428,22 +377,14 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 18,
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...cardShadow,
   },
   card: {
     backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 18,
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...cardShadow,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -459,7 +400,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#111827',
+    color: '#111111',
     textAlign: 'right',
     marginBottom: 4,
   },
@@ -479,32 +420,29 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginBottom: 8,
   },
+  inputLabelLeft: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    textAlign: 'left',
+    marginBottom: 8,
+  },
   input: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAFAFA',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
+    color: '#111111',
     writingDirection: 'rtl',
   },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  switchLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#374151',
+  inputLeft: {
+    writingDirection: 'ltr',
   },
   uploadButton: {
-    backgroundColor: '#0EA5E9',
+    backgroundColor: '#111111',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -518,117 +456,49 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   removeButton: {
-    marginTop: 10,
+    marginTop: 12,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
     paddingVertical: 12,
-    backgroundColor: '#FEF2F2',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
+    backgroundColor: '#FFFFFF',
   },
   removeButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#EF4444',
+    color: '#111111',
   },
-  presetsGrid: {
+  switchRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  presetCard: {
-    width: '47%',
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: '#FFFFFF',
-  },
-  presetDots: {
-    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    marginTop: 8,
   },
-  presetDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  presetName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-    textAlign: 'right',
-  },
-  colorInputRow: {
-    marginTop: 12,
-  },
-  colorInputLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#374151',
-    textAlign: 'right',
-    marginBottom: 8,
-  },
-  colorInputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-  },
-  colorPreviewDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginRight: 8,
-  },
-  colorInput: {
-    flex: 1,
-    paddingVertical: 12,
+  switchLabel: {
     fontSize: 15,
-    color: '#111827',
+    fontWeight: '700',
+    color: '#374151',
   },
-  actionsRow: {
+  saveButton: {
+    backgroundColor: '#111111',
+    borderRadius: 14,
+    minHeight: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
     flexDirection: 'row',
     gap: 10,
     marginTop: 4,
   },
-  saveButton: {
-    flex: 1,
-    backgroundColor: '#0EA5E9',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
   saveButtonText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
-  },
-  resetButton: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  resetButtonText: {
-    color: '#6B7280',
-    fontSize: 15,
-    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

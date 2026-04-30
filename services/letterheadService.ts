@@ -10,13 +10,10 @@ export interface LetterheadSettings {
   user_id?: string;
   logo_url: string | null;
   business_name: string;
+  english_name: string;
   phone_number: string;
-  background_color: string;
-  primary_color: string;
-  text_color: string;
-  border_color: string;
-  accent_color: string;
-  layout: 'logo_right';
+  address_ar: string;
+  address_en: string;
   show_logo: boolean;
   show_phone: boolean;
   created_at?: string;
@@ -25,64 +22,17 @@ export interface LetterheadSettings {
 
 export const DEFAULT_LETTERHEAD_SETTINGS: LetterheadSettings = {
   logo_url: null,
-  business_name: 'ArtiCode',
+  business_name: 'اسم الشركة',
+  english_name: 'Company Name',
   phone_number: '',
-  background_color: '#FFFFFF',
-  primary_color: '#111827',
-  text_color: '#374151',
-  border_color: '#E5E7EB',
-  accent_color: '#0EA5E9',
-  layout: 'logo_right',
+  address_ar: '',
+  address_en: '',
   show_logo: true,
   show_phone: true,
 };
 
-export const LETTERHEAD_COLOR_PRESETS = [
-  {
-    name: 'أزرق هادئ',
-    background_color: '#FFFFFF',
-    primary_color: '#0F172A',
-    text_color: '#475569',
-    border_color: '#BAE6FD',
-    accent_color: '#0EA5E9',
-  },
-  {
-    name: 'ذهبي رسمي',
-    background_color: '#FFFBEB',
-    primary_color: '#78350F',
-    text_color: '#92400E',
-    border_color: '#FCD34D',
-    accent_color: '#D97706',
-  },
-  {
-    name: 'أخضر مالي',
-    background_color: '#F0FDF4',
-    primary_color: '#064E3B',
-    text_color: '#047857',
-    border_color: '#86EFAC',
-    accent_color: '#10B981',
-  },
-  {
-    name: 'أسود فاخر',
-    background_color: '#111827',
-    primary_color: '#FFFFFF',
-    text_color: '#D1D5DB',
-    border_color: '#374151',
-    accent_color: '#F59E0B',
-  },
-  {
-    name: 'رمادي بسيط',
-    background_color: '#F9FAFB',
-    primary_color: '#111827',
-    text_color: '#4B5563',
-    border_color: '#D1D5DB',
-    accent_color: '#6B7280',
-  },
-];
-
-function sanitizeHexColor(value: string, fallback: string): string {
-  const trimmed = value.trim();
-  return /^#[0-9A-Fa-f]{6}$/.test(trimmed) ? trimmed.toUpperCase() : fallback;
+function normalizeText(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
 }
 
 export function normalizeLetterheadSettings(
@@ -91,27 +41,12 @@ export function normalizeLetterheadSettings(
   return {
     ...DEFAULT_LETTERHEAD_SETTINGS,
     ...(settings || {}),
-    background_color: sanitizeHexColor(
-      settings?.background_color || DEFAULT_LETTERHEAD_SETTINGS.background_color,
-      DEFAULT_LETTERHEAD_SETTINGS.background_color
-    ),
-    primary_color: sanitizeHexColor(
-      settings?.primary_color || DEFAULT_LETTERHEAD_SETTINGS.primary_color,
-      DEFAULT_LETTERHEAD_SETTINGS.primary_color
-    ),
-    text_color: sanitizeHexColor(
-      settings?.text_color || DEFAULT_LETTERHEAD_SETTINGS.text_color,
-      DEFAULT_LETTERHEAD_SETTINGS.text_color
-    ),
-    border_color: sanitizeHexColor(
-      settings?.border_color || DEFAULT_LETTERHEAD_SETTINGS.border_color,
-      DEFAULT_LETTERHEAD_SETTINGS.border_color
-    ),
-    accent_color: sanitizeHexColor(
-      settings?.accent_color || DEFAULT_LETTERHEAD_SETTINGS.accent_color,
-      DEFAULT_LETTERHEAD_SETTINGS.accent_color
-    ),
-    layout: 'logo_right',
+    logo_url: typeof settings?.logo_url === 'string' ? settings.logo_url : null,
+    business_name: normalizeText(settings?.business_name, DEFAULT_LETTERHEAD_SETTINGS.business_name),
+    english_name: normalizeText(settings?.english_name, DEFAULT_LETTERHEAD_SETTINGS.english_name),
+    phone_number: normalizeText(settings?.phone_number, ''),
+    address_ar: normalizeText(settings?.address_ar, ''),
+    address_en: normalizeText(settings?.address_en, ''),
     show_logo: settings?.show_logo ?? DEFAULT_LETTERHEAD_SETTINGS.show_logo,
     show_phone: settings?.show_phone ?? DEFAULT_LETTERHEAD_SETTINGS.show_phone,
   };
@@ -142,13 +77,10 @@ export async function saveLetterheadSettings(
     user_id: userId,
     logo_url: normalized.logo_url,
     business_name: normalized.business_name.trim() || DEFAULT_LETTERHEAD_SETTINGS.business_name,
+    english_name: normalized.english_name.trim() || DEFAULT_LETTERHEAD_SETTINGS.english_name,
     phone_number: normalized.phone_number.trim(),
-    background_color: normalized.background_color,
-    primary_color: normalized.primary_color,
-    text_color: normalized.text_color,
-    border_color: normalized.border_color,
-    accent_color: normalized.accent_color,
-    layout: normalized.layout,
+    address_ar: normalized.address_ar.trim(),
+    address_en: normalized.address_en.trim(),
     show_logo: normalized.show_logo,
     show_phone: normalized.show_phone,
     updated_at: new Date().toISOString(),
@@ -179,7 +111,7 @@ export async function pickLetterheadLogoFromGallery(): Promise<string | null> {
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     allowsEditing: true,
     aspect: [1, 1],
-    quality: 0.8,
+    quality: 0.9,
     base64: false,
   });
 
@@ -236,7 +168,6 @@ export async function deleteLetterheadLogo(logoUrl: string | null): Promise<void
     if (markerIndex === -1) return;
 
     const filePath = decodeURIComponent(logoUrl.substring(markerIndex + publicMarker.length));
-
     await supabase.storage.from(BUCKET_NAME).remove([filePath]);
   } catch (error) {
     console.warn('[letterheadService] Could not delete old logo:', error);

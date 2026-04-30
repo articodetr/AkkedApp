@@ -15,21 +15,13 @@ type ReceiptHeaderContext = {
 type StoredLetterheadSettings = {
   logo_url?: string | null;
   business_name?: string | null;
+  english_name?: string | null;
   phone_number?: string | null;
-  background_color?: string | null;
-  primary_color?: string | null;
-  text_color?: string | null;
-  border_color?: string | null;
-  accent_color?: string | null;
+  address_ar?: string | null;
+  address_en?: string | null;
   show_logo?: boolean | null;
   show_phone?: boolean | null;
 };
-
-const DEFAULT_LETTERHEAD_BACKGROUND_COLOR = '#FFFFFF';
-const DEFAULT_LETTERHEAD_PRIMARY_COLOR = '#111827';
-const DEFAULT_LETTERHEAD_TEXT_COLOR = '#374151';
-const DEFAULT_LETTERHEAD_BORDER_COLOR = '#E5E7EB';
-const DEFAULT_LETTERHEAD_ACCENT_COLOR = '#0EA5E9';
 
 function escapeXml(value?: string | null): string {
   return String(value || '')
@@ -38,11 +30,6 @@ function escapeXml(value?: string | null): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
-}
-
-function sanitizeHexColor(color: string | null | undefined, fallback: string): string {
-  const value = (color || '').trim();
-  return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(value) ? value : fallback;
 }
 
 async function getBundledDefaultHeader(): Promise<string> {
@@ -136,52 +123,31 @@ function buildGeneratedCustomerHeaderSvg(
   customer: Partial<Customer>,
   logoHref?: string | null
 ): string {
-  const primary = sanitizeHexColor(customer.receipt_header_primary_color, '#0F766E');
-  const secondary = sanitizeHexColor(customer.receipt_header_secondary_color, '#115E59');
-  const textColor = sanitizeHexColor(customer.receipt_header_text_color, '#FFFFFF');
-
-  const leftTitle = customer.receipt_header_left_title?.trim() || customer.name || '';
-  const leftSubtitle =
-    customer.receipt_header_left_subtitle?.trim() ||
-    (customer.phone ? customer.phone : '');
-
-  const rightTitle =
-    customer.receipt_header_right_title?.trim() ||
-    (customer.account_number ? `رقم الحساب: ${customer.account_number}` : '');
-
-  const rightSubtitle = customer.receipt_header_right_subtitle?.trim() || '';
+  const arabicName = escapeXml(customer.name || 'اسم العميل');
+  const englishName = escapeXml(customer.name || 'Customer Name');
+  const phoneNumber = escapeXml(customer.phone || '');
+  const accountNumber = escapeXml(customer.account_number || '');
+  const initials = escapeXml((customer.name?.trim()?.charAt(0) || 'C').toUpperCase());
 
   return `
-  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="405" viewBox="0 0 2048 405">
-    <defs>
-      <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="${primary}" />
-        <stop offset="100%" stop-color="${secondary}" />
-      </linearGradient>
-      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="rgba(0,0,0,0.25)" />
-      </filter>
-    </defs>
+  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="620" viewBox="0 0 2048 620">
+    <rect width="2048" height="620" fill="#ffffff" />
+    <text x="170" y="188" font-size="62" font-weight="800" fill="#111111">${englishName}</text>
+    ${phoneNumber ? `<text x="170" y="282" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
+    ${accountNumber ? `<text x="170" y="366" font-size="34" font-weight="500" fill="#6B7280">Account: ${accountNumber}</text>` : ``}
 
-    <rect width="2048" height="405" rx="0" fill="url(#bg)" />
+    <text x="1878" y="150" text-anchor="end" font-size="62" font-weight="800" fill="#111111">${arabicName}</text>
+    ${phoneNumber ? `<text x="1878" y="222" text-anchor="end" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
+    ${accountNumber ? `<text x="1878" y="286" text-anchor="end" font-size="34" font-weight="500" fill="#6B7280">${accountNumber}</text>` : ``}
 
-    <rect x="80" y="70" width="560" height="265" rx="28" fill="rgba(255,255,255,0.10)" />
-    <rect x="1408" y="70" width="560" height="265" rx="28" fill="rgba(255,255,255,0.10)" />
-
-    <circle cx="1024" cy="202.5" r="126" fill="rgba(255,255,255,0.12)" />
-    <circle cx="1024" cy="202.5" r="108" fill="#ffffff" filter="url(#shadow)" />
-
+    <circle cx="1024" cy="218" r="150" fill="#ffffff" stroke="#111111" stroke-width="6" />
     ${
       logoHref
-        ? `<image href="${logoHref}" x="932" y="110.5" width="184" height="184" preserveAspectRatio="xMidYMid meet" />`
-        : `<text x="1024" y="214" text-anchor="middle" font-size="44" font-weight="700" fill="${primary}">LOGO</text>`
+        ? `<image href="${logoHref}" x="894" y="88" width="260" height="260" preserveAspectRatio="xMidYMid meet" />`
+        : `<text x="1024" y="236" text-anchor="middle" font-size="118" font-weight="700" fill="#111111">${initials}</text>`
     }
 
-    <text x="140" y="155" font-size="52" font-weight="700" fill="${textColor}">${escapeXml(leftTitle)}</text>
-    <text x="140" y="225" font-size="34" font-weight="500" fill="${textColor}">${escapeXml(leftSubtitle)}</text>
-
-    <text x="1908" y="155" text-anchor="end" font-size="52" font-weight="700" fill="${textColor}">${escapeXml(rightTitle)}</text>
-    <text x="1908" y="225" text-anchor="end" font-size="34" font-weight="500" fill="${textColor}">${escapeXml(rightSubtitle)}</text>
+    <line x1="150" y1="548" x2="1898" y2="548" stroke="#BDBDBD" stroke-width="3.5" />
   </svg>
   `;
 }
@@ -198,55 +164,39 @@ function buildStoredLetterheadHeaderSvg(
   settings: StoredLetterheadSettings,
   logoHref?: string | null
 ): string {
-  const background = sanitizeHexColor(
-    settings.background_color,
-    DEFAULT_LETTERHEAD_BACKGROUND_COLOR
+  const arabicName = escapeXml(settings.business_name?.trim() || 'اسم الشركة');
+  const englishName = escapeXml(
+    settings.english_name?.trim() || settings.business_name?.trim() || 'Company Name'
   );
-  const primary = sanitizeHexColor(
-    settings.primary_color,
-    DEFAULT_LETTERHEAD_PRIMARY_COLOR
-  );
-  const textColor = sanitizeHexColor(
-    settings.text_color,
-    DEFAULT_LETTERHEAD_TEXT_COLOR
-  );
-  const border = sanitizeHexColor(
-    settings.border_color,
-    DEFAULT_LETTERHEAD_BORDER_COLOR
-  );
-  const accent = sanitizeHexColor(
-    settings.accent_color,
-    DEFAULT_LETTERHEAD_ACCENT_COLOR
-  );
-  const businessName = escapeXml(settings.business_name?.trim() || 'ArtiCode');
   const phoneNumber = escapeXml(settings.phone_number?.trim() || '');
+  const addressAr = escapeXml(settings.address_ar?.trim() || '');
+  const addressEn = escapeXml(settings.address_en?.trim() || '');
   const showLogo = settings.show_logo ?? true;
   const showPhone = settings.show_phone ?? true;
   const initials = escapeXml((settings.business_name?.trim()?.charAt(0) || 'A').toUpperCase());
 
   return `
-  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="405" viewBox="0 0 2048 405">
-    <defs>
-      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="rgba(0,0,0,0.18)" />
-      </filter>
-    </defs>
-    <rect width="2048" height="405" fill="transparent" />
-    <rect x="10" y="10" width="2028" height="385" rx="42" fill="${background}" stroke="${border}" stroke-width="10" filter="url(#shadow)" />
-    <rect x="590" y="120" width="1180" height="14" rx="7" fill="${accent}" fill-opacity="0.14" />
-    <rect x="920" y="275" width="850" height="12" rx="6" fill="${accent}" fill-opacity="0.08" />
+  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="620" viewBox="0 0 2048 620">
+    <rect width="2048" height="620" fill="#ffffff" />
+    <rect x="24" y="24" width="2000" height="572" rx="24" fill="#ffffff" stroke="#D4D4D4" stroke-width="2.5" />
+
+    <text x="170" y="188" font-size="62" font-weight="800" fill="#111111">${englishName}</text>
+    ${showPhone && phoneNumber ? `<text x="170" y="282" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
+    ${addressEn ? `<text x="170" y="366" font-size="34" font-weight="500" fill="#6B7280">${addressEn}</text>` : ``}
+
+    <text x="1878" y="150" text-anchor="end" font-size="62" font-weight="800" fill="#111111">${arabicName}</text>
+    ${showPhone && phoneNumber ? `<text x="1878" y="222" text-anchor="end" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
+    ${addressAr ? `<text x="1878" y="286" text-anchor="end" font-size="34" font-weight="500" fill="#6B7280">${addressAr}</text>` : ``}
+
     ${showLogo ? `
-      <circle cx="255" cy="202.5" r="108" fill="${accent}" fill-opacity="0.10" stroke="${accent}" stroke-width="6" />
+      <circle cx="1024" cy="218" r="150" fill="#ffffff" stroke="#111111" stroke-width="6" />
       ${logoHref
-        ? `<image href="${logoHref}" x="155" y="102.5" width="200" height="200" preserveAspectRatio="xMidYMid meet" />`
-        : `<text x="255" y="226" text-anchor="middle" font-size="96" font-weight="700" fill="${accent}">${initials}</text>`
+        ? `<image href="${logoHref}" x="894" y="88" width="260" height="260" preserveAspectRatio="xMidYMid meet" />`
+        : `<text x="1024" y="236" text-anchor="middle" font-size="118" font-weight="700" fill="#111111">${initials}</text>`
       }
     ` : ``}
-    <text x="1810" y="186" text-anchor="end" font-size="82" font-weight="800" fill="${primary}">${businessName}</text>
-    ${showPhone && phoneNumber
-      ? `<text x="1810" y="266" text-anchor="end" font-size="44" font-weight="600" fill="${textColor}">رقم الهاتف: ${phoneNumber}</text>`
-      : ``
-    }
+
+    <line x1="150" y1="548" x2="1898" y2="548" stroke="#BDBDBD" stroke-width="3.5" />
   </svg>
   `;
 }
@@ -267,7 +217,7 @@ async function getStoredLetterheadHeaderBase64(
   try {
     const { data, error } = await supabase
       .from('letterhead_settings')
-      .select('logo_url, business_name, phone_number, background_color, primary_color, text_color, border_color, accent_color, show_logo, show_phone')
+      .select('logo_url, business_name, english_name, phone_number, address_ar, address_en, show_logo, show_phone')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -285,6 +235,7 @@ async function getStoredLetterheadHeaderBase64(
     return null;
   }
 }
+
 async function getAppReceiptLogoBase64(forceRefresh = false): Promise<string> {
   try {
     const { data: settings, error } = await supabase
@@ -323,71 +274,6 @@ async function getAppReceiptLogoBase64(forceRefresh = false): Promise<string> {
   }
 }
 
-async function getUserLetterheadHeaderBase64(
-  userId?: string | null
-): Promise<string | null> {
-  if (!userId) {
-    return null;
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('letterhead_settings')
-      .select(
-        'logo_url, business_name, phone_number, background_color, primary_color, text_color, border_color, accent_color, show_logo, show_phone'
-      )
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error || !data) {
-      return null;
-    }
-
-    let centerLogo: string | null = null;
-
-    if (data.show_logo && data.logo_url) {
-      centerLogo = await downloadAndConvertImageToBase64(data.logo_url);
-    }
-
-    const primary = data.primary_color || '#111827';
-    const accent = data.accent_color || primary;
-    const textColor = data.text_color || '#FFFFFF';
-    const businessName = escapeXml(data.business_name || 'ArtiCode');
-    const phoneNumber = escapeXml(data.phone_number || '');
-
-    const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="405" viewBox="0 0 2048 405">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="${primary}" />
-      <stop offset="100%" stop-color="${accent}" />
-    </linearGradient>
-  </defs>
-  <rect width="2048" height="405" fill="url(#bg)" />
-  <rect x="80" y="70" width="560" height="265" rx="28" fill="rgba(255,255,255,0.10)" />
-  <rect x="1408" y="70" width="560" height="265" rx="28" fill="rgba(255,255,255,0.10)" />
-  <circle cx="1024" cy="202.5" r="108" fill="#ffffff" />
-  ${
-    centerLogo
-      ? `<image href="${centerLogo}" x="932" y="110.5" width="184" height="184" preserveAspectRatio="xMidYMid meet" />`
-      : ''
-  }
-  <text x="140" y="155" font-size="52" font-weight="700" fill="${textColor}">${businessName}</text>
-  ${
-    data.show_phone && phoneNumber
-      ? `<text x="140" y="225" font-size="34" font-weight="500" fill="${textColor}">${phoneNumber}</text>`
-      : ''
-  }
-</svg>
-    `;
-
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  } catch (error) {
-    console.error('[logoHelper] Error in getUserLetterheadHeaderBase64:', error);
-    return null;
-  }
-}
-
 export async function getCustomerReceiptHeaderBase64(
   customer?: Partial<Customer> | null,
   forceRefresh = false,
@@ -408,7 +294,6 @@ export async function getCustomerReceiptHeaderBase64(
 
     if (mode === 'full_banner' && customer.receipt_header_banner_url) {
       const banner = await downloadAndConvertImageToBase64(customer.receipt_header_banner_url);
-
       return banner || (await getAppReceiptLogoBase64(forceRefresh));
     }
 
@@ -441,6 +326,7 @@ export async function getCustomerReceiptHeaderBase64(
     return await getAppReceiptLogoBase64(forceRefresh);
   }
 }
+
 export async function getReceiptLogoBase64(
   forceRefresh = false,
   customer?: Partial<Customer> | null,
@@ -448,6 +334,7 @@ export async function getReceiptLogoBase64(
 ): Promise<string> {
   return getCustomerReceiptHeaderBase64(customer, forceRefresh, context);
 }
+
 export async function getLogoBase64(
   forceRefresh = false,
   customer?: Partial<Customer> | null,
@@ -455,6 +342,7 @@ export async function getLogoBase64(
 ): Promise<string> {
   return getCustomerReceiptHeaderBase64(customer, forceRefresh, context);
 }
+
 export async function getLogoUrl(): Promise<string> {
   try {
     const defaultAsset = Asset.fromModule(DEFAULT_RECEIPT_HEADER);

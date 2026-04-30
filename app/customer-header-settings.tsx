@@ -61,6 +61,12 @@ export default function CustomerHeaderSettingsScreen() {
   const [textColor, setTextColor] = useState('#FFFFFF');
 
   useEffect(() => {
+    if (!customerId) {
+      Alert.alert('خطأ', 'يجب اختيار عميل أولاً قبل فتح ترويسة العميل');
+      router.back();
+      return;
+    }
+
     loadCustomer();
   }, [customerId, currentUser?.userId]);
 
@@ -136,13 +142,17 @@ export default function CustomerHeaderSettingsScreen() {
 
   const handleSave = async () => {
     try {
-      if (!customer) {
-      throw new Error('لم يتم تحميل بيانات العميل بعد');
-    }
+      if (!customerId) {
+        throw new Error('يجب اختيار عميل أولاً قبل حفظ الترويسة');
+      }
 
-    if (!currentUser?.userId) {
-      throw new Error('لم يتم العثور على بيانات الحساب الحالي');
-    }
+      if (!customer) {
+        throw new Error('لم يتم تحميل بيانات العميل بعد');
+      }
+
+      if (!currentUser?.userId) {
+        throw new Error('لم يتم العثور على بيانات الحساب الحالي');
+      }
 
       setSaving(true);
 
