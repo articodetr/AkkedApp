@@ -27,61 +27,50 @@ export function buildUserScopeFilter(
 
 /**
  * Main app customer filter.
- * Keep customer pages owner-only to avoid showing duplicate/foreign records.
+ *
+ * IMPORTANT:
+ * Profit/loss accounts must stay private to their owner.
+ * We do NOT append any global profit/loss conditions here, because doing so
+ * would make accounts like PROFIT_LOSS_ACCOUNT appear shared across users.
+ *
+ * The includeProfitLoss argument is kept only for backward compatibility.
  */
 export function buildScopedCustomerFilter(
   userId: string,
-  includeProfitLoss: boolean = false,
+  _includeProfitLoss: boolean = false,
 ): string {
-  const filters = [buildOwnedCustomerFilter(userId)];
-
-  if (includeProfitLoss) {
-    filters.push('phone.eq.PROFIT_LOSS_ACCOUNT');
-    filters.push('is_profit_loss_account.eq.true');
-  }
-
-  return filters.join(',');
+  return buildOwnedCustomerFilter(userId);
 }
 
 /**
  * Statistics/approvals filter.
- * This must include both owned customers and customers where the current user is
- * the linked counterparty, otherwise pending approvals and cash flow can appear
- * as zero even when movements exist.
+ *
+ * This must include owned customers and linked-counterparty customers so
+ * pending approvals and linked movements still appear correctly.
+ *
+ * We intentionally do NOT add any standalone profit/loss conditions.
+ * If a profit/loss customer belongs to the current user, it is already covered
+ * by the normal user scope.
  */
 export function buildStatisticsCustomerFilter(
   userId: string,
-  includeProfitLoss: boolean = true,
+  _includeProfitLoss: boolean = true,
 ): string {
-  const filters = [buildUserScopeFilter(userId)];
-
-  if (includeProfitLoss) {
-    filters.push('phone.eq.PROFIT_LOSS_ACCOUNT');
-    filters.push('is_profit_loss_account.eq.true');
-  }
-
-  return filters.join(',');
+  return buildUserScopeFilter(userId);
 }
 
 /**
  * Read/detail customer filter.
- * Use this when a user opens a specific customer/movement coming from
- * notifications or linked-account approvals. It allows the record when the
- * current user is either the owner or the linked counterparty, while keeping the
- * normal customer list owner-only.
+ *
+ * Used when opening a specific record from notifications or approvals.
+ * Keeps read access aligned with user scope without leaking global
+ * profit/loss accounts.
  */
 export function buildReadableCustomerFilter(
   userId: string,
-  includeProfitLoss: boolean = false,
+  _includeProfitLoss: boolean = false,
 ): string {
-  const filters = [buildUserScopeFilter(userId)];
-
-  if (includeProfitLoss) {
-    filters.push('phone.eq.PROFIT_LOSS_ACCOUNT');
-    filters.push('is_profit_loss_account.eq.true');
-  }
-
-  return filters.join(',');
+  return buildUserScopeFilter(userId);
 }
 
 export async function fetchAccessibleCustomers(

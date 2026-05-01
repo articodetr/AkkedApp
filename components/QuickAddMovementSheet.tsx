@@ -12,14 +12,7 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import {
-  X,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Plus,
-  Save,
-  Printer,
-} from 'lucide-react-native';
+import { X, ArrowDownCircle, ArrowUpCircle, Save, Printer } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
@@ -57,37 +50,21 @@ export default function QuickAddMovementSheet({
   const { triggerRefresh } = useDataRefresh();
   const { currentUser } = useAuth();
   const insets = useSafeAreaInsets();
-  const [movementType, setMovementType] = useState<
-    'incoming' | 'outgoing' | ''
-  >('');
+
+  const [movementType, setMovementType] = useState<'incoming' | 'outgoing' | ''>('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<Currency>('USD');
   const [notes, setNotes] = useState('');
-  const [showCommission, setShowCommission] = useState(false);
-  const [commission, setCommission] = useState('');
-  const [commissionCurrency, setCommissionCurrency] = useState<Currency>('USD');
   const [isLoading, setIsLoading] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
   useEffect(() => {
-    console.log('[QuickAddMovementSheet] visible changed:', visible);
     if (visible) {
       loadLastUsedCurrency();
     } else {
       resetForm();
     }
   }, [visible]);
-
-  useEffect(() => {
-    setCommissionCurrency(currency);
-  }, [currency]);
-
-  useEffect(() => {
-    if (movementType === 'outgoing') {
-      setShowCommission(false);
-      setCommission('');
-    }
-  }, [movementType]);
 
   const loadLastUsedCurrency = async () => {
     try {
@@ -112,8 +89,6 @@ export default function QuickAddMovementSheet({
     setMovementType('');
     setAmount('');
     setNotes('');
-    setShowCommission(false);
-    setCommission('');
   };
 
   const getCurrencySymbol = (code: string) => {
@@ -123,27 +98,18 @@ export default function QuickAddMovementSheet({
 
   const calculateNewBalance = () => {
     const amountNum = parseFloat(amount) || 0;
-    const commissionAmount = movementType === 'incoming' && commission ? parseFloat(commission) : 0;
-    const currentBalance =
-      currentBalances.find((b) => b.currency === currency)?.balance || 0;
-
-    let actualAmount = amountNum;
-
-    // إذا كانت العمولة من نفس العملة، نطبق الخصم/الإضافة
-    if (commissionAmount > 0 && commissionCurrency === currency && movementType === 'incoming') {
-      actualAmount = amountNum - commissionAmount;
-    }
+    const currentBalance = currentBalances.find((b) => b.currency === currency)?.balance || 0;
 
     if (requiresApproval && movementType) {
       return currentBalance;
     }
 
     if (movementType === 'incoming') {
-      return currentBalance + actualAmount;
+      return currentBalance + amountNum;
     }
 
     if (movementType === 'outgoing') {
-      return currentBalance - actualAmount;
+      return currentBalance - amountNum;
     }
 
     return currentBalance;
@@ -151,12 +117,16 @@ export default function QuickAddMovementSheet({
 
   const formatBalance = (balance: number) => {
     const absBalance = Math.abs(balance);
+
     if (balance > 0) {
       return `له ${absBalance.toFixed(2)} ${getCurrencySymbol(currency)}`;
-    } else if (balance < 0) {
+    }
+
+    if (balance < 0) {
       return `عليه ${absBalance.toFixed(2)} ${getCurrencySymbol(currency)}`;
     }
-    return `متساوي`;
+
+    return 'متساوي';
   };
 
   const isPendingApproval = requiresApproval && !!movementType;
@@ -174,55 +144,34 @@ export default function QuickAddMovementSheet({
       return;
     }
 
-    if (commission && parseFloat(commission) < 0) {
-      Alert.alert('خطأ', 'العمولة لا يمكن أن تكون سالبة');
-      return;
-    }
-
-    if (commission && parseFloat(commission) >= parseFloat(amount)) {
-      Alert.alert('خطأ', 'العمولة لا يمكن أن تكون أكبر من أو تساوي المبلغ');
-      return;
-    }
-
     if (!trimmedNotes) {
       Alert.alert('خطأ', 'الملاحظة مطلوبة لكل حركة');
       return;
     }
 
     setIsLoading(true);
+
     try {
       if (!currentUser) {
         Alert.alert('خطأ', 'يجب تسجيل الدخول أولاً');
         return;
       }
 
-      // حساب المبلغ الفعلي بعد خصم/إضافة العمولة
-      const baseAmount = parseFloat(amount);
-      const commissionAmount = movementType === 'incoming' && commission ? parseFloat(commission) : 0;
-      let actualAmount = baseAmount;
+      const actualAmount = parseFloat(amount);
 
-      // إذا كانت العمولة من نفس العملة، نطبق الخصم/الإضافة
-      if (commissionAmount > 0 && commissionCurrency === currency && movementType === 'incoming') {
-        // له: نخصم العمولة من المبلغ
-        actualAmount = baseAmount - commissionAmount;
-      }
-
-      const { data: insertedData, error } = await supabase.rpc(
-        'insert_movement_with_user',
-        {
-          p_user_name: currentUser.userName,
-          p_customer_id: customerId,
-          p_movement_type: movementType,
-          p_amount: actualAmount,
-          p_currency: currency,
-          p_notes: trimmedNotes,
-          p_sender_name: movementType === 'outgoing' ? customerName : 'علي هادي علي الرازحي',
-          p_beneficiary_name: movementType === 'outgoing' ? 'علي هادي علي الرازحي' : customerName,
-          p_commission: movementType === 'incoming' && commission ? parseFloat(commission) : null,
-          p_commission_currency: commissionCurrency,
-          p_commission_recipient_id: null,
-        }
-      );
+      const { data: insertedData, error } = await supabase.rpc('insert_movement_with_user', {
+        p_user_name: currentUser.userName,
+        p_customer_id: customerId,
+        p_movement_type: movementType,
+        p_amount: actualAmount,
+        p_currency: currency,
+        p_notes: trimmedNotes,
+        p_sender_name: movementType === 'outgoing' ? customerName : 'علي هادي علي الرازحي',
+        p_beneficiary_name: movementType === 'outgoing' ? 'علي هادي علي الرازحي' : customerName,
+        p_commission: null,
+        p_commission_currency: currency,
+        p_commission_recipient_id: null,
+      });
 
       if (error) throw error;
 
@@ -246,8 +195,8 @@ export default function QuickAddMovementSheet({
           pathname: '/receipt-preview',
           params: {
             movementId: movement.id,
-            customerName: customerName,
-            customerAccountNumber: customerAccountNumber,
+            customerName,
+            customerAccountNumber,
           },
         });
       } else {
@@ -266,308 +215,197 @@ export default function QuickAddMovementSheet({
     }
   };
 
-  const currentBalance =
-    currentBalances.find((b) => b.currency === currency)?.balance || 0;
+  const currentBalance = currentBalances.find((b) => b.currency === currency)?.balance || 0;
   const newBalance = calculateNewBalance();
 
   return (
     <>
-      <Modal
-        visible={visible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={onClose}
-      >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={onClose}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.sheetContainer}
-            onPress={(e) => e.stopPropagation()}
           >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 20}
-              style={styles.keyboardView}
-            >
-              <View
-                style={[
-                  styles.sheet,
-                  { paddingBottom: Math.max(insets.bottom, 16) },
-                ]}
-              >
-                <View style={styles.header}>
-                  <TouchableOpacity
-                    onPress={onClose}
-                    style={styles.closeButton}
-                  >
-                    <X size={24} color="#6B7280" />
-                  </TouchableOpacity>
-                  <Text style={styles.headerTitle}>إضافة حركة</Text>
-                  <View style={{ width: 32 }} />
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()} style={styles.sheet}>
+              <View style={styles.header}>
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <X size={24} color="#6B7280" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>إضافة حركة</Text>
+                <View style={{ width: 32 }} />
+              </View>
+
+              <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>
+                    نوع الحركة <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={styles.typeButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeButton,
+                        movementType === 'outgoing' && styles.typeButtonActiveRed,
+                      ]}
+                      onPress={() => setMovementType('outgoing')}
+                    >
+                      <ArrowDownCircle
+                        size={28}
+                        color={movementType === 'outgoing' ? '#FFFFFF' : '#EF4444'}
+                      />
+                      <Text
+                        style={[
+                          styles.typeButtonText,
+                          { color: movementType === 'outgoing' ? '#FFFFFF' : '#111827' },
+                        ]}
+                      >
+                        عليه
+                      </Text>
+                      <Text
+                        style={[
+                          styles.typeButtonSubtext,
+                          { color: movementType === 'outgoing' ? '#FEE2E2' : '#6B7280' },
+                        ]}
+                      >
+                        قبض
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.typeButton,
+                        movementType === 'incoming' && styles.typeButtonActiveGreen,
+                      ]}
+                      onPress={() => setMovementType('incoming')}
+                    >
+                      <ArrowUpCircle
+                        size={28}
+                        color={movementType === 'incoming' ? '#FFFFFF' : '#10B981'}
+                      />
+                      <Text
+                        style={[
+                          styles.typeButtonText,
+                          { color: movementType === 'incoming' ? '#FFFFFF' : '#111827' },
+                        ]}
+                      >
+                        له
+                      </Text>
+                      <Text
+                        style={[
+                          styles.typeButtonSubtext,
+                          { color: movementType === 'incoming' ? '#D1FAE5' : '#6B7280' },
+                        ]}
+                      >
+                        صرف
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
-                <ScrollView
-                  style={styles.scrollView}
-                  contentContainerStyle={[
-                    styles.content,
-                    { paddingBottom: 120 + insets.bottom },
-                  ]}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                  nestedScrollEnabled={true}
-                  scrollEventThrottle={16}
-                >
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
-                      نوع الحركة <Text style={styles.required}>*</Text>
-                    </Text>
-                    <View style={styles.typeButtons}>
-                      <TouchableOpacity
-                        style={[
-                          styles.typeButton,
-                          movementType === 'outgoing' &&
-                            styles.typeButtonActiveRed,
-                        ]}
-                        onPress={() => setMovementType('outgoing')}
-                      >
-                        <ArrowDownCircle
-                          size={24}
-                          color={
-                            movementType === 'outgoing' ? '#FFFFFF' : '#EF4444'
-                          }
-                        />
-                        <Text
-                          style={[
-                            styles.typeButtonText,
-                            {
-                              color:
-                                movementType === 'outgoing'
-                                  ? '#FFFFFF'
-                                  : '#EF4444',
-                            },
-                          ]}
-                        >
-                          عليه
-                        </Text>
-                        <Text
-                          style={[
-                            styles.typeButtonSubtext,
-                            {
-                              color:
-                                movementType === 'outgoing'
-                                  ? '#FECACA'
-                                  : '#FCA5A5',
-                            },
-                          ]}
-                        >
-                          قبض
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.typeButton,
-                          movementType === 'incoming' &&
-                            styles.typeButtonActiveGreen,
-                        ]}
-                        onPress={() => setMovementType('incoming')}
-                      >
-                        <ArrowUpCircle
-                          size={24}
-                          color={
-                            movementType === 'incoming' ? '#FFFFFF' : '#10B981'
-                          }
-                        />
-                        <Text
-                          style={[
-                            styles.typeButtonText,
-                            {
-                              color:
-                                movementType === 'incoming'
-                                  ? '#FFFFFF'
-                                  : '#10B981',
-                            },
-                          ]}
-                        >
-                          له
-                        </Text>
-                        <Text
-                          style={[
-                            styles.typeButtonSubtext,
-                            {
-                              color:
-                                movementType === 'incoming'
-                                  ? '#D1FAE5'
-                                  : '#6EE7B7',
-                            },
-                          ]}
-                        >
-                          صرف
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
-                      المبلغ <Text style={styles.required}>*</Text>
-                    </Text>
-                    <View style={styles.amountRow}>
-                      <TouchableOpacity
-                        style={styles.currencyButton}
-                        onPress={() => setShowCurrencyPicker(true)}
-                      >
-                        <Text style={styles.currencyCode}>{currency}</Text>
-                        <Text style={styles.currencySymbol}>
-                          {getCurrencySymbol(currency)}
-                        </Text>
-                      </TouchableOpacity>
-                      <TextInput
-                        style={styles.amountInput}
-                        value={amount}
-                        onChangeText={setAmount}
-                        placeholder="0.00"
-                        placeholderTextColor="#9CA3AF"
-                        keyboardType="decimal-pad"
-                      />
-                    </View>
-                  </View>
-
-                  {movementType === 'incoming' && (
-                    !showCommission ? (
-                      <TouchableOpacity
-                        style={styles.addCommissionButton}
-                        onPress={() => setShowCommission(true)}
-                      >
-                        <Plus size={16} color="#3B82F6" />
-                        <Text style={styles.addCommissionText}>إضافة عمولة</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <View style={styles.section}>
-                        <View style={styles.commissionHeader}>
-                          <TouchableOpacity
-                            onPress={() => {
-                              setShowCommission(false);
-                              setCommission('');
-                            }}
-                          >
-                            <X size={18} color="#EF4444" />
-                          </TouchableOpacity>
-                          <Text style={styles.sectionTitle}>عمولة</Text>
-                        </View>
-                        <View style={styles.amountRow}>
-                          <View style={styles.commissionCurrencyDisplay}>
-                            <Text style={styles.currencyCode}>
-                              {commissionCurrency}
-                            </Text>
-                            <Text style={styles.currencySymbol}>
-                              {getCurrencySymbol(commissionCurrency)}
-                            </Text>
-                          </View>
-                          <TextInput
-                            style={styles.amountInput}
-                            value={commission}
-                            onChangeText={setCommission}
-                            placeholder="0.00"
-                            placeholderTextColor="#9CA3AF"
-                            keyboardType="decimal-pad"
-                          />
-                        </View>
-                      </View>
-                    )
-                  )}
-
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>ملاحظة <Text style={styles.required}>*</Text></Text>
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>
+                    المبلغ <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={styles.amountRow}>
+                    <TouchableOpacity
+                      style={styles.currencyButton}
+                      onPress={() => setShowCurrencyPicker(true)}
+                    >
+                      <Text style={styles.currencyCode}>{currency}</Text>
+                      <Text style={styles.currencySymbol}>{getCurrencySymbol(currency)}</Text>
+                    </TouchableOpacity>
                     <TextInput
-                      style={styles.notesInput}
-                      value={notes}
-                      onChangeText={setNotes}
-                      placeholder="أضف ملاحظة توضح سبب الحركة"
-                      placeholderTextColor="#9CA3AF"
-                      textAlign="right"
+                      style={styles.amountInput}
+                      value={amount}
+                      onChangeText={setAmount}
+                      placeholder="0.00"
+                      keyboardType="numeric"
+                      textAlign="center"
                     />
                   </View>
-
-                  {amount && movementType && (
-                    <View style={styles.previewSection}>
-                      <Text style={styles.previewTitle}>معاينة الأثر</Text>
-                      <View style={styles.previewRow}>
-                        <Text style={styles.previewValue}>
-                          {formatBalance(currentBalance)}
-                        </Text>
-                        <Text style={styles.previewLabel}>الرصيد قبل:</Text>
-                      </View>
-                      <View style={styles.previewRow}>
-                        <Text
-                          style={[
-                            styles.previewValue,
-                            styles.previewValueBold,
-                            { color: newBalance > 0 ? '#10B981' : newBalance < 0 ? '#EF4444' : '#6B7280' },
-                          ]}
-                        >
-                          {formatBalance(newBalance)}
-                        </Text>
-                        <Text style={styles.previewLabel}>الإجمالي بعد:</Text>
-                      </View>
-                      {isPendingApproval && (
-                        <Text style={styles.previewPendingNote}>
-                          هذه الحركة ستبقى بانتظار الموافقة، ولن تؤثر في الإجمالي قبل قبول الطرف الآخر.
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                </ScrollView>
-
-                <View style={styles.footer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.saveButton,
-                      isLoading && styles.saveButtonDisabled,
-                    ]}
-                    onPress={() => handleSave(false)}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Save size={20} color="#FFFFFF" />
-                        <Text style={styles.saveButtonText}>حفظ</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.savePrintButton,
-                      isLoading && styles.saveButtonDisabled,
-                    ]}
-                    onPress={() => handleSave(true)}
-                    disabled={isLoading}
-                  >
-                    <Printer size={18} color="#3B82F6" />
-                    <Text style={styles.savePrintButtonText}>حفظ + طباعة</Text>
-                  </TouchableOpacity>
                 </View>
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>
+                    ملاحظة <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.notesInput}
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="اكتب ملاحظة الحركة"
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                    textAlign="right"
+                  />
+                </View>
+
+                {amount && movementType && (
+                  <View style={styles.previewSection}>
+                    <Text style={styles.previewTitle}>معاينة الأثر</Text>
+
+                    <View style={styles.previewRow}>
+                      <Text style={styles.previewValue}>{formatBalance(currentBalance)}</Text>
+                      <Text style={styles.previewLabel}>الرصيد قبل:</Text>
+                    </View>
+
+                    <View style={styles.previewRow}>
+                      <Text
+                        style={[
+                          styles.previewValue,
+                          styles.previewValueBold,
+                          {
+                            color:
+                              newBalance > 0 ? '#10B981' : newBalance < 0 ? '#EF4444' : '#6B7280',
+                          },
+                        ]}
+                      >
+                        {formatBalance(newBalance)}
+                      </Text>
+                      <Text style={styles.previewLabel}>الإجمالي بعد:</Text>
+                    </View>
+
+                    {isPendingApproval && (
+                      <Text style={styles.previewPendingNote}>
+                        هذه الحركة ستبقى بانتظار الموافقة، ولن تؤثر في الإجمالي قبل قبول الطرف الآخر.
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+
+              <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+                <TouchableOpacity
+                  style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
+                  onPress={() => handleSave(false)}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Save size={20} color="#FFFFFF" />
+                      <Text style={styles.saveButtonText}>حفظ</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.savePrintButton, isLoading && styles.saveButtonDisabled]}
+                  onPress={() => handleSave(true)}
+                  disabled={isLoading}
+                >
+                  <Printer size={18} color="#3B82F6" />
+                  <Text style={styles.savePrintButtonText}>حفظ + طباعة</Text>
+                </TouchableOpacity>
               </View>
-            </KeyboardAvoidingView>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
 
-      <Modal
-        visible={showCurrencyPicker}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowCurrencyPicker(false)}
-      >
-        <View style={styles.pickerContainer}>
-          <View style={styles.pickerContent}>
+      <Modal visible={showCurrencyPicker} transparent animationType="slide">
+        <TouchableOpacity style={styles.pickerContainer} activeOpacity={1} onPress={() => setShowCurrencyPicker(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()} style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>اختر العملة</Text>
             <ScrollView style={styles.pickerList}>
               {CURRENCIES.map((curr) => (
@@ -575,7 +413,7 @@ export default function QuickAddMovementSheet({
                   key={curr.code}
                   style={styles.pickerItem}
                   onPress={() => {
-                    setCurrency(curr.code);
+                    setCurrency(curr.code as Currency);
                     setShowCurrencyPicker(false);
                   }}
                 >
@@ -586,14 +424,11 @@ export default function QuickAddMovementSheet({
                 </TouchableOpacity>
               ))}
             </ScrollView>
-            <TouchableOpacity
-              style={styles.pickerCloseButton}
-              onPress={() => setShowCurrencyPicker(false)}
-            >
+            <TouchableOpacity style={styles.pickerCloseButton} onPress={() => setShowCurrencyPicker(false)}>
               <Text style={styles.pickerCloseButtonText}>إغلاق</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </>
   );
@@ -696,13 +531,6 @@ const styles = StyleSheet.create({
     width: 90,
     alignItems: 'center',
   },
-  commissionCurrencyDisplay: {
-    backgroundColor: '#4F46E5',
-    borderRadius: 12,
-    padding: 14,
-    width: 90,
-    alignItems: 'center',
-  },
   currencyCode: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -725,25 +553,6 @@ const styles = StyleSheet.create({
     color: '#111827',
     textAlign: 'center',
   },
-  addCommissionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  addCommissionText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#3B82F6',
-  },
-  commissionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
   notesInput: {
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
@@ -753,6 +562,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: '#111827',
+    minHeight: 100,
   },
   previewSection: {
     backgroundColor: '#F9FAFB',
