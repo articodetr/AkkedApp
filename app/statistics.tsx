@@ -11,12 +11,9 @@ import {
 import { useRouter } from 'expo-router';
 import {
   ChevronLeft,
-  Search,
-  Calendar,
   Clock3,
   Users,
   ArrowLeftRight,
-  TrendingUp,
 } from 'lucide-react-native';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,6 +24,7 @@ import { StatisticsData, StatisticsService } from '@/services/statisticsService'
 // ============================================================
 // Types
 // ============================================================
+
 type CurrencyLedgerRow = {
   currency: string;
   totalForMe: number;
@@ -55,12 +53,13 @@ type TransactionsCountData = {
   month: number;
   yesterday?: number;
   previousMonth?: number;
-  weeklyTrend?: number[]; // last 7 days
+  weeklyTrend?: number[];
 };
 
 // ============================================================
 // Theme
 // ============================================================
+
 const C = {
   text: '#111827',
   muted: '#6B7280',
@@ -87,9 +86,14 @@ const C = {
 // ============================================================
 // Helpers
 // ============================================================
-function toArabicDigits(input: number | string): string {
-  const map = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-  return String(input ?? '').replace(/\d/g, (d) => map[Number(d)]);
+
+function toLatinDigits(input: number | string): string {
+  const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
+  const easternArabicIndic = '۰۱۲۳۴۵۶۷۸۹';
+
+  return String(input ?? '')
+    .replace(/[٠-٩]/g, (d) => String(arabicIndic.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String(easternArabicIndic.indexOf(d)));
 }
 
 function formatAmount(amount: number): string {
@@ -99,18 +103,9 @@ function formatAmount(amount: number): string {
   });
 }
 
-function getCurrencyInfo(code: string) {
-  return (
-    CURRENCIES.find((currency) => currency.code === code) || {
-      code,
-      name: code,
-      symbol: code,
-    }
-  );
-}
-
 function sumCurrencyList(items?: { currency: string; amount?: number; total?: number }[]) {
   if (!Array.isArray(items)) return 0;
+
   return items.reduce((sum, item) => {
     const value = Number(item.amount ?? item.total ?? 0);
     return sum + value;
@@ -119,9 +114,15 @@ function sumCurrencyList(items?: { currency: string; amount?: number; total?: nu
 
 function getInitials(name: string): string {
   if (!name) return '؟';
+
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2);
+
   return `${parts[0][0] || ''} ${parts[1][0] || ''}`.trim();
+}
+
+function joinMetaParts(parts: Array<string | null | undefined | false>): string {
+  return parts.filter(Boolean).join(' • ');
 }
 
 function buildCurrencyLedgerRows(stats: StatisticsData | null): CurrencyLedgerRow[] {
@@ -139,6 +140,7 @@ function buildCurrencyLedgerRows(stats: StatisticsData | null): CurrencyLedgerRo
       countForMe: 0,
       countOnMe: 0,
     };
+
     c.totalForMe += Number(item.amount || 0);
     c.countForMe += Number(item.count || 0);
     map.set(item.currency, c);
@@ -151,6 +153,7 @@ function buildCurrencyLedgerRows(stats: StatisticsData | null): CurrencyLedgerRo
       countForMe: 0,
       countOnMe: 0,
     };
+
     c.totalOnMe += Number(item.amount || 0);
     c.countOnMe += Number(item.count || 0);
     map.set(item.currency, c);
@@ -159,6 +162,7 @@ function buildCurrencyLedgerRows(stats: StatisticsData | null): CurrencyLedgerRo
   return Array.from(map.entries())
     .map(([currency, t]) => {
       const netAmount = t.totalForMe - t.totalOnMe;
+
       return {
         currency,
         totalForMe: t.totalForMe,
@@ -176,6 +180,7 @@ function buildCurrencyLedgerRows(stats: StatisticsData | null): CurrencyLedgerRo
 function buildTopCustomers(stats: StatisticsData | null): TopCustomerRow[] {
   const list: any[] = (stats as any)?.topCustomers || [];
   if (!Array.isArray(list)) return [];
+
   return list.slice(0, 3).map((item: any, index: number) => ({
     id: item.id ?? index,
     name: item.name ?? 'عميل',
@@ -190,6 +195,7 @@ function buildTopCustomers(stats: StatisticsData | null): TopCustomerRow[] {
 
 function buildTxCount(stats: StatisticsData | null): TransactionsCountData {
   const t: any = (stats as any)?.transactionsCount || {};
+
   return {
     today: Number(t.today || 0),
     week: Number(t.week || 0),
@@ -200,30 +206,10 @@ function buildTxCount(stats: StatisticsData | null): TransactionsCountData {
   };
 }
 
-function getCurrentArabicMonthRange(): string {
-  const months = [
-    'كانون الثاني',
-    'شباط',
-    'آذار',
-    'نيسان',
-    'أيار',
-    'حزيران',
-    'تموز',
-    'آب',
-    'أيلول',
-    'تشرين الأول',
-    'تشرين الثاني',
-    'كانون الأول',
-  ];
-  const now = new Date();
-  const m = months[now.getMonth()];
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  return `${toArabicDigits(1)} - ${toArabicDigits(lastDay)} ${m} ${toArabicDigits(now.getFullYear())}`;
-}
-
 // ============================================================
 // Sub components
 // ============================================================
+
 function SectionHeader({
   title,
   rightSlot,
@@ -243,33 +229,15 @@ function TopBar({ onBack }: { onBack: () => void }) {
   return (
     <View style={styles.topBar}>
       <TouchableOpacity style={styles.iconBtn} onPress={onBack} activeOpacity={0.7}>
-        <ChevronLeft size={14} color={C.text} />
+        <ChevronLeft size={18} color={C.text} />
       </TouchableOpacity>
 
       <View style={styles.topTitleWrap}>
-        <Text style={styles.topTitle}>دفتر الأستاذ</Text>
+        <Text style={styles.topTitle}>الإحصاءات</Text>
         <Text style={styles.topSubtitle}>الإحصائيات والمستحقات</Text>
       </View>
 
-      <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
-        <Search size={14} color={C.text} />
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-function PeriodBar({ label, onChange }: { label: string; onChange: () => void }) {
-  return (
-    <View style={styles.periodBar}>
-      <View style={styles.periodLeftWrap}>
-        <Calendar size={13} color={C.text} />
-        <Text style={styles.periodLabel}>{label}</Text>
-      </View>
-
-      <TouchableOpacity style={styles.periodChangeWrap} onPress={onChange} activeOpacity={0.7}>
-        <Text style={styles.periodChangeText}>تغيير الفترة</Text>
-        <ChevronLeft size={11} color={C.blueLink} />
-      </TouchableOpacity>
+      <View style={styles.iconBtnPlaceholder} />
     </View>
   );
 }
@@ -290,13 +258,17 @@ function KPISummary({
       <View style={[styles.kpiBox, styles.kpiBoxLeftBorder]}>
         <Text style={styles.kpiLabel}>إجمالي مستحقاتي (لنا)</Text>
         <Text style={[styles.kpiValue, { color: C.green }]}>$ {formatAmount(totalForMe)}</Text>
-        <Text style={styles.kpiHint}>من {toArabicDigits(customersForMe)} عميل</Text>
+        {customersForMe > 0 ? (
+          <Text style={styles.kpiHint}>من {toLatinDigits(customersForMe)} عميل</Text>
+        ) : null}
       </View>
 
       <View style={styles.kpiBox}>
         <Text style={styles.kpiLabel}>إجمالي ديوني (علينا)</Text>
         <Text style={[styles.kpiValue, { color: C.red }]}>$ {formatAmount(totalOnMe)}</Text>
-        <Text style={styles.kpiHint}>إلى {toArabicDigits(customersOnMe)} عميل</Text>
+        {customersOnMe > 0 ? (
+          <Text style={styles.kpiHint}>إلى {toLatinDigits(customersOnMe)} عميل</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -306,19 +278,15 @@ function TransactionsCount({ data }: { data: TransactionsCountData }) {
   const { today, week, month, yesterday, previousMonth, weeklyTrend } = data;
 
   const total = (today || 0) + (week || 0) + (month || 0);
-  const yesterdayDelta =
-    yesterday != null ? today - yesterday : null;
+  const yesterdayDelta = yesterday != null ? today - yesterday : null;
   const monthDeltaPct =
     previousMonth && previousMonth > 0
       ? Math.round(((month - previousMonth) / previousMonth) * 100)
       : null;
+
   const weekAvg = week > 0 ? (week / 7).toFixed(1) : '0';
 
-  // Sparkline values (height ratios). Fallback to a neutral pattern.
-  const trend =
-    weeklyTrend && weeklyTrend.length > 0
-      ? weeklyTrend
-      : [3, 5, 4, 7, 5, 8, today || 0];
+  const trend = weeklyTrend && weeklyTrend.length > 0 ? weeklyTrend : [3, 5, 4, 7, 5, 8, today || 0];
   const trendMax = Math.max(...trend, 1);
 
   return (
@@ -328,7 +296,7 @@ function TransactionsCount({ data }: { data: TransactionsCountData }) {
         rightSlot={
           <View style={styles.sectionHeaderIconWrap}>
             <View style={styles.sectionHeaderIconCircle}>
-              <ArrowLeftRight size={12} color={C.purple} />
+              <ArrowLeftRight size={14} color={C.purple} />
             </View>
           </View>
         }
@@ -338,16 +306,12 @@ function TransactionsCount({ data }: { data: TransactionsCountData }) {
         <View style={styles.txCountRow}>
           <View style={[styles.txCountCol, styles.txCountColBorder, styles.txCountColToday]}>
             <Text style={styles.txCountLabel}>اليوم</Text>
-            <Text style={styles.txCountValue}>{toArabicDigits(today)}</Text>
+            <Text style={styles.txCountValue}>{toLatinDigits(today)}</Text>
+
             {yesterdayDelta != null ? (
-              <Text
-                style={[
-                  styles.txCountHint,
-                  { color: yesterdayDelta >= 0 ? C.green : C.red },
-                ]}
-              >
+              <Text style={[styles.txCountHint, { color: yesterdayDelta >= 0 ? C.green : C.red }]}>
                 {yesterdayDelta >= 0 ? '+' : '−'}
-                {toArabicDigits(Math.abs(yesterdayDelta))} عن أمس
+                {toLatinDigits(Math.abs(yesterdayDelta))} عن أمس
               </Text>
             ) : (
               <Text style={styles.txCountHint}>—</Text>
@@ -356,22 +320,18 @@ function TransactionsCount({ data }: { data: TransactionsCountData }) {
 
           <View style={[styles.txCountCol, styles.txCountColBorder]}>
             <Text style={styles.txCountLabel}>هذا الأسبوع</Text>
-            <Text style={styles.txCountValue}>{toArabicDigits(week)}</Text>
-            <Text style={styles.txCountHint}>معدل {toArabicDigits(weekAvg)} / يوم</Text>
+            <Text style={styles.txCountValue}>{toLatinDigits(week)}</Text>
+            <Text style={styles.txCountHint}>معدل {toLatinDigits(weekAvg)} / يوم</Text>
           </View>
 
           <View style={styles.txCountCol}>
             <Text style={styles.txCountLabel}>هذا الشهر</Text>
-            <Text style={styles.txCountValue}>{toArabicDigits(month)}</Text>
+            <Text style={styles.txCountValue}>{toLatinDigits(month)}</Text>
+
             {monthDeltaPct != null ? (
-              <Text
-                style={[
-                  styles.txCountHint,
-                  { color: monthDeltaPct >= 0 ? C.green : C.red },
-                ]}
-              >
+              <Text style={[styles.txCountHint, { color: monthDeltaPct >= 0 ? C.green : C.red }]}>
                 {monthDeltaPct >= 0 ? '+' : '−'}
-                {toArabicDigits(Math.abs(monthDeltaPct))}٪ عن السابق
+                {toLatinDigits(Math.abs(monthDeltaPct))}٪ عن السابق
               </Text>
             ) : (
               <Text style={styles.txCountHint}>—</Text>
@@ -383,6 +343,7 @@ function TransactionsCount({ data }: { data: TransactionsCountData }) {
           {trend.slice(-7).map((v, i, arr) => {
             const isLast = i === arr.length - 1;
             const heightPct = Math.max(8, Math.round((v / trendMax) * 100));
+
             return (
               <View
                 key={i}
@@ -390,9 +351,9 @@ function TransactionsCount({ data }: { data: TransactionsCountData }) {
                   flex: 1,
                   height: `${heightPct}%`,
                   backgroundColor: isLast ? C.blueLink : C.blueSoft,
-                  borderTopLeftRadius: 2,
-                  borderTopRightRadius: 2,
-                  marginHorizontal: 1.5,
+                  borderTopLeftRadius: 3,
+                  borderTopRightRadius: 3,
+                  marginHorizontal: 2,
                 }}
               />
             );
@@ -401,9 +362,7 @@ function TransactionsCount({ data }: { data: TransactionsCountData }) {
       </View>
 
       <View style={styles.txCountFooter}>
-        <Text style={styles.txCountFooterText}>
-          إجمالي الفترة {toArabicDigits(total)}
-        </Text>
+        <Text style={styles.txCountFooterText}>إجمالي الفترة {toLatinDigits(total)}</Text>
       </View>
     </View>
   );
@@ -433,7 +392,6 @@ function CurrencyLedger({ rows }: { rows: CurrencyLedgerRow[] }) {
       />
 
       <View style={styles.cardOutlined}>
-        {/* Table header */}
         <View style={styles.ledgerHeaderRow}>
           <Text style={[styles.ledgerHeaderCell, styles.colCurrency]}>العملة</Text>
           <Text style={[styles.ledgerHeaderCell, styles.colFlex]}>لنا</Text>
@@ -449,8 +407,8 @@ function CurrencyLedger({ rows }: { rows: CurrencyLedgerRow[] }) {
               : row.direction === 'on_me'
                 ? C.red
                 : C.muted;
-          const sign =
-            row.direction === 'for_me' ? '+ ' : row.direction === 'on_me' ? '− ' : '';
+
+          const sign = row.direction === 'for_me' ? '+ ' : row.direction === 'on_me' ? '− ' : '';
 
           return (
             <TouchableOpacity
@@ -469,32 +427,32 @@ function CurrencyLedger({ rows }: { rows: CurrencyLedgerRow[] }) {
                 <Text style={[styles.ledgerNumber, { color: C.green }]}>
                   {formatAmount(row.totalForMe)}
                 </Text>
-                <Text style={styles.ledgerSubNumber}>
-                  {toArabicDigits(row.countForMe)}{' '}
-                  {row.countForMe === 1 ? 'حركة' : 'حركات'}
-                </Text>
+                {row.countForMe > 0 ? (
+                  <Text style={styles.ledgerSubNumber}>
+                    {toLatinDigits(row.countForMe)} {row.countForMe === 1 ? 'حركة' : 'حركات'}
+                  </Text>
+                ) : null}
               </View>
 
               <View style={styles.colFlex}>
                 <Text style={[styles.ledgerNumber, { color: C.red }]}>
                   {formatAmount(row.totalOnMe)}
                 </Text>
-                <Text style={styles.ledgerSubNumber}>
-                  {toArabicDigits(row.countOnMe)}{' '}
-                  {row.countOnMe === 1 ? 'حركة' : 'حركات'}
-                </Text>
+                {row.countOnMe > 0 ? (
+                  <Text style={styles.ledgerSubNumber}>
+                    {toLatinDigits(row.countOnMe)} {row.countOnMe === 1 ? 'حركة' : 'حركات'}
+                  </Text>
+                ) : null}
               </View>
 
               <View style={styles.colFlex}>
                 <Text style={[styles.ledgerNet, { color: netColor }]}>
-                  {row.direction === 'balanced'
-                    ? '0'
-                    : `${sign}${formatAmount(row.finalAmount)}`}
+                  {row.direction === 'balanced' ? '0' : `${sign}${formatAmount(row.finalAmount)}`}
                 </Text>
               </View>
 
               <View style={styles.colChevron}>
-                <ChevronLeft size={9} color={C.faint} />
+                <ChevronLeft size={11} color={C.faint} />
               </View>
             </TouchableOpacity>
           );
@@ -527,15 +485,25 @@ function PendingOperations({
 }) {
   const totalPending = awaitingMineCount + awaitingOthersCount;
 
+  const mySubtitle = joinMetaParts([
+    awaitingMineCount > 0 && `${toLatinDigits(awaitingMineCount)} عمليات`,
+    awaitingMineCustomers > 0 && `${toLatinDigits(awaitingMineCustomers)} عملاء`,
+    awaitingMineOldest && `أقدمها ${awaitingMineOldest}`,
+  ]);
+
+  const othersSubtitle = joinMetaParts([
+    awaitingOthersCount > 0 && `${toLatinDigits(awaitingOthersCount)} عملية`,
+    awaitingOthersCustomers > 0 && `${toLatinDigits(awaitingOthersCustomers)} عملاء`,
+    awaitingOthersOldest && `أقدمها ${awaitingOthersOldest}`,
+  ]);
+
   return (
     <View>
       <SectionHeader
         title="الحركات بانتظار المراجعة"
         rightSlot={
           <View style={styles.pendingBadge}>
-            <Text style={styles.pendingBadgeText}>
-              {toArabicDigits(totalPending)} معلّق
-            </Text>
+            <Text style={styles.pendingBadgeText}>{toLatinDigits(totalPending)} معلّق</Text>
           </View>
         }
       />
@@ -547,15 +515,12 @@ function PendingOperations({
           onPress={onPress}
         >
           <View style={[styles.pendingIconCircle, { backgroundColor: C.yellowSoft }]}>
-            <Clock3 size={15} color={C.yellow} />
+            <Clock3 size={17} color={C.yellow} />
           </View>
 
           <View style={styles.pendingTextWrap}>
             <Text style={styles.pendingTitle}>بانتظار موافقتي</Text>
-            <Text style={styles.pendingSubtitle}>
-              {toArabicDigits(awaitingMineCount)} عمليات • {toArabicDigits(awaitingMineCustomers)} عملاء
-              {awaitingMineOldest ? ` • أقدمها ${awaitingMineOldest}` : ''}
-            </Text>
+            {mySubtitle ? <Text style={styles.pendingSubtitle}>{mySubtitle}</Text> : null}
           </View>
 
           <View style={styles.pendingAmountWrap}>
@@ -564,20 +529,17 @@ function PendingOperations({
             </Text>
           </View>
 
-          <ChevronLeft size={10} color={C.faint} />
+          <ChevronLeft size={11} color={C.faint} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.pendingRow} activeOpacity={0.7} onPress={onPress}>
           <View style={[styles.pendingIconCircle, { backgroundColor: C.blueSoft }]}>
-            <Users size={15} color={C.blue} />
+            <Users size={17} color={C.blue} />
           </View>
 
           <View style={styles.pendingTextWrap}>
             <Text style={styles.pendingTitle}>بانتظار العملاء</Text>
-            <Text style={styles.pendingSubtitle}>
-              {toArabicDigits(awaitingOthersCount)} عملية • {toArabicDigits(awaitingOthersCustomers)} عملاء
-              {awaitingOthersOldest ? ` • أقدمها ${awaitingOthersOldest}` : ''}
-            </Text>
+            {othersSubtitle ? <Text style={styles.pendingSubtitle}>{othersSubtitle}</Text> : null}
           </View>
 
           <View style={styles.pendingAmountWrap}>
@@ -586,7 +548,7 @@ function PendingOperations({
             </Text>
           </View>
 
-          <ChevronLeft size={10} color={C.faint} />
+          <ChevronLeft size={11} color={C.faint} />
         </TouchableOpacity>
       </View>
     </View>
@@ -599,7 +561,7 @@ function TopCustomers({ customers }: { customers: TopCustomerRow[] }) {
   return (
     <View>
       <SectionHeader
-        title="أعلى ٣ أرصدة عملاء"
+        title="أعلى 3 أرصدة عملاء"
         rightSlot={
           <TouchableOpacity activeOpacity={0.7}>
             <Text style={styles.linkText}>عرض الكل</Text>
@@ -611,6 +573,12 @@ function TopCustomers({ customers }: { customers: TopCustomerRow[] }) {
         {customers.map((c, idx) => {
           const color = c.direction === 'for_me' ? C.green : C.red;
           const sign = c.direction === 'for_me' ? '+ ' : '− ';
+
+          const subtitle = joinMetaParts([
+            c.count > 0 && `${toLatinDigits(c.count)} حركات`,
+            c.lastActivity && `آخر حركة ${c.lastActivity}`,
+          ]);
+
           return (
             <TouchableOpacity
               key={c.id}
@@ -626,10 +594,7 @@ function TopCustomers({ customers }: { customers: TopCustomerRow[] }) {
 
               <View style={styles.customerTextWrap}>
                 <Text style={styles.customerName}>{c.name}</Text>
-                <Text style={styles.customerSub}>
-                  {toArabicDigits(c.count)} حركات
-                  {c.lastActivity ? ` • آخر حركة ${c.lastActivity}` : ''}
-                </Text>
+                {subtitle ? <Text style={styles.customerSub}>{subtitle}</Text> : null}
               </View>
 
               <View style={styles.customerAmountWrap}>
@@ -649,6 +614,7 @@ function TopCustomers({ customers }: { customers: TopCustomerRow[] }) {
 // ============================================================
 // Main screen
 // ============================================================
+
 export default function StatisticsScreen() {
   const router = useRouter();
   const { currentUser } = useAuth();
@@ -701,6 +667,7 @@ export default function StatisticsScreen() {
     () => sumCurrencyList(stats?.debtStats?.owedToUsByCurrency as any),
     [stats],
   );
+
   const totalOnMe = useMemo(
     () => sumCurrencyList(stats?.debtStats?.weOweByCurrency as any),
     [stats],
@@ -713,6 +680,7 @@ export default function StatisticsScreen() {
     () => sumCurrencyList(stats?.actionableStats?.awaitingMyApprovalByCurrency as any),
     [stats],
   );
+
   const pendingOthersAmount = useMemo(
     () => sumCurrencyList(stats?.actionableStats?.awaitingOthersApprovalByCurrency as any),
     [stats],
@@ -721,22 +689,21 @@ export default function StatisticsScreen() {
   const pendingMineCustomers = Number(
     (stats?.actionableStats as any)?.awaitingMyApprovalCustomersCount || 0,
   );
+
   const pendingOthersCustomers = Number(
     (stats?.actionableStats as any)?.awaitingOthersApprovalCustomersCount || 0,
   );
+
   const pendingMineOldest = String(
     (stats?.actionableStats as any)?.awaitingMyApprovalOldestLabel || '',
   );
+
   const pendingOthersOldest = String(
     (stats?.actionableStats as any)?.awaitingOthersApprovalOldestLabel || '',
   );
 
-  const goToSettings = () => {
-    router.push('/settings' as any);
-  };
-
-  const onChangePeriod = () => {
-    // hook your period picker here
+  const goToNotifications = () => {
+    router.push('/(tabs)/notifications' as any);
   };
 
   if (loading) {
@@ -752,8 +719,6 @@ export default function StatisticsScreen() {
     <View style={styles.container}>
       <TopBar onBack={() => router.back()} />
 
-      <PeriodBar label={getCurrentArabicMonthRange()} onChange={onChangePeriod} />
-
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.contentContainer}
@@ -768,7 +733,6 @@ export default function StatisticsScreen() {
         />
 
         <TransactionsCount data={txCount} />
-
         <CurrencyLedger rows={ledgerRows} />
 
         <PendingOperations
@@ -780,7 +744,7 @@ export default function StatisticsScreen() {
           awaitingOthersAmount={pendingOthersAmount}
           awaitingOthersCustomers={pendingOthersCustomers}
           awaitingOthersOldest={pendingOthersOldest}
-          onPress={goToSettings}
+          onPress={goToNotifications}
         />
 
         <TopCustomers customers={topCustomers} />
@@ -792,406 +756,429 @@ export default function StatisticsScreen() {
 // ============================================================
 // Styles
 // ============================================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.bg,
   },
+
   screen: {
     flex: 1,
   },
+
   contentContainer: {
-    paddingBottom: 24,
+    paddingBottom: 28,
   },
+
   loadingContainer: {
     flex: 1,
     backgroundColor: C.bg,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
+
   loadingText: {
-    fontSize: 14,
+    fontSize: 15,
     color: C.muted,
-    fontWeight: '500',
+    fontWeight: '700',
     writingDirection: 'rtl',
   },
 
-  // Top bar
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 0.5,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
+
   iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    borderWidth: 0.5,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
     borderColor: C.border,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: C.bg,
   },
+
+  iconBtnPlaceholder: {
+    width: 38,
+    height: 38,
+  },
+
   topTitleWrap: {
     alignItems: 'center',
   },
+
   topTitle: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 22,
+    fontWeight: '900',
     color: C.text,
     writingDirection: 'rtl',
   },
+
   topSubtitle: {
-    fontSize: 11,
+    fontSize: 13,
     color: C.muted,
-    marginTop: 1,
-    writingDirection: 'rtl',
-  },
-
-  // Period bar
-  periodBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: C.bgSoft,
-    borderBottomWidth: 0.5,
-    borderBottomColor: C.border,
-  },
-  periodLeftWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  periodLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: C.text,
-    writingDirection: 'rtl',
-  },
-  periodChangeWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  periodChangeText: {
-    fontSize: 11,
-    color: C.blueLink,
+    marginTop: 3,
     fontWeight: '500',
     writingDirection: 'rtl',
   },
 
-  // KPI summary
   kpiRow: {
     flexDirection: 'row',
-    borderBottomWidth: 0.5,
+    borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
+
   kpiBox: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
+
   kpiBoxLeftBorder: {
-    borderLeftWidth: 0.5,
+    borderLeftWidth: 1,
     borderLeftColor: C.border,
   },
+
   kpiLabel: {
-    fontSize: 11,
+    fontSize: 13,
     color: C.muted,
-    marginBottom: 4,
+    marginBottom: 6,
     textAlign: 'right',
+    fontWeight: '600',
     writingDirection: 'rtl',
   },
+
   kpiValue: {
-    fontSize: 17,
-    fontWeight: '500',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  kpiHint: {
-    fontSize: 11,
-    color: C.muted,
-    marginTop: 2,
+    fontSize: 22,
+    fontWeight: '900',
     textAlign: 'right',
     writingDirection: 'rtl',
   },
 
-  // Section header
+  kpiHint: {
+    fontSize: 12,
+    color: C.muted,
+    marginTop: 4,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: 20,
+    paddingBottom: 10,
   },
+
   sectionHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 17,
+    fontWeight: '900',
     color: C.text,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
+
   sectionHeaderIconWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+
   sectionHeaderIconCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     backgroundColor: C.purpleSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   linkText: {
-    fontSize: 11,
-    color: C.blueLink,
-    fontWeight: '500',
-    writingDirection: 'rtl',
-  },
-  emptyText: {
     fontSize: 13,
-    color: C.muted,
-    textAlign: 'center',
-    padding: 16,
+    color: C.blueLink,
+    fontWeight: '700',
     writingDirection: 'rtl',
   },
 
-  // Generic card outlined
+  emptyText: {
+    fontSize: 14,
+    color: C.muted,
+    textAlign: 'center',
+    padding: 20,
+    fontWeight: '500',
+    writingDirection: 'rtl',
+  },
+
   cardOutlined: {
     marginHorizontal: 16,
-    borderWidth: 0.5,
+    borderWidth: 1,
     borderColor: C.border,
-    borderRadius: 8,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: C.bg,
   },
 
-  // Transactions count
   txCountRow: {
     flexDirection: 'row',
   },
+
   txCountCol: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 10,
     alignItems: 'center',
   },
+
   txCountColBorder: {
-    borderLeftWidth: 0.5,
+    borderLeftWidth: 1,
     borderLeftColor: C.border,
   },
+
   txCountColToday: {
     backgroundColor: C.bgSofter,
   },
+
   txCountLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: C.muted,
-    writingDirection: 'rtl',
-  },
-  txCountValue: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: C.text,
-    marginTop: 6,
-    marginBottom: 2,
-  },
-  txCountHint: {
-    fontSize: 10,
-    color: C.muted,
-    fontWeight: '500',
-    writingDirection: 'rtl',
-  },
-  sparkRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 28,
-    paddingHorizontal: 12,
-    paddingTop: 6,
-    paddingBottom: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: C.border,
-    backgroundColor: C.bgSofter,
-  },
-  txCountFooter: {
-    paddingHorizontal: 16,
-    paddingTop: 6,
-    alignItems: 'flex-start',
-  },
-  txCountFooterText: {
-    fontSize: 11,
-    color: C.muted,
+    fontWeight: '600',
     writingDirection: 'rtl',
   },
 
-  // Currency ledger
+  txCountValue: {
+    fontSize: 30,
+    fontWeight: '900',
+    color: C.text,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+
+  txCountHint: {
+    fontSize: 11,
+    color: C.muted,
+    fontWeight: '600',
+    writingDirection: 'rtl',
+    textAlign: 'center',
+  },
+
+  sparkRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 36,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    backgroundColor: C.bgSofter,
+  },
+
+  txCountFooter: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    alignItems: 'flex-start',
+  },
+
+  txCountFooterText: {
+    fontSize: 12,
+    color: C.muted,
+    fontWeight: '500',
+    writingDirection: 'rtl',
+  },
+
   ledgerHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     backgroundColor: C.bgSoft,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
+
   ledgerHeaderCell: {
-    fontSize: 10,
+    fontSize: 11,
     color: C.muted,
-    fontWeight: '500',
+    fontWeight: '700',
     textAlign: 'center',
     writingDirection: 'rtl',
   },
+
   colCurrency: {
-    width: 38,
+    width: 52,
     alignItems: 'center',
   },
+
   colFlex: {
     flex: 1,
     alignItems: 'center',
   },
+
   colChevron: {
-    width: 12,
+    width: 18,
     alignItems: 'center',
   },
+
   ledgerDataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
   },
+
   ledgerRowDivider: {
-    borderBottomWidth: 0.5,
+    borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
+
   ledgerCurrencyCode: {
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '700',
     color: C.muted,
     textAlign: 'center',
   },
+
   ledgerNumber: {
-    fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  ledgerSubNumber: {
-    fontSize: 9,
-    color: C.faint,
-    marginTop: 1,
-    textAlign: 'center',
-    writingDirection: 'rtl',
-  },
-  ledgerNet: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '800',
     textAlign: 'center',
   },
 
-  // Pending
-  pendingBadge: {
-    backgroundColor: C.redSoft,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  pendingBadgeText: {
+  ledgerSubNumber: {
     fontSize: 10,
-    color: C.red,
-    fontWeight: '500',
+    color: C.faint,
+    marginTop: 2,
+    textAlign: 'center',
     writingDirection: 'rtl',
   },
+
+  ledgerNet: {
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+
+  pendingBadge: {
+    backgroundColor: C.redSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+
+  pendingBadgeText: {
+    fontSize: 11,
+    color: C.red,
+    fontWeight: '700',
+    writingDirection: 'rtl',
+  },
+
   pendingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
   },
+
   pendingIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   pendingTextWrap: {
     flex: 1,
     minWidth: 0,
   },
+
   pendingTitle: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '800',
     color: C.text,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
+
   pendingSubtitle: {
-    fontSize: 10,
+    fontSize: 11,
     color: C.muted,
-    marginTop: 1,
+    marginTop: 3,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
+
   pendingAmountWrap: {
     alignItems: 'flex-start',
   },
+
   pendingAmount: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '900',
   },
 
-  // Top customers
   customerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 12,
   },
+
   customerAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: C.avatarBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   customerAvatarText: {
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '800',
     color: C.avatarText,
   },
+
   customerTextWrap: {
     flex: 1,
     minWidth: 0,
   },
+
   customerName: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '800',
     color: C.text,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
+
   customerSub: {
-    fontSize: 10,
+    fontSize: 11,
     color: C.muted,
-    marginTop: 1,
+    marginTop: 3,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
+
   customerAmountWrap: {
     alignItems: 'flex-start',
   },
+
   customerAmount: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '900',
   },
 });
