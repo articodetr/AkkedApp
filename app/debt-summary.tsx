@@ -1,65 +1,74 @@
-import { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   RefreshControl,
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-  ArrowRight,
-  Search,
-  ArrowUpDown,
-  Download,
-  Filter,
-  TrendingUp,
-  TrendingDown,
-} from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
-import { CustomerBalanceByCurrency, CURRENCIES, Currency } from '@/types/database';
+import { ArrowRight, Download } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+
+import { supabase } from '@/lib/supabase';
+import { CustomerBalanceByCurrency, CURRENCIES } from '@/types/database';
 import { generatePDFHeaderHTML, generatePDFHeaderStyles } from '@/utils/pdfHeaderGenerator';
 import { getLogoBase64 } from '@/utils/logoHelper';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { buildUserScopeFilter, fetchAccessibleCustomers } from '@/services/userScopeService';
-import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 
-type SortType = 'name' | 'balance' | 'currency';
-type FilterCurrency = 'all' | Currency;
-
-interface CustomerDebtSummary {
+interface CustomerDebtItem {
   customerId: string;
   customerName: string;
-  linked_user_id?: string | null;
+  accountNumber: string;
   balances: CustomerBalanceByCurrency[];
-  largestBalanceAbs: number;
+}
+
+function formatAmount(value: number) {
+  return Number(value).toLocaleString('en-US', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+  });
+}
+
+function getCurrencyInfo(code: string) {
+  return (
+    CURRENCIES.find((currency) => currency.code === code) || {
+      code,
+      name: code,
+      symbol: code,
+    }
+  );
+}
+
+function getBalanceMeta(amount: number) {
+  if (amount > 0) {
+    return { label: 'له', color: '#16A34A', bg: '#ECFDF3', sign: '+' };
+  }
+  if (amount < 0) {
+    return { label: 'عليه', color: '#DC2626', bg: '#FEF2F2', sign: '-' };
+  }
+  return { label: 'متساوي', color: '#6B7280', bg: '#F3F4F6', sign: '' };
 }
 
 export default function DebtSummaryScreen() {
   const router = useRouter();
-  const { lastRefreshTime } = useDataRefresh();
   const { currentUser } = useAuth();
-  const [data, setData] = useState<CustomerDebtSummary[]>([]);
-  const [filteredData, setFilteredData] = useState<CustomerDebtSummary[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
+  const { lastRefreshTime } = useDataRefresh();
+
+  const [data, setData] = useState<CustomerDebtItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<SortType>('name');
-  const [filterCurrency, setFilterCurrency] = useState<FilterCurrency>('all');
-  const [showFilters, setShowFilters] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (currentUser?.userId) {
       loadData();
     } else {
       setData([]);
-      setFilteredData([]);
       setIsLoading(false);
     }
   }, [currentUser?.userId]);
@@ -70,17 +79,12 @@ export default function DebtSummaryScreen() {
     }
   }, [lastRefreshTime, currentUser?.userId]);
 
-  useEffect(() => {
-    applyFiltersAndSort();
-  }, [data, searchQuery, sortBy, filterCurrency]);
-
   const loadData = async () => {
     try {
       setIsLoading(true);
 
       if (!currentUser?.userId) {
         setData([]);
-        setFilteredData([]);
         return;
       }
 
@@ -93,77 +97,45 @@ export default function DebtSummaryScreen() {
           .order('customer_name'),
       ]);
 
-      if (balancesResult.error) {
-        throw balancesResult.error;
-      }
+      if (balancesResult.error) throw balancesResult.error;
 
-      const nonSystemCustomers = customers.filter((customer) => !customer.is_profit_loss_account);
-      const customerMap = new Map(nonSystemCustomers.map((customer) => [customer.id, customer]));
-      const grouped = new Map<string, CustomerDebtSummary>();
+      const visibleCustomers = customers.filter((customer) => !customer.is_profit_loss_account);
+      const customerMap = new Map(
+        visibleCustomers.map((customer) => [
+          customer.id,
+          { name: customer.name, accountNumber: customer.account_number },
+        ]),
+      );
+
+      const grouped = new Map<string, CustomerDebtItem>();
 
       (balancesResult.data || []).forEach((balance) => {
-        const customer = customerMap.get(balance.customer_id);
-
-        if (!customer) {
-          return;
-        }
+        const customerInfo = customerMap.get(balance.customer_id);
+        if (!customerInfo) return;
 
         if (!grouped.has(balance.customer_id)) {
           grouped.set(balance.customer_id, {
             customerId: balance.customer_id,
-            customerName: customer.name,
-            linked_user_id: customer.linked_user_id || null,
+            customerName: customerInfo.name,
+            accountNumber: customerInfo.accountNumber,
             balances: [],
-            largestBalanceAbs: 0,
           });
         }
 
-        const summary = grouped.get(balance.customer_id)!;
-        summary.balances.push(balance);
-        summary.largestBalanceAbs = Math.max(
-          summary.largestBalanceAbs,
-          Math.abs(Number(balance.balance)),
-        );
+        grouped.get(balance.customer_id)!.balances.push(balance);
       });
 
-      setData(Array.from(grouped.values()));
+      const result = Array.from(grouped.values()).sort((a, b) =>
+        a.customerName.localeCompare(b.customerName, 'ar'),
+      );
+
+      setData(result);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading debt summary:', error);
+      Alert.alert('خطأ', 'تعذر تحميل تقرير الديون');
     } finally {
       setIsLoading(false);
     }
-  };
-
-
-  const applyFiltersAndSort = () => {
-    let result = [...data];
-
-    if (searchQuery.trim()) {
-      result = result.filter((item) =>
-        item.customerName.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    if (filterCurrency !== 'all') {
-      result = result.filter((item) =>
-        item.balances.some((b) => b.currency === filterCurrency)
-      );
-    }
-
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.customerName.localeCompare(b.customerName, 'ar');
-        case 'balance':
-          return b.largestBalanceAbs - a.largestBalanceAbs;
-        case 'currency':
-          return a.balances[0]?.currency.localeCompare(b.balances[0]?.currency || '') || 0;
-        default:
-          return 0;
-      }
-    });
-
-    setFilteredData(result);
   };
 
   const onRefresh = async () => {
@@ -172,160 +144,82 @@ export default function DebtSummaryScreen() {
     setRefreshing(false);
   };
 
-  const getCurrencySymbol = (code: string) => {
-    const currency = CURRENCIES.find((c) => c.code === code);
-    return currency?.symbol || code;
-  };
-
-  const getCurrencyName = (code: string) => {
-    const currency = CURRENCIES.find((c) => c.code === code);
-    return currency?.name || code;
-  };
-
-
-  const getTotalStats = () => {
-    const owedToUsByCurrency: { [key: string]: number } = {};
-    const owedToCustomersByCurrency: { [key: string]: number } = {};
-
-    filteredData.forEach((customer) => {
-      customer.balances.forEach((balance) => {
-        const amount = Number(balance.balance);
-        const currency = balance.currency;
-
-        if (amount > 0) {
-          owedToCustomersByCurrency[currency] =
-            (owedToCustomersByCurrency[currency] || 0) + amount;
-        } else if (amount < 0) {
-          owedToUsByCurrency[currency] = (owedToUsByCurrency[currency] || 0) + Math.abs(amount);
-        }
-      });
-    });
-
-    return { owedToUsByCurrency, owedToCustomersByCurrency };
-  };
-
   const generatePDF = async () => {
     try {
       let logoDataUrl: string | undefined;
+
       try {
         logoDataUrl = await getLogoBase64(false, null, { userId: currentUser?.userId });
-        console.log('[DebtSummary] Logo loaded successfully for PDF');
       } catch (logoError) {
-        console.warn('[DebtSummary] Could not load logo, continuing without it:', logoError);
+        console.warn('[DebtSummary] Could not load logo:', logoError);
       }
 
-      const reportTitle = 'تقرير شامل - كشف حساب جميع العملاء';
-
       const headerHTML = generatePDFHeaderHTML({
-        title: reportTitle,
+        title: 'تقرير الديون الشامل',
         logoDataUrl,
-        primaryColor: '#382de3',
-        darkColor: '#2821b8',
+        primaryColor: '#5B5AF7',
+        darkColor: '#3730A3',
         height: 150,
         showPhones: true,
       });
 
-      const reportRows = filteredData.length > 0 ? filteredData : data;
-
-      const tableRows = reportRows
+      const rows = data
         .flatMap((customer) =>
           customer.balances.map((balance) => {
             const amount = Number(balance.balance);
-            const totalIncoming = Number(balance.total_incoming);
-            const totalOutgoing = Number(balance.total_outgoing);
-
-            const owedToMe = amount < 0 ? Math.abs(amount) : 0;
-            const owedByMe = amount > 0 ? amount : 0;
+            const meta = getBalanceMeta(amount);
+            const currencyInfo = getCurrencyInfo(balance.currency);
 
             return `
               <tr>
-                <td style="padding: 8px; border: 1px solid #000; text-align: right;">${customer.customerName}</td>
-                <td style="padding: 8px; border: 1px solid #000; text-align: center;">${getCurrencyName(balance.currency)}</td>
-                <td style="padding: 8px; border: 1px solid #000; text-align: center;">${totalIncoming > 0 ? totalIncoming.toFixed(2) : ''}</td>
-                <td style="padding: 8px; border: 1px solid #000; text-align: center;">${totalOutgoing > 0 ? totalOutgoing.toFixed(2) : ''}</td>
-                <td style="padding: 8px; border: 1px solid #000; text-align: center;">${owedToMe > 0 ? owedToMe.toFixed(2) : ''}</td>
-                <td style="padding: 8px; border: 1px solid #000; text-align: center;">${owedByMe > 0 ? owedByMe.toFixed(2) : ''}</td>
+                <td>${customer.customerName}</td>
+                <td>${customer.accountNumber}</td>
+                <td>${currencyInfo.name}</td>
+                <td style="color:${meta.color}; font-weight:bold;">${meta.label}</td>
+                <td style="color:${meta.color}; font-weight:bold;">
+                  ${formatAmount(Math.abs(amount))} ${currencyInfo.symbol}
+                </td>
               </tr>
             `;
-          })
+          }),
         )
         .join('');
 
       const html = `
         <!DOCTYPE html>
-        <html dir="rtl">
+        <html dir="rtl" lang="ar">
           <head>
-            <meta charset="utf-8">
+            <meta charset="utf-8" />
             <style>
-              @page {
-                size: A4 landscape;
-                margin: 15mm;
-              }
-              body {
-                font-family: 'Arial', 'Tahoma', sans-serif;
-                padding: 20px;
-                margin: 0;
-                background: white;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 20px;
-                font-size: 11px;
-              }
-              th {
-                background: #f3f4f6;
-                padding: 10px;
-                border: 1px solid #000;
-                text-align: center;
-                font-weight: bold;
-                font-size: 12px;
-              }
-              td {
-                padding: 8px;
-                border: 1px solid #000;
-              }
-              .footer {
-                text-align: left;
-                margin-top: 20px;
-                font-size: 10px;
-                color: #6B7280;
-              }
+              @page { size: A4; margin: 12mm; }
+              body { font-family: Arial, Tahoma, sans-serif; background: #fff; margin: 0; color: #111827; }
+              table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+              th, td { border: 1px solid #D1D5DB; padding: 10px; text-align: center; }
+              th { background: #F3F4F6; font-weight: bold; }
               ${generatePDFHeaderStyles()}
             </style>
           </head>
           <body>
             ${headerHTML}
-
             <table>
               <thead>
                 <tr>
-                  <th rowspan="2">الحساب</th>
-                  <th rowspan="2">العملة</th>
-                  <th colspan="2">إجمالي الحركات</th>
-                  <th colspan="2">صافي الرصيد</th>
-                </tr>
-                <tr>
-                  <th>وارد</th>
-                  <th>صادر</th>
-                  <th>له</th>
-                  <th>عليه</th>
+                  <th>اسم العميل</th>
+                  <th>رقم الحساب</th>
+                  <th>العملة</th>
+                  <th>الحالة</th>
+                  <th>المبلغ</th>
                 </tr>
               </thead>
               <tbody>
-                ${tableRows}
+                ${rows || '<tr><td colspan="5">لا توجد بيانات</td></tr>'}
               </tbody>
             </table>
-
-            <div class="footer">
-              ${new Date().toLocaleDateString('en-CA')} - 1/1
-            </div>
           </body>
         </html>
       `;
 
       const { uri } = await Print.printToFileAsync({ html });
-
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri);
       } else {
@@ -337,554 +231,158 @@ export default function DebtSummaryScreen() {
     }
   };
 
-  const renderCustomerCard = (customer: CustomerDebtSummary) => {
-    return (
-      <View key={customer.customerId} style={styles.customerCard}>
-        <View style={styles.customerHeader}>
-          <CustomerStatusBadge linkedUserId={customer.linked_user_id} />
-          <Text style={styles.customerName}>{customer.customerName}</Text>
-        </View>
-
-        <View style={styles.balancesContainer}>
-          {customer.balances.map((balance) => {
-            const amount = Number(balance.balance);
-            const isPositive = amount > 0;
-            const directionLabel = isPositive ? 'له' : 'عليه';
-
-            return (
-              <View key={balance.currency} style={styles.balanceRow}>
-                <View style={styles.currencyInfo}>
-                  <Text style={styles.currencyName}>{getCurrencyName(balance.currency)}</Text>
-                  <Text style={styles.currencyCode}>({balance.currency})</Text>
-                </View>
-
-                <View style={styles.amountContainer}>
-                  {isPositive ? (
-                    <TrendingUp size={16} color="#10B981" />
-                  ) : (
-                    <TrendingDown size={16} color="#EF4444" />
-                  )}
-                  <Text
-                    style={[
-                      styles.balanceDirection,
-                      { color: isPositive ? '#10B981' : '#EF4444' },
-                    ]}
-                  >
-                    {directionLabel}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.balanceAmount,
-                      { color: isPositive ? '#10B981' : '#EF4444' },
-                    ]}
-                  >
-                    {Math.abs(amount).toFixed(2)} {getCurrencySymbol(balance.currency)}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.customerFooter}>
-          {customer.balances.map((balance) => (
-            <View key={`footer-${balance.currency}`} style={styles.currencySection}>
-              <Text style={styles.footerCurrency}>{getCurrencyName(balance.currency)}:</Text>
-              <View style={styles.currencyFooterRow}>
-                <Text style={styles.totalIncomingLabel}>وارد:</Text>
-                <Text style={styles.totalIncoming}>
-                  {Number(balance.total_incoming).toFixed(2)} {getCurrencySymbol(balance.currency)}
-                </Text>
-              </View>
-              <View style={styles.currencyFooterRow}>
-                <Text style={styles.totalOutgoingLabel}>صادر:</Text>
-                <Text style={styles.totalOutgoing}>
-                  {Number(balance.total_outgoing).toFixed(2)} {getCurrencySymbol(balance.currency)}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
-  };
-
-  const stats = getTotalStats();
-
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowRight size={24} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>تقرير الديون الشامل</Text>
-        <TouchableOpacity style={styles.exportButton} onPress={generatePDF}>
-          <Download size={20} color="#4F46E5" />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsScrollView}>
-        <View style={styles.statsContainer}>
-          {Object.keys(stats.owedToUsByCurrency).length === 0 &&
-          Object.keys(stats.owedToCustomersByCurrency).length === 0 ? (
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>لا توجد ديون</Text>
-            </View>
-          ) : (
-            <>
-              {Object.entries(stats.owedToUsByCurrency).map(([currency, amount]) => (
-                <View key={`owed-to-us-${currency}`} style={styles.statCurrencyCard}>
-                  <Text style={styles.statCurrencyLabel}>{getCurrencyName(currency)}</Text>
-                  <View style={styles.statCurrencyRow}>
-                    <TrendingUp size={16} color="#10B981" />
-                    <Text style={styles.statCurrencyLabelSmall}>لنا</Text>
-                    <Text style={[styles.statCurrencyValue, { color: '#10B981' }]}>
-                      {amount.toFixed(2)} {getCurrencySymbol(currency)}
-                    </Text>
-                  </View>
-                  {stats.owedToCustomersByCurrency[currency] && (
-                    <View style={styles.statCurrencyRow}>
-                      <TrendingDown size={16} color="#EF4444" />
-                      <Text style={styles.statCurrencyLabelSmall}>علينا</Text>
-                      <Text style={[styles.statCurrencyValue, { color: '#EF4444' }]}>
-                        {stats.owedToCustomersByCurrency[currency].toFixed(2)}{' '}
-                        {getCurrencySymbol(currency)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              ))}
-              {Object.entries(stats.owedToCustomersByCurrency)
-                .filter(([currency]) => !stats.owedToUsByCurrency[currency])
-                .map(([currency, amount]) => (
-                  <View key={`owed-to-customers-${currency}`} style={styles.statCurrencyCard}>
-                    <Text style={styles.statCurrencyLabel}>{getCurrencyName(currency)}</Text>
-                    <View style={styles.statCurrencyRow}>
-                      <TrendingDown size={16} color="#EF4444" />
-                      <Text style={styles.statCurrencyLabelSmall}>علينا</Text>
-                      <Text style={[styles.statCurrencyValue, { color: '#EF4444' }]}>
-                        {amount.toFixed(2)} {getCurrencySymbol(currency)}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-            </>
-          )}
-
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>عدد العملاء</Text>
-            <Text style={[styles.statValue, { color: '#4F46E5' }]}>
-              {filteredData.length}
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      <View style={styles.controlsContainer}>
-        <View style={styles.searchContainer}>
-          <Search size={20} color="#9CA3AF" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="ابحث عن عميل..."
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            textAlign="right"
-          />
-        </View>
-
-        <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => setShowFilters(!showFilters)}
-        >
-          <Filter size={20} color="#4F46E5" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.sortButton}
-          onPress={() => {
-            const sortOptions: SortType[] = ['name', 'balance', 'currency'];
-            const currentIndex = sortOptions.indexOf(sortBy);
-            const nextIndex = (currentIndex + 1) % sortOptions.length;
-            setSortBy(sortOptions[nextIndex]);
-          }}
-        >
-          <ArrowUpDown size={20} color="#4F46E5" />
-        </TouchableOpacity>
-      </View>
-
-      {showFilters && (
-        <View style={styles.filtersPanel}>
-          <Text style={styles.filtersPanelTitle}>تصفية حسب العملة</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <TouchableOpacity
-              style={[
-                styles.currencyFilter,
-                filterCurrency === 'all' && styles.currencyFilterActive,
-              ]}
-              onPress={() => setFilterCurrency('all')}
-            >
-              <Text
-                style={[
-                  styles.currencyFilterText,
-                  filterCurrency === 'all' && styles.currencyFilterTextActive,
-                ]}
-              >
-                الكل
-              </Text>
-            </TouchableOpacity>
-            {CURRENCIES.map((currency) => (
-              <TouchableOpacity
-                key={currency.code}
-                style={[
-                  styles.currencyFilter,
-                  filterCurrency === currency.code && styles.currencyFilterActive,
-                ]}
-                onPress={() => setFilterCurrency(currency.code as FilterCurrency)}
-              >
-                <Text
-                  style={[
-                    styles.currencyFilterText,
-                    filterCurrency === currency.code && styles.currencyFilterTextActive,
-                  ]}
-                >
-                  {currency.symbol} {currency.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
       <ScrollView
-        style={styles.content}
+        style={styles.screen}
+        contentContainerStyle={styles.contentContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
       >
+        <View style={styles.topHeader}>
+          <TouchableOpacity style={styles.topActionButton} onPress={generatePDF}>
+            <Download size={16} color="#5B5AF7" />
+            <Text style={styles.topActionText}>PDF</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.pageTitle}>تقرير الديون الشامل</Text>
+
+          <TouchableOpacity style={styles.topIconButton} onPress={() => router.back()}>
+            <ArrowRight size={18} color="#1E1B4B" />
+          </TouchableOpacity>
+        </View>
+
         {isLoading ? (
-          <View style={styles.emptyContainer}>
+          <View style={styles.emptyBox}>
             <Text style={styles.emptyText}>جاري التحميل...</Text>
           </View>
-        ) : filteredData.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>لا توجد نتائج</Text>
+        ) : data.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>لا توجد بيانات</Text>
           </View>
         ) : (
-          <View style={styles.customersList}>
-            {filteredData.map((customer) => renderCustomerCard(customer))}
-          </View>
+          data.map((customer) => (
+            <View key={customer.customerId} style={styles.sectionCard}>
+              <Text style={styles.customerName}>{customer.customerName}</Text>
+              <Text style={styles.accountNumber}>رقم الحساب: {customer.accountNumber}</Text>
+
+              <View style={styles.balanceList}>
+                {customer.balances.map((balance) => {
+                  const amount = Number(balance.balance);
+                  const meta = getBalanceMeta(amount);
+                  const currencyInfo = getCurrencyInfo(balance.currency);
+
+                  return (
+                    <View key={`${customer.customerId}-${balance.currency}`} style={styles.balanceRow}>
+                      <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
+                        <Text style={[styles.statusPillText, { color: meta.color }]}>{meta.label}</Text>
+                      </View>
+
+                      <View style={styles.balanceInfo}>
+                        <Text style={styles.currencyName}>{currencyInfo.name}</Text>
+                        <Text style={[styles.balanceAmount, { color: meta.color }]}>
+                          {meta.sign} {formatAmount(Math.abs(amount))} {currencyInfo.symbol}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          ))
         )}
+
+        <View style={{ height: 10 }} />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+  container: { flex: 1, backgroundColor: '#F7F7FC' },
+  screen: { flex: 1 },
+  contentContainer: { padding: 14, paddingBottom: 24 },
+  topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    marginBottom: 14,
+    marginTop: 6,
   },
-  backButton: {
-    width: 40,
-    height: 40,
+  topIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  exportButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statsScrollView: {
-    flexGrow: 0,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-  },
-  statCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     elevation: 2,
-    minWidth: 120,
   },
-  statCurrencyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    minWidth: 180,
-    gap: 8,
-  },
-  statCurrencyLabel: {
-    fontSize: 14,
-    color: '#111827',
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  statCurrencyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    justifyContent: 'flex-end',
-  },
-  statCurrencyLabelSmall: {
-    fontSize: 11,
-    color: '#6B7280',
-    textAlign: 'right',
-  },
-  statCurrencyValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    flex: 1,
-    textAlign: 'right',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  controlsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 8,
-    marginBottom: 8,
-  },
-  searchContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+  topActionButton: {
+    minWidth: 64,
+    height: 42,
     paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  searchIcon: {
-    marginLeft: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 44,
-    fontSize: 14,
-    color: '#111827',
-  },
-  filterButton: {
-    width: 44,
-    height: 44,
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    justifyContent: 'center',
     alignItems: 'center',
-  },
-  sortButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filtersPanel: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  filtersPanelTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'right',
-  },
-  currencyFilter: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  currencyFilterActive: {
-    backgroundColor: '#4F46E5',
-  },
-  currencyFilterText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  currencyFilterTextActive: {
-    color: '#FFFFFF',
-  },
-  content: {
-    flex: 1,
-  },
-  customersList: {
-    padding: 16,
-  },
-  customerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    flexDirection: 'row',
+    gap: 6,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     elevation: 2,
   },
-  customerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    paddingBottom: 12,
+  topActionText: { fontSize: 13, color: '#5B5AF7', fontWeight: '800' },
+  pageTitle: { fontSize: 22, fontWeight: '900', color: '#1E1B4B' },
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ECECF7',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  customerName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'right',
-    flex: 1,
-  },
-  balancesContainer: {
-    gap: 8,
-  },
+  customerName: { fontSize: 16, fontWeight: '900', color: '#1E1B4B', textAlign: 'right' },
+  accountNumber: { fontSize: 12, color: '#7C84A3', textAlign: 'right', marginTop: 4, marginBottom: 10 },
+  balanceList: { gap: 10 },
   balanceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  currencyInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  currencyName: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'right',
-  },
-  currencyCode: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textAlign: 'right',
-  },
-  amountContainer: {
+    borderWidth: 1,
+    borderColor: '#E3E7F2',
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
-  balanceDirection: {
-    fontSize: 13,
-    fontWeight: '700',
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    marginLeft: 10,
   },
-  balanceAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'right',
-  },
-  customerFooter: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    gap: 8,
-  },
-  currencySection: {
-    gap: 4,
-  },
-  currencyFooterRow: {
-    flexDirection: 'row',
+  statusPillText: { fontSize: 12, fontWeight: '800' },
+  balanceInfo: { flex: 1, alignItems: 'flex-end' },
+  currencyName: { fontSize: 13, fontWeight: '700', color: '#1F2937', marginBottom: 4 },
+  balanceAmount: { fontSize: 16, fontWeight: '900', textAlign: 'right' },
+  emptyBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 24,
     alignItems: 'center',
-    gap: 8,
-    justifyContent: 'space-between',
-  },
-  footerCurrency: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: 'bold',
-    textAlign: 'right',
-    marginBottom: 4,
-  },
-  totalIncomingLabel: {
-    fontSize: 11,
-    color: '#10B981',
-    fontWeight: '600',
-    textAlign: 'right',
-    minWidth: 50,
-  },
-  totalIncoming: {
-    fontSize: 11,
-    color: '#10B981',
-    textAlign: 'right',
-    flex: 1,
-  },
-  totalOutgoingLabel: {
-    fontSize: 11,
-    color: '#EF4444',
-    fontWeight: '600',
-    textAlign: 'right',
-    minWidth: 50,
-  },
-  totalOutgoing: {
-    fontSize: 11,
-    color: '#EF4444',
-    textAlign: 'right',
-    flex: 1,
-  },
-  emptyContainer: {
-    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 64,
+    borderWidth: 1,
+    borderColor: '#ECECF7',
   },
-  emptyText: {
-    fontSize: 16,
-    color: '#9CA3AF',
-  },
+  emptyText: { fontSize: 14, color: '#7C84A3', fontWeight: '600' },
 });

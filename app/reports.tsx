@@ -1,66 +1,62 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-} from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowRight, FileText, Download } from 'lucide-react-native';
+import { ArrowRight, FileText, ClipboardList } from 'lucide-react-native';
+
+const reportTypes = [
+  {
+    title: 'تقرير الديون الشامل',
+    description: 'عرض أرصدة جميع العملاء بكل العملات مع إمكانية التصدير',
+    icon: FileText,
+    color: '#5B5AF7',
+    route: '/debt-summary',
+  },
+  {
+    title: 'الديون',
+    description: 'عرض الديون المستحقة والمدفوعة بشكل مبسط',
+    icon: ClipboardList,
+    color: '#F97316',
+    route: '/debts',
+  },
+];
 
 export default function ReportsScreen() {
   const router = useRouter();
 
-  const reportTypes = [
-    {
-      title: 'تقرير الديون الشامل',
-      description: 'عرض أرصدة جميع العملاء بكل العملات',
-      icon: FileText,
-      color: '#4F46E5',
-      route: '/debt-summary',
-    },
-  ];
-
-  const handleGenerateReport = (report: typeof reportTypes[0]) => {
-    router.push(report.route as any);
-  };
-
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowRight size={24} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>التقارير</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView style={styles.content}>
-        <View style={styles.infoCard}>
-          <FileText size={48} color="#4F46E5" />
-          <Text style={styles.infoTitle}>التقارير المالية</Text>
-          <Text style={styles.infoText}>
-            اختر نوع التقرير الذي تريد إنشاءه. يمكنك تصدير التقارير ومشاركتها بصيغة PDF.
-          </Text>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+        <View style={styles.topHeader}>
+          <View style={styles.headerSpacer} />
+          <Text style={styles.pageTitle}>التقارير</Text>
+          <TouchableOpacity style={styles.topIconButton} onPress={() => router.back()}>
+            <ArrowRight size={18} color="#1E1B4B" />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.reportsSection}>
-          {reportTypes.map((report, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.reportCard}
-              onPress={() => handleGenerateReport(report)}
-            >
-              <View style={[styles.reportIcon, { backgroundColor: `${report.color}15` }]}>
-                <report.icon size={32} color={report.color} />
-              </View>
-              <View style={styles.reportInfo}>
-                <Text style={styles.reportTitle}>{report.title}</Text>
-                <Text style={styles.reportDescription}>{report.description}</Text>
-              </View>
-              <Download size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          ))}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>اختر التقرير</Text>
+          <Text style={styles.sectionSubtitle}>واجهة مبسطة وواضحة بنفس أسلوب الإحصائيات</Text>
+
+          <View style={styles.cardsWrap}>
+            {reportTypes.map((report) => (
+              <TouchableOpacity
+                key={report.route}
+                activeOpacity={0.88}
+                style={styles.reportCard}
+                onPress={() => router.push(report.route as any)}
+              >
+                <View style={[styles.reportIconWrap, { backgroundColor: `${report.color}12` }]}>
+                  <report.icon size={18} color={report.color} />
+                </View>
+
+                <View style={styles.reportTextWrap}>
+                  <Text style={styles.reportTitle}>{report.title}</Text>
+                  <Text style={styles.reportDescription}>{report.description}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -70,95 +66,104 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F7F7FC',
   },
-  header: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+  screen: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 14,
+    paddingBottom: 24,
+  },
+  topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    marginBottom: 14,
+    marginTop: 6,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  content: {
-    flex: 1,
-  },
-  infoCard: {
+  topIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
-    margin: 16,
-    padding: 24,
-    borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     elevation: 2,
   },
-  infoTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginTop: 16,
-    marginBottom: 8,
+  headerSpacer: {
+    width: 42,
+    height: 42,
   },
-  infoText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 22,
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1E1B4B',
   },
-  reportsSection: {
-    padding: 16,
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#ECECF7',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#1E1B4B',
+    textAlign: 'right',
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#7C84A3',
+    fontWeight: '500',
+    textAlign: 'right',
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  cardsWrap: {
+    gap: 10,
   },
   reportCard: {
-    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E3E7F2',
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  reportIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
+  reportIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
-    marginLeft: 16,
+    justifyContent: 'center',
+    marginLeft: 10,
   },
-  reportInfo: {
+  reportTextWrap: {
     flex: 1,
+    alignItems: 'flex-end',
   },
   reportTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1F2937',
     textAlign: 'right',
   },
   reportDescription: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6B7280',
     textAlign: 'right',
+    marginTop: 4,
   },
 });

@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { ArrowRight, User, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserLinkedAccount, CURRENCIES } from '@/types/database';
+import { UserLinkedAccount } from '@/types/database';
 
 export default function LinkedAccountsScreen() {
   const router = useRouter();
@@ -84,9 +84,6 @@ export default function LinkedAccountsScreen() {
         <View style={styles.accountInfo}>
           <View style={styles.accountHeader}>
             <Text style={styles.accountName}>{displayName}</Text>
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>{isOwner ? 'عميلك' : 'أنت عميل عنده'}</Text>
-            </View>
           </View>
           <Text style={styles.accountNumber}>رقم الحساب: {displayAccount}</Text>
         </View>
