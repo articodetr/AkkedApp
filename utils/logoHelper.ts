@@ -2,10 +2,24 @@ import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Customer } from '@/types/database';
 
 const BUCKET_NAME = 'shop-logos';
 const FIXED_SETTINGS_ID = '00000000-0000-0000-0000-000000000000';
+const USER_KEY = '@money_transfer_current_user';
+
+async function getCurrentUserIdFromStorage(): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.userId || null;
+  } catch (error) {
+    console.error('[logoHelper] Error reading current user:', error);
+    return null;
+  }
+}
 const DEFAULT_RECEIPT_HEADER = require('../assets/images/default-header.png');
 
 type ReceiptHeaderContext = {
@@ -236,13 +250,17 @@ async function getStoredLetterheadHeaderBase64(
   }
 }
 
-async function getAppReceiptLogoBase64(forceRefresh = false): Promise<string> {
+async function getAppReceiptLogoBase64(forceRefresh = false, userId?: string | null): Promise<string> {
   try {
-    const { data: settings, error } = await supabase
+    const resolvedUserId = userId || await getCurrentUserIdFromStorage();
+    const query = supabase
       .from('app_settings')
       .select('selected_receipt_logo, shop_logo')
-      .eq('id', FIXED_SETTINGS_ID)
-      .maybeSingle();
+      .limit(1);
+
+    const { data: settings, error } = resolvedUserId
+      ? await query.eq('user_id', resolvedUserId).maybeSingle()
+      : await query.eq('id', FIXED_SETTINGS_ID).maybeSingle();
 
     if (error || !settings) {
       return await getBundledDefaultHeader();
@@ -289,12 +307,12 @@ export async function getCustomerReceiptHeaderBase64(
         return storedLetterhead;
       }
 
-      return await getAppReceiptLogoBase64(forceRefresh);
+      return await getAppReceiptLogoBase64(forceRefresh, context.userId);
     }
 
     if (mode === 'full_banner' && customer.receipt_header_banner_url) {
       const banner = await downloadAndConvertImageToBase64(customer.receipt_header_banner_url);
-      return banner || (await getAppReceiptLogoBase64(forceRefresh));
+      return banner || (await getAppReceiptLogoBase64(forceRefresh, context.userId));
     }
 
     if (mode === 'generated') {
@@ -313,7 +331,7 @@ export async function getCustomerReceiptHeaderBase64(
       return storedLetterhead;
     }
 
-    return await getAppReceiptLogoBase64(forceRefresh);
+    return await getAppReceiptLogoBase64(forceRefresh, context.userId);
   } catch (error) {
     console.error('[logoHelper] Error in getCustomerReceiptHeaderBase64:', error);
 
@@ -323,7 +341,7 @@ export async function getCustomerReceiptHeaderBase64(
       return storedLetterhead;
     }
 
-    return await getAppReceiptLogoBase64(forceRefresh);
+    return await getAppReceiptLogoBase64(forceRefresh, context.userId);
   }
 }
 
@@ -343,16 +361,20 @@ export async function getLogoBase64(
   return getCustomerReceiptHeaderBase64(customer, forceRefresh, context);
 }
 
-export async function getLogoUrl(): Promise<string> {
+export async function getLogoUrl(userId?: string): Promise<string> {
   try {
     const defaultAsset = Asset.fromModule(DEFAULT_RECEIPT_HEADER);
     const defaultUri = defaultAsset.uri || '';
 
-    const { data: settings, error } = await supabase
+    const resolvedUserId = userId || await getCurrentUserIdFromStorage();
+    const query = supabase
       .from('app_settings')
       .select('shop_logo')
-      .eq('id', FIXED_SETTINGS_ID)
-      .maybeSingle();
+      .limit(1);
+
+    const { data: settings, error } = resolvedUserId
+      ? await query.eq('user_id', resolvedUserId).maybeSingle()
+      : await query.eq('id', FIXED_SETTINGS_ID).maybeSingle();
 
     if (error || !settings?.shop_logo) {
       return defaultUri;

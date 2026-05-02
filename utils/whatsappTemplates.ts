@@ -1,8 +1,22 @@
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const APP_SETTINGS_FIXED_ID = '00000000-0000-0000-0000-000000000000';
+const USER_KEY = '@money_transfer_current_user';
+
+async function getCurrentUserId(): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.userId || null;
+  } catch (error) {
+    console.error('Error reading current user:', error);
+    return null;
+  }
+}
 
 export interface TemplateVariables {
   customer_name?: string;
@@ -52,11 +66,15 @@ const PLACEHOLDER_ALIASES: Record<keyof TemplateVariables, string[]> = {
 
 export async function fetchWhatsAppTemplates(): Promise<WhatsAppTemplates> {
   try {
-    const { data, error } = await supabase
+    const userId = await getCurrentUserId();
+    const query = supabase
       .from('app_settings')
       .select('whatsapp_account_statement_template, whatsapp_share_account_template')
-      .eq('id', APP_SETTINGS_FIXED_ID)
-      .maybeSingle();
+      .limit(1);
+
+    const { data, error } = userId
+      ? await query.eq('user_id', userId).maybeSingle()
+      : await query.eq('id', APP_SETTINGS_FIXED_ID).maybeSingle();
 
     if (error) {
       console.error('Error fetching WhatsApp templates:', error);

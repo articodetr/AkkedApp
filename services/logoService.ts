@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -6,11 +7,36 @@ import { decode } from 'base64-arraybuffer';
 
 const BUCKET_NAME = 'shop-logos';
 const FIXED_SETTINGS_ID = '00000000-0000-0000-0000-000000000000';
+const USER_KEY = '@money_transfer_current_user';
+
+async function getCurrentUserId(): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.userId || null;
+  } catch (error) {
+    console.error('[logoService] Error reading current user:', error);
+    return null;
+  }
+}
 
 export interface UploadLogoResult {
   success: boolean;
   url?: string;
   error?: string;
+}
+
+async function getCurrentUserIdFromStorage(): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.userId || null;
+  } catch (error) {
+    console.error('[logoService] Error reading current user from storage:', error);
+    return null;
+  }
 }
 
 export async function pickImageFromGallery(): Promise<string | null> {
@@ -192,11 +218,15 @@ export async function updateShopLogo(logoUrl: string | null): Promise<boolean> {
   try {
     console.log('[logoService] updateShopLogo called with logoUrl:', logoUrl);
 
-    const { data: settings, error: fetchError } = await supabase
+    const userId = await getCurrentUserIdFromStorage();
+    const query = supabase
       .from('app_settings')
       .select('id, shop_logo')
-      .eq('id', FIXED_SETTINGS_ID)
-      .maybeSingle();
+      .limit(1);
+
+    const { data: settings, error: fetchError } = userId
+      ? await query.eq('user_id', userId).maybeSingle()
+      : await query.eq('id', FIXED_SETTINGS_ID).maybeSingle();
 
     if (fetchError) {
       console.error('[logoService] Fetch error:', fetchError);
@@ -207,17 +237,16 @@ export async function updateShopLogo(logoUrl: string | null): Promise<boolean> {
       await deleteLogo(settings.shop_logo);
     }
 
-    const settingsToUpsert = {
-      id: FIXED_SETTINGS_ID,
-      shop_logo: logoUrl,
-    };
+    const settingsToUpsert: Record<string, any> = userId
+      ? { user_id: userId, shop_logo: logoUrl }
+      : { id: FIXED_SETTINGS_ID, shop_logo: logoUrl };
 
     console.log('[logoService] Upserting settings:', settingsToUpsert);
 
     const { data, error: upsertError } = await supabase
       .from('app_settings')
       .upsert(settingsToUpsert, {
-        onConflict: 'id',
+        onConflict: userId ? 'user_id' : 'id',
         ignoreDuplicates: false,
       })
       .select();
@@ -247,15 +276,21 @@ export async function updateShopSettings(settings: {
   try {
     console.log('[logoService] updateShopSettings called with:', settings);
 
-    const settingsToUpsert = {
-      id: FIXED_SETTINGS_ID,
-      ...settings,
-    };
+    const userId = await getCurrentUserIdFromStorage();
+    const settingsToUpsert: Record<string, any> = userId
+      ? {
+          user_id: userId,
+          ...settings,
+        }
+      : {
+          id: FIXED_SETTINGS_ID,
+          ...settings,
+        };
 
     const { data, error: upsertError } = await supabase
       .from('app_settings')
       .upsert(settingsToUpsert, {
-        onConflict: 'id',
+        onConflict: userId ? 'user_id' : 'id',
         ignoreDuplicates: false,
       })
       .select();
