@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   RefreshControl,
@@ -89,119 +89,138 @@ export default function DebtSummaryScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
 
-  const loadData = useCallback(async () => {
-    try {
-      setIsLoading(true);
+  const loadData = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent === true;
 
-      if (!currentUser?.userId) {
-        setRows([]);
-        return;
-      }
+      try {
+        if (!silent) {
+          setIsLoading(true);
+        }
 
-      // Read customers using statistics scope, not owned-only scope.
-      const { data: customersData, error: customersError } = await supabase
-        .from('customers')
-        .select('id, name, account_number, is_profit_loss_account')
-        .or(buildStatisticsCustomerFilter(currentUser.userId))
-        .order('name', { ascending: true });
+        if (!currentUser?.userId) {
+          setRows([]);
+          return;
+        }
 
-      if (customersError) {
-        throw customersError;
-      }
+        const { data: customersData, error: customersError } = await supabase
+          .from('customers')
+          .select('id, name, account_number, is_profit_loss_account')
+          .or(buildStatisticsCustomerFilter(currentUser.userId))
+          .order('name', { ascending: true });
 
-      const visibleCustomers = ((customersData || []) as any[])
-        .filter((customer) => !customer.is_profit_loss_account)
-        .map(
-          (customer) =>
-            ({
-              id: customer.id,
-              name: customer.name,
-              accountNumber: customer.account_number || '-',
-            }) satisfies CustomerRow,
+        if (customersError) {
+          throw customersError;
+        }
+
+        const visibleCustomers = ((customersData || []) as any[])
+          .filter((customer) => !customer.is_profit_loss_account)
+          .map(
+            (customer) =>
+              ({
+                id: customer.id,
+                name: customer.name,
+                accountNumber: customer.account_number || '-',
+              }) satisfies CustomerRow,
+          );
+
+        if (visibleCustomers.length === 0) {
+          setRows([]);
+          hasLoadedOnceRef.current = true;
+          return;
+        }
+
+        const customerMap = new Map<string, CustomerRow>(
+          visibleCustomers.map((customer) => [customer.id, customer]),
         );
 
-      if (visibleCustomers.length === 0) {
-        setRows([]);
-        return;
+        const customerIds = visibleCustomers.map((customer) => customer.id);
+
+        const { data: balancesData, error: balancesError } = await supabase
+          .from('customer_balances_by_currency')
+          .select('*')
+          .in('customer_id', customerIds)
+          .order('customer_name', { ascending: true });
+
+        if (balancesError) {
+          throw balancesError;
+        }
+
+        const nextRows: ReportRow[] = ((balancesData || []) as CustomerBalanceByCurrency[])
+          .map((balance) => {
+            const customer = customerMap.get(balance.customer_id);
+            if (!customer) return null;
+
+            const amount = Number((balance as any).balance || 0);
+            const currencyInfo = getCurrencyInfo(balance.currency);
+            const meta = getBalanceMeta(amount);
+
+            return {
+              key: `${balance.customer_id}-${balance.currency}`,
+              customerId: balance.customer_id,
+              customerName: customer.name || (balance as any).customer_name || 'عميل',
+              accountNumber: customer.accountNumber || '-',
+              currency: balance.currency,
+              currencyName: currencyInfo.name,
+              currencySymbol: currencyInfo.symbol,
+              amount,
+              statusLabel: meta.label,
+              statusColor: meta.color,
+              statusBg: meta.bg,
+              amountPrefix: meta.sign,
+            } satisfies ReportRow;
+          })
+          .filter((item): item is ReportRow => Boolean(item))
+          .sort((a, b) => {
+            const customerCompare = a.customerName.localeCompare(b.customerName, 'ar');
+            if (customerCompare !== 0) return customerCompare;
+            return a.currency.localeCompare(b.currency);
+          });
+
+        setRows(nextRows);
+        hasLoadedOnceRef.current = true;
+      } catch (error) {
+        console.error('[DebtSummary] Error loading report:', error);
+        Alert.alert('خطأ', 'تعذر تحميل تقرير الديون الشامل');
+        if (!silent) {
+          setRows([]);
+        }
+      } finally {
+        if (!silent) {
+          setIsLoading(false);
+        }
       }
-
-      const customerMap = new Map<string, CustomerRow>(
-        visibleCustomers.map((customer) => [customer.id, customer]),
-      );
-
-      const customerIds = visibleCustomers.map((customer) => customer.id);
-
-      const { data: balancesData, error: balancesError } = await supabase
-        .from('customer_balances_by_currency')
-        .select('*')
-        .in('customer_id', customerIds)
-        .order('customer_name', { ascending: true });
-
-      if (balancesError) {
-        throw balancesError;
-      }
-
-      const nextRows: ReportRow[] = ((balancesData || []) as CustomerBalanceByCurrency[])
-        .map((balance) => {
-          const customer = customerMap.get(balance.customer_id);
-          if (!customer) return null;
-
-          const amount = Number((balance as any).balance || 0);
-          const currencyInfo = getCurrencyInfo(balance.currency);
-          const meta = getBalanceMeta(amount);
-
-          return {
-            key: `${balance.customer_id}-${balance.currency}`,
-            customerId: balance.customer_id,
-            customerName: customer.name || (balance as any).customer_name || 'عميل',
-            accountNumber: customer.accountNumber || '-',
-            currency: balance.currency,
-            currencyName: currencyInfo.name,
-            currencySymbol: currencyInfo.symbol,
-            amount,
-            statusLabel: meta.label,
-            statusColor: meta.color,
-            statusBg: meta.bg,
-            amountPrefix: meta.sign,
-          } satisfies ReportRow;
-        })
-        .filter((item): item is ReportRow => Boolean(item))
-        .sort((a, b) => {
-          const customerCompare = a.customerName.localeCompare(b.customerName, 'ar');
-          if (customerCompare !== 0) return customerCompare;
-          return a.currency.localeCompare(b.currency);
-        });
-
-      setRows(nextRows);
-    } catch (error) {
-      console.error('[DebtSummary] Error loading report:', error);
-      Alert.alert('خطأ', 'تعذر تحميل تقرير الديون الشامل');
-      setRows([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUser?.userId]);
+    },
+    [currentUser?.userId],
+  );
 
   useEffect(() => {
-    if (currentUser?.userId) {
-      loadData();
-    } else {
+    if (!currentUser?.userId) {
       setRows([]);
       setIsLoading(false);
+      hasLoadedOnceRef.current = false;
+      return;
     }
+
+    loadData({ silent: false });
   }, [currentUser?.userId, loadData]);
 
   useEffect(() => {
-    if (!isLoading && currentUser?.userId) {
-      loadData();
-    }
-  }, [lastRefreshTime, currentUser?.userId, isLoading, loadData]);
+    if (!currentUser?.userId) return;
+    if (!hasLoadedOnceRef.current) return;
+
+    loadData({ silent: true });
+  }, [lastRefreshTime, currentUser?.userId, loadData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+    try {
+      await loadData({ silent: true });
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const summary = useMemo(() => {
