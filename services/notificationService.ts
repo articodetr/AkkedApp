@@ -148,7 +148,7 @@ function normalizeNotification(item: MovementNotification): MovementNotification
   return {
     ...item,
     customer_id: item.customer_id || movement?.customer_id || null,
-    customer_name: item.customer_name || movement?.customer?.name || null,
+    customer_name: movement?.customer?.name || item.customer_name || null,
     movement_number: item.movement_number || movement?.movement_number || null,
     amount: item.amount ?? movement?.amount ?? null,
     currency: item.currency || movement?.currency || null,
@@ -272,6 +272,7 @@ export function isNotificationPending(item: MovementNotification) {
   return (
     rawStatus === 'pending' ||
     item.notification_type === 'approval_needed' ||
+    item.notification_type === 'movement_pending' ||
     Boolean(item.movement?.pending_approval)
   );
 }
@@ -442,14 +443,28 @@ const isIncoming = movementType === 'incoming';
     rowBg = '#FEF2F2';
     visualState = 'rejected';
   } else if (pending) {
-    subtitle = createdByCurrentUser ? `بانتظار موافقة ${customerName}.` : 'بانتظار الموافقة.';
-    statusText = 'معلقة';
-    statusColor = '#B45309';
-    statusBg = '#FEF3C7';
-    rowBorderColor = '#FBBF24';
-    rowBg = '#FFFBEB';
-    visualState = 'pending';
-  } else if (!subtitle) {
+  if (createdByCurrentUser) {
+    subtitle = customerName
+      ? `أنت قيدت على ${customerName}${amountSentenceText ? ` مبلغ ${amountSentenceText}` : ''} وبانتظار موافقته.`
+      : 'أنت أضفت هذه الحركة وهي بانتظار موافقة الطرف الآخر.';
+  } else {
+    subtitle = actorName
+      ? `${actorName} قيد عليك${amountSentenceText ? ` مبلغ ${amountSentenceText}` : ''} وبانتظار موافقتك.`
+      : 'هذه الحركة بانتظار موافقتك قبل أن تدخل في الإجماليات.';
+  }
+
+  statusText = 'معلقة';
+
+  statusColor = '#B45309';
+
+  statusBg = '#FEF3C7';
+
+  rowBorderColor = '#FBBF24';
+
+  rowBg = '#FFFBEB';
+
+  visualState = 'pending';
+} else if (!subtitle) {
     subtitle = 'يوجد تحديث جديد على هذه الحركة.';
   }
 
@@ -518,6 +533,46 @@ export function getNotificationSearchText(item: MovementNotification) {
     .join(' ');
 }
 
+function getNotificationDedupScore(item: MovementNotification) {
+  let score = 0;
+
+  if (item.movement?.customer?.name) score += 10;
+  if (item.customer_name) score += 5;
+  if (item.action_required === false) score += 2;
+  if (item.message) score += 1;
+  if (item.title) score += 1;
+
+  return score;
+}
+
+function dedupeMovementNotifications(items: MovementNotification[]): MovementNotification[] {
+  const output = new Map<string, MovementNotification>();
+
+  for (const rawItem of items) {
+    const item = normalizeNotification(rawItem);
+    const rawStatus = getNotificationRawStatus(item);
+    const key = item.movement_id
+      ? [item.user_id || '', item.movement_id, rawStatus || item.notification_type || 'info'].join('::')
+      : item.id;
+
+    const existing = output.get(key);
+    if (!existing) {
+      output.set(key, item);
+      continue;
+    }
+
+    const currentScore = getNotificationDedupScore(item);
+    const existingScore = getNotificationDedupScore(existing);
+
+    if (currentScore > existingScore) {
+      output.set(key, item);
+    }
+  }
+
+  return Array.from(output.values());
+}
+
+
 export function notificationMatchesSearch(item: MovementNotification, searchQuery: string) {
   const query = normalizeText(searchQuery).replace(/\s+/g, ' ');
   if (!query) return true;
@@ -579,7 +634,7 @@ export async function getGeneralNotifications(userId: string) {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return ((data || []) as MovementNotification[]).map(normalizeNotification);
+  return dedupeMovementNotifications((data || []) as MovementNotification[]);
 }
 
 export async function getCustomerNotifications(userId: string, customerId: string) {
@@ -592,7 +647,7 @@ export async function getCustomerNotifications(userId: string, customerId: strin
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return ((data || []) as MovementNotification[]).map(normalizeNotification);
+  return dedupeMovementNotifications((data || []) as MovementNotification[]);
 }
 
 export async function getNotificationById(notificationId: string) {
