@@ -53,6 +53,9 @@ export const isCustomerLimitReachedMessage = (message?: string | null) => {
     normalized.includes('quota') ||
     normalized.includes('limit') ||
     normalized.includes('subscription limit') ||
+    normalized.includes('free limit') ||
+    normalized.includes('free quota') ||
+    normalized.includes('requires subscription') ||
     compactArabic.includes('الحد المسموح') ||
     compactArabic.includes('الحد الأقصى') ||
     compactArabic.includes('الحد الاقصى') ||
@@ -60,6 +63,10 @@ export const isCustomerLimitReachedMessage = (message?: string | null) => {
     compactArabic.includes('وصل المستخدم إلى الحد') ||
     compactArabic.includes('وصلت إلى الحد') ||
     compactArabic.includes('تفعيل الاشتراك') ||
+    compactArabic.includes('الحد المجاني') ||
+    compactArabic.includes('يجب عليك الاشتراك') ||
+    compactArabic.includes('يجب تفعيل الاشتراك') ||
+    compactArabic.includes('الاشتراك مطلوب') ||
     (compactArabic.includes('الحد') && compactArabic.includes('الاشتراك')) ||
     (compactArabic.includes('الحد') && compactArabic.includes('العملاء')) ||
     (compactArabic.includes('الحد') && compactArabic.includes('المستخدمين'))
@@ -172,15 +179,15 @@ export const showCustomerLimitReachedAlert = (
 
   const limitText =
     typeof customerLimit === 'number' && customerLimit > 0
-      ? `يجب عليك الاشتراك في التطبيق.\nلقد وصلت إلى الحد المسموح وهو ${customerLimit} عملاء${typeof customerCount === 'number' ? `، والعدد الحالي ${customerCount}` : ''}.`
-      : 'يجب عليك الاشتراك في التطبيق.\nلقد وصلت إلى الحد المسموح من العملاء في باقتك الحالية.';
+      ? `يجب عليك الاشتراك في التطبيق.\nلقد وصلت إلى الحد المجاني لإضافة العملاء. الحد الحالي هو ${customerLimit} عملاء${typeof customerCount === 'number' ? `، والعدد الحالي ${customerCount}` : ''}.`
+      : 'يجب عليك الاشتراك في التطبيق.\nلقد وصلت إلى الحد المجاني لإضافة العملاء.';
 
   Alert.alert(
     'الاشتراك مطلوب',
-    `${limitText}\n\nللتواصل والاشتراك عبر واتساب:\n${adminPhoneDisplay}`,
+    `${limitText}\n\nللتواصل عبر واتساب:\n${adminPhoneDisplay}`,
     [
       {
-        text: 'إلغاء',
+        text: 'إغلاق',
         style: 'cancel',
       },
       {
