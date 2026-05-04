@@ -81,7 +81,7 @@ export function SubscriptionLimitUpgradeModal({
             <View style={styles.quotaBox}>
               <ShieldCheck size={18} color="#4338CA" />
               <Text style={styles.quotaText}>
-                الاستخدام الحالي: {customerCount ?? 'غير معروف'} من{' '}
+                عدد العملاء الحالي: {customerCount ?? 'غير معروف'} من{' '}
                 {customerLimit ?? 'غير محدد'} عميل
               </Text>
             </View>
