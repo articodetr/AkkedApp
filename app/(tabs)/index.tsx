@@ -1,30 +1,24 @@
 import { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-  Users,
-  BarChart3,
-  FileText,
-} from 'lucide-react-native';
+import { BarChart3, FileText, Users } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { settings, refreshSettings } = useAuth();
+  const { refreshSettings } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    if (!settings) {
-      refreshSettings();
-    }
-  }, [settings, refreshSettings]);
+    refreshSettings();
+  }, [refreshSettings]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -59,17 +53,15 @@ export default function DashboardScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>{settings?.shop_name || 'الصرافة'}</Text>
-          <Text style={styles.headerSubtitle}>
-            {new Date().toLocaleDateString('ar-EG', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </Text>
-        </View>
+        <Text style={styles.headerTitle}>أكِّد</Text>
+        <Text style={styles.headerSubtitle}>
+          {new Date().toLocaleDateString('ar-EG', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}
+        </Text>
       </View>
 
       <ScrollView
@@ -77,19 +69,23 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.menuGrid}>
-          {menuItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.menuItem}
-              onPress={() => router.push(item.route as any)}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}15` }]}>
-                <item.icon size={32} color={item.color} />
-              </View>
-              <Text style={styles.menuTitle}>{item.title}</Text>
-              <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
-            </TouchableOpacity>
-          ))}
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <TouchableOpacity
+                key={item.title}
+                style={styles.menuItem}
+                onPress={() => router.push(item.route as any)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}15` }]}>
+                  <Icon size={28} color={item.color} />
+                </View>
+                <Text style={styles.menuTitle}>{item.title}</Text>
+                <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
     </View>

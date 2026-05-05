@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, ActivityIndicator, Modal, TextInput, I18nManager, } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -13,7 +13,6 @@ import { format, isSameMonth, isSameYear, startOfDay, endOfDay } from 'date-fns'
 import { ar } from 'date-fns/locale';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
 import { generateAccountStatementHTML } from '@/utils/accountStatementGenerator';
 import { getLogoBase64 } from '@/utils/logoHelper';
 import QuickAddMovementSheet from '@/components/QuickAddMovementSheet';
@@ -33,49 +32,6 @@ import {
   normalizeMovementApprovalStatus,
   requiresCounterpartyApproval,
 } from '@/utils/movementApproval';
-
-
-function sanitizeStatementPdfFileName(value: string | number | null | undefined): string {
-  const safe = String(value || 'عميل')
-    .trim()
-    .replace(/[\\/:*?"<>|#%{}~&]/g, '-')
-    .replace(/\s+/g, '_')
-    .replace(/_+/g, '_')
-    .slice(0, 80);
-  return safe || 'عميل';
-}
-
-function buildAccountStatementPdfName(customerName: string | null | undefined): string {
-  const safeCustomerName = sanitizeStatementPdfFileName(customerName);
-  const date = new Date().toISOString().slice(0, 10);
-  return `كشف_حساب_${safeCustomerName}_${date}.pdf`;
-}
-
-async function prepareNamedStatementPdf(sourceUri: string, fileName: string): Promise<string> {
-  const baseDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory;
-
-  if (!baseDirectory) {
-    return sourceUri;
-  }
-
-  const targetUri = `${baseDirectory}${fileName}`;
-
-  if (targetUri === sourceUri) {
-    return sourceUri;
-  }
-
-  try {
-    const existing = await FileSystem.getInfoAsync(targetUri);
-    if (existing.exists) {
-      await FileSystem.deleteAsync(targetUri, { idempotent: true });
-    }
-  } catch {
-    // تجاهل خطأ فحص الملف القديم.
-  }
-
-  await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
-  return targetUri;
-}
 
 interface GroupedMovements {
   [key: string]: AccountMovement[];
@@ -370,13 +326,6 @@ export default function CustomerDetailsScreen() {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const searchScrollRef = useRef<ScrollView>(null);
-
-  const focusSearchInput = () => {
-    setTimeout(() => {
-      searchScrollRef.current?.scrollTo({ y: 230, animated: true });
-    }, 220);
-  };
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null); const loadCustomerData = useCallback(async () => {
@@ -585,12 +534,11 @@ export default function CustomerDetailsScreen() {
 
       console.log('[CustomerDetails] Creating PDF file...');
       const { uri } = await Print.printToFileAsync({ html });
-      const statementPdfName = buildAccountStatementPdfName(customer.name);
-      const namedPdfUri = await prepareNamedStatementPdf(uri, statementPdfName);
-      console.log('[CustomerDetails] PDF created at:', namedPdfUri);
+      console.log('[CustomerDetails] PDF created at:', uri);
+
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(namedPdfUri, {
+        await Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',
           dialogTitle: `كشف حساب ${customer.name}`,
           UTI: 'com.adobe.pdf',
@@ -1077,12 +1025,7 @@ export default function CustomerDetailsScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView
-        ref={searchScrollRef}
-        style={styles.content}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.contentScrollContainer}
-      >
+      <ScrollView style={styles.content}>
         <View style={styles.summarySection}>
           <View style={styles.summaryPanel}>
             <View style={styles.summarySectionHeader}>
@@ -1250,8 +1193,7 @@ export default function CustomerDetailsScreen() {
               value={searchQuery}
               onChangeText={setSearchQuery}
               textAlign="right"
-          onFocus={focusSearchInput}
-        />
+            />
             {searchQuery !== '' && (
               <TouchableOpacity
                 onPress={() => setSearchQuery('')}
@@ -1462,76 +1404,14 @@ export default function CustomerDetailsScreen() {
         />
       )}
 
-      
-      {/* Akked safe customer settings menu */}
       <Modal
         visible={showSettingsMenu}
         transparent
         animationType="fade"
         onRequestClose={() => setShowSettingsMenu(false)}
       >
-        <View style={styles.settingsOverlay}>
-          <TouchableOpacity
-            style={styles.settingsBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowSettingsMenu(false)}
-          />
-
-          <View style={styles.settingsSheet}>
-            <Text style={styles.settingsSheetTitle}>إدارة العميل</Text>
-            <Text style={styles.settingsSheetSubtitle}>{customer?.name}</Text>
-
-            <TouchableOpacity
-              style={styles.settingsMenuItem}
-              activeOpacity={0.75}
-              onPress={() => {
-                setShowSettingsMenu(false);
-                router.push({
-                  pathname: '/add-customer',
-                  params: { id: String(customer?.id || id || '') },
-                });
-              }}
-            >
-              <Text style={styles.settingsMenuItemText}>تعديل البيانات</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.settingsMenuItem}
-              activeOpacity={0.75}
-              onPress={() => {
-                setShowSettingsMenu(false);
-                setTimeout(handleResetAccount, 150);
-              }}
-            >
-              <Text style={[styles.settingsMenuItemText, styles.settingsMenuItemDanger]}>
-                تصفير الحساب
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.settingsMenuItem}
-              activeOpacity={0.75}
-              onPress={() => {
-                setShowSettingsMenu(false);
-                setTimeout(handleDeleteCustomer, 150);
-              }}
-            >
-              <Text style={[styles.settingsMenuItemText, styles.settingsMenuItemDanger]}>
-                حذف العميل
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.settingsCancelButton}
-              activeOpacity={0.75}
-              onPress={() => setShowSettingsMenu(false)}
-            >
-              <Text style={styles.settingsCancelText}>إلغاء</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        
       </Modal>
-
 
       <CalendarRangePicker
         visible={showDateRangeModal}
@@ -1547,64 +1427,6 @@ export default function CustomerDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-
-  settingsOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  settingsBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  settingsSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 22,
-    paddingTop: 24,
-    paddingBottom: 30,
-  },
-  settingsSheetTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  settingsSheetSubtitle: {
-    fontSize: 14,
-    color: '#64748B',
-    textAlign: 'center',
-    marginBottom: 22,
-  },
-  settingsMenuItem: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  settingsMenuItemText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    textAlign: 'right',
-  },
-  settingsMenuItemDanger: {
-    color: '#DC2626',
-  },
-  settingsCancelButton: {
-    marginTop: 16,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingsCancelText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#334155',
-  },
-
   container: {
     flex: 1,
     backgroundColor: '#F3F4F6',
@@ -1675,9 +1497,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  contentScrollContainer: {
-    paddingBottom: 120,
   },
   loadingContainer: {
     flex: 1,

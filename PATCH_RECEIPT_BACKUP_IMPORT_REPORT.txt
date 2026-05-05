@@ -1,0 +1,4 @@
+✅ app/receipt-preview.tsx: تم إضافة دالة تسمية ملف السند باسم العميل.
+✅ app/receipt-preview.tsx: تم تعديل اسم ملف PDF عند إنشاء السند.
+✅ app/receipt-preview.tsx: تم تعديل اسم ملف PDF عند التنزيل.
+✅ app/backup.tsx: تم تفعيل استيراد بيانات JSON واستبدال رسالة قيد التطوير.

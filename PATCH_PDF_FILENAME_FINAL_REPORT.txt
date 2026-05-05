@@ -1,0 +1,7 @@
+✅ app/receipt-preview.tsx: تم إضافة دالة نسخ PDF إلى اسم واضح قبل المشاركة.
+✅ app/receipt-preview.tsx: تم إنشاء مسار PDF باسم العميل بدل اسم Expo المؤقت.
+✅ app/receipt-preview.tsx: تم إجبار المشاركة على استخدام نسخة PDF باسم العميل.
+✅ app/customer-details.tsx: تم إضافة FileSystem لإعادة تسمية ملفات كشف الحساب.
+✅ app/customer-details.tsx: تم إضافة دوال تسمية كشف الحساب باسم العميل.
+✅ app/customer-details.tsx: تم تسمية PDF كشف الحساب قبل المشاركة.
+✅ app/customer-details.tsx: تم مشاركة كشف الحساب من المسار الجديد وليس uri المؤقت.

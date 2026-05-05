@@ -65,17 +65,12 @@ export default function PinSettings() {
     }
 
     if (pin.length < 8) {
-      Alert.alert('خطأ', 'رقم PIN يجب أن يكون 8 أرقام على الأقل');
+      Alert.alert('خطأ', 'رقم PIN يجب أن يكون 8 أحرف على الأقل');
       return;
     }
 
     if (pin.length > 16) {
-      Alert.alert('خطأ', 'رقم PIN يجب أن لا يزيد عن 16 رقم');
-      return;
-    }
-
-    if (!/^\d+$/.test(pin)) {
-      Alert.alert('خطأ', 'رقم PIN يجب أن يحتوي على أرقام فقط');
+      Alert.alert('خطأ', 'رقم PIN يجب أن لا يزيد عن 16 حرف');
       return;
     }
 
@@ -169,7 +164,7 @@ export default function PinSettings() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>رقم PIN (8-16 رقم فقط)</Text>
+            <Text style={styles.label}>رقم PIN (8-16 حرف: أرقام، أحرف، رموز)</Text>
             <View style={styles.inputContainer}>
               <Lock size={20} color="#6B7280" />
               <TextInput
@@ -178,14 +173,11 @@ export default function PinSettings() {
                 placeholderTextColor="#9CA3AF"
                 value={pin}
                 onChangeText={(text) => {
-                const digitsOnly = text.replace(/[^0-9]/g, '');
-                if (digitsOnly.length <= 16) {
-                  setPin(digitsOnly);
-                }
-              }}
+                  if (text.length <= 16) {
+                    setPin(text);
+                  }
+                }}
                 maxLength={16}
-              keyboardType="number-pad"
-              inputMode="numeric"
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -197,7 +189,7 @@ export default function PinSettings() {
                 styles.lengthIndicator,
                 pin.length >= 8 && pin.length <= 16 ? styles.lengthIndicatorValid : styles.lengthIndicatorInvalid
               ]}>
-                {pin.length} / 16 رقم
+                {pin.length} / 16 حرف
               </Text>
             )}
           </View>
@@ -217,9 +209,9 @@ export default function PinSettings() {
         <View style={styles.infoSection}>
           <Text style={styles.infoSectionTitle}>معلومات مهمة</Text>
           <Text style={styles.infoSectionText}>
-            • رقم PIN يجب أن يكون 8 أرقام على الأقل{'\n'}
-            • الحد الأقصى 16 رقم{'\n'}
-            • يسمح بالأرقام فقط{'\n'}
+            • رقم PIN يجب أن يكون 8 أحرف على الأقل{'\n'}
+            • الحد الأقصى 16 حرف{'\n'}
+            • يمكن استخدام الأرقام والأحرف والرموز{'\n'}
             • احفظ رقم PIN في مكان آمن{'\n'}
             • سيتم طلب رقم PIN عند فتح التطبيق{'\n'}
             • لتعديل أو حذف المستخدمين، استخدم صفحة "إدارة المستخدمين"

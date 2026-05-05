@@ -1,0 +1,7 @@
+تم تعديل app.json: الاسم والشعار وشاشة البداية وبيانات Supabase.
+تم نسخ: assets\images\icon.png
+تم نسخ: assets\images\splash-icon.png
+تم نسخ: assets\images\favicon.png
+تم تعديل lib/supabase.ts لمنع استخدام مفتاح Supabase تالف من .env.
+تم حذف مجلد .expo لمسح كاش الإعدادات المحلي.
+استخدم بعد التعديل: npx expo start -c --port 8081

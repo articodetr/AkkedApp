@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
-  RefreshControl,
   Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Link2, Plus, Search } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { Customer, CustomerBalanceByCurrency, CURRENCIES } from '@/types/database';
+import { CURRENCIES, Customer, CustomerBalanceByCurrency } from '@/types/database';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildScopedCustomerFilter } from '@/services/userScopeService';
@@ -20,13 +20,41 @@ import { sortCustomersKeepingOriginalOrder } from '@/utils/customerDisplay';
 
 interface CustomerWithBalances extends Customer {
   balances: CustomerBalanceByCurrency[];
+  last_activity?: string | null;
+}
+
+function getCustomerUniqueKey(customer: Customer): string {
+  const accountNumber = String(customer.account_number || '').trim();
+  return accountNumber || customer.id;
+}
+
+function removeDuplicateCustomers(customers: CustomerWithBalances[]) {
+  const map = new Map<string, CustomerWithBalances>();
+
+  customers.forEach((customer) => {
+    const key = getCustomerUniqueKey(customer);
+    const existing = map.get(key);
+
+    if (!existing) {
+      map.set(key, customer);
+      return;
+    }
+
+    const existingUpdatedAt = new Date(existing.updated_at || existing.created_at || 0).getTime();
+    const nextUpdatedAt = new Date(customer.updated_at || customer.created_at || 0).getTime();
+
+    if (nextUpdatedAt > existingUpdatedAt) {
+      map.set(key, customer);
+    }
+  });
+
+  return Array.from(map.values());
 }
 
 export default function CustomersScreen() {
   const router = useRouter();
   const { lastRefreshTime } = useDataRefresh();
   const { currentUser } = useAuth();
-
   const [customers, setCustomers] = useState<CustomerWithBalances[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<CustomerWithBalances[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,16 +88,16 @@ export default function CustomersScreen() {
       const { data: customersData, error: customersError } = await supabase
         .from('customers_with_last_activity')
         .select('*')
-        .or(buildScopedCustomerFilter(currentUser.userId, true))
-        .order('is_profit_loss_account', { ascending: false })
+        .or(buildScopedCustomerFilter(currentUser.userId, false))
         .order('last_activity', { ascending: false });
 
       if (customersError) {
         throw customersError;
       }
 
-      const visibleCustomers = (customersData || []).filter(
-        (customer) => customer.user_id === currentUser.userId || customer.is_profit_loss_account,
+      const visibleCustomers = ((customersData || []) as CustomerWithBalances[]).filter(
+        (customer) =>
+          customer.user_id === currentUser.userId && !customer.is_profit_loss_account,
       );
 
       const visibleCustomerIds = visibleCustomers.map((customer) => customer.id);
@@ -85,7 +113,7 @@ export default function CustomersScreen() {
           throw balancesError;
         }
 
-        (balancesData || []).forEach((balance) => {
+        ((balancesData || []) as CustomerBalanceByCurrency[]).forEach((balance) => {
           if (!balancesMap.has(balance.customer_id)) {
             balancesMap.set(balance.customer_id, []);
           }
@@ -98,12 +126,12 @@ export default function CustomersScreen() {
         balances: balancesMap.get(customer.id) || [],
       }));
 
-      const systemCustomers = customersWithBalances.filter((customer) => customer.is_profit_loss_account);
       const regularCustomers = sortCustomersKeepingOriginalOrder(
-        customersWithBalances.filter((customer) => !customer.is_profit_loss_account),
+        removeDuplicateCustomers(customersWithBalances),
       );
 
-      setCustomers([...systemCustomers, ...regularCustomers]);
+      setCustomers(regularCustomers);
+      setFilteredCustomers(regularCustomers);
     } catch (error) {
       console.error('Error loading customers:', error);
     } finally {
@@ -117,10 +145,12 @@ export default function CustomersScreen() {
       return;
     }
 
+    const normalizedSearch = searchQuery.toLowerCase().trim();
     const filtered = customers.filter(
       (customer) =>
-        customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.phone.includes(searchQuery),
+        customer.name.toLowerCase().includes(normalizedSearch) ||
+        customer.phone?.includes(normalizedSearch) ||
+        customer.account_number?.includes(normalizedSearch),
     );
 
     setFilteredCustomers(filtered);
@@ -140,7 +170,7 @@ export default function CustomersScreen() {
   const formatBalanceAmount = (amount: number, currencyCode: string) => {
     const rounded = Math.round(Number(amount) || 0);
     const symbol = getCurrencySymbol(currencyCode);
-    return rounded.toLocaleString('en-US') + ' ' + symbol;
+    return `${rounded.toLocaleString('en-US')} ${symbol}`;
   };
 
   const handleDeleteCustomer = async (customer: CustomerWithBalances) => {
@@ -181,7 +211,6 @@ export default function CustomersScreen() {
             }
 
             const result = data as { success: boolean; message: string };
-
             if (result.success) {
               Alert.alert('تم الحذف', 'تم حذف العميل بنجاح');
               await loadCustomers();
@@ -219,7 +248,6 @@ export default function CustomersScreen() {
               }
 
               const result = data as { success: boolean; message: string };
-
               if (result.success) {
                 Alert.alert('تم التصفير', 'تم تصفير الحساب بنجاح');
                 await loadCustomers();
@@ -227,7 +255,7 @@ export default function CustomersScreen() {
                 Alert.alert('خطأ', result.message);
               }
             } catch (error) {
-              console.error('Error resetting account:', error);
+              console.error('Error resetting customer account:', error);
               Alert.alert('خطأ', 'حدث خطأ غير متوقع');
             }
           },
@@ -237,11 +265,6 @@ export default function CustomersScreen() {
   };
 
   const handleCustomerLongPress = (customer: CustomerWithBalances) => {
-    if (customer.is_profit_loss_account) {
-      Alert.alert('حساب الأرباح والخسائر', 'هذا حساب النظام ولا يمكن حذفه أو تصفيره.');
-      return;
-    }
-
     Alert.alert('خيارات العميل', `اختر العملية لـ ${customer.name}:`, [
       { text: 'إلغاء', style: 'cancel' },
       {
@@ -263,47 +286,30 @@ export default function CustomersScreen() {
   const renderCustomer = ({ item }: { item: CustomerWithBalances; index: number }) => {
     const hasBalances = item.balances.length > 0;
     const displayBalances = item.balances.slice(0, 2);
-    const isProfitLoss = item.is_profit_loss_account;
     const isLinkedUser = !!item.linked_user_id;
 
     return (
       <TouchableOpacity
-        style={[
-          styles.customerCard,
-          isProfitLoss && styles.profitLossCard,
-          !isProfitLoss && !isLinkedUser && styles.unlinkedUserCard,
-          isLinkedUser && styles.linkedUserCard,
-        ]}
+        style={[styles.customerCard, isLinkedUser && styles.linkedUserCard]}
+        activeOpacity={0.8}
         onPress={() => router.push(`/customer-details?id=${item.id}` as any)}
         onLongPress={() => handleCustomerLongPress(item)}
       >
         <View style={styles.customerInfo}>
           <View style={styles.customerHeaderRow}>
-            <Text
-              style={[styles.customerName, isProfitLoss && styles.profitLossName]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
+            <Text style={styles.customerName} numberOfLines={1}>
               {item.name}
             </Text>
-
-            {isLinkedUser && !isProfitLoss ? (
+            {isLinkedUser ? (
               <View style={styles.linkIndicator}>
                 <Link2 size={12} color="#6366F1" />
               </View>
             ) : null}
           </View>
-
-          <Text
-            style={styles.customerMetaText}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {isProfitLoss
-              ? 'حساب الأرباح والخسائر'
-              : isLinkedUser
-                ? `رقم الحساب: ${item.account_number}`
-                : `${item.phone} • رقم الحساب: ${item.account_number}`}
+          <Text style={styles.customerMetaText} numberOfLines={1}>
+            {isLinkedUser
+              ? `رقم الحساب: ${item.account_number}`
+              : `${item.phone || ''} • رقم الحساب: ${item.account_number}`}
           </Text>
         </View>
 
@@ -314,10 +320,9 @@ export default function CustomersScreen() {
             <>
               {displayBalances.map((balance, idx) => {
                 const balanceAmount = Number(balance.balance);
-
                 return (
                   <Text
-                    key={`${balance.currency}-${idx}`}
+                    key={`${item.id}-${balance.currency}`}
                     style={[
                       styles.balanceText,
                       { color: balanceAmount >= 0 ? '#10B981' : '#EF4444' },
@@ -330,7 +335,6 @@ export default function CustomersScreen() {
                   </Text>
                 );
               })}
-
               {item.balances.length > 2 && (
                 <Text style={styles.moreBalancesText}>+{item.balances.length - 2} المزيد</Text>
               )}
@@ -352,9 +356,9 @@ export default function CustomersScreen() {
         <TextInput
           style={styles.searchInput}
           placeholder="ابحث بالاسم أو الرقم"
-          placeholderTextColor="#9CA3AF"
           value={searchQuery}
           onChangeText={setSearchQuery}
+          placeholderTextColor="#9CA3AF"
         />
       </View>
 
@@ -374,8 +378,9 @@ export default function CustomersScreen() {
       <TouchableOpacity
         style={styles.floatingButton}
         onPress={() => router.push('/add-customer' as any)}
+        activeOpacity={0.8}
       >
-        <Plus size={28} color="#FFFFFF" />
+        <Plus size={32} color="#FFFFFF" />
       </TouchableOpacity>
     </View>
   );
@@ -445,18 +450,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 12,
     elevation: 2,
-  },
-  profitLossCard: {
-    backgroundColor: '#FEF3C7',
-    borderWidth: 2,
-    borderColor: '#F59E0B',
-  },
-  unlinkedUserCard: {
-    borderColor: '#E2E8F0',
-  },
-  profitLossName: {
-    fontWeight: 'bold',
-    color: '#92400E',
   },
   linkedUserCard: {
     borderColor: '#E5E7EB',

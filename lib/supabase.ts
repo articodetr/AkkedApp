@@ -4,30 +4,48 @@ import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// نقرأ المفاتيح من EXPO_PUBLIC_* أولاً (المعتمد في Expo)،
-// ثم من extra كاحتياط حتى لا ينكسر الإصدار التجريبي إذا غاب ملف .env.
-const supabaseUrl =
-  process.env.EXPO_PUBLIC_SUPABASE_URL ||
-  (Constants.expoConfig?.extra as any)?.EXPO_PUBLIC_SUPABASE_URL ||
-  '';
+type ExtraConfig = Record<string, unknown>;
 
-const supabaseAnonKey =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-  (Constants.expoConfig?.extra as any)?.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-  '';
+const readString = (value: unknown) =>
+  typeof value === 'string' ? value.trim() : '';
+
+const extra = ((Constants.expoConfig?.extra ??
+  (Constants as any).manifest?.extra ??
+  {}) as ExtraConfig);
+
+const envSupabaseUrl = readString(process.env.EXPO_PUBLIC_SUPABASE_URL);
+const envSupabaseAnonKey = readString(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+const extraSupabaseUrl = readString(extra.EXPO_PUBLIC_SUPABASE_URL);
+const extraSupabaseAnonKey = readString(extra.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+
+const isValidSupabaseUrl = (value: string) =>
+  /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(value);
+
+const isValidSupabaseAnonKey = (value: string) => {
+  const parts = value.split('.');
+  return parts.length === 3 && value.length > 100;
+};
+
+const supabaseUrl = isValidSupabaseUrl(envSupabaseUrl)
+  ? envSupabaseUrl
+  : isValidSupabaseUrl(extraSupabaseUrl)
+    ? extraSupabaseUrl
+    : '';
+
+const supabaseAnonKey = isValidSupabaseAnonKey(envSupabaseAnonKey)
+  ? envSupabaseAnonKey
+  : isValidSupabaseAnonKey(extraSupabaseAnonKey)
+    ? extraSupabaseAnonKey
+    : '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  // رسالة واضحة إذا لم يتم تعيين متغيرات البيئة (تظهر في Metro/Expo Go)
   console.warn(
-    '[supabase] EXPO_PUBLIC_SUPABASE_URL أو EXPO_PUBLIC_SUPABASE_ANON_KEY غير معرّف. ' +
-      'تأكد من وجود ملف .env في جذر المشروع وأعد تشغيل expo start بـ -c'
+    '[supabase] إعدادات Supabase غير صحيحة. تأكد من EXPO_PUBLIC_SUPABASE_URL و EXPO_PUBLIC_SUPABASE_ANON_KEY، واستخدم anon key فقط وليس service_role key.'
   );
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    // استخدم AsyncStorage على الجوال (iOS / Android) فقط — على الويب
-    // اترك المكتبة تستخدم localStorage الافتراضي.
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,

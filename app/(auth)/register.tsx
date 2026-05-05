@@ -10,7 +10,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
-  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,33 +39,21 @@ export default function RegisterScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [newAccountNumber, setNewAccountNumber] = useState('');
 
+  const onlyNumbers = (text: string) => text.replace(/[^0-9]/g, '').slice(0, 20);
+
   const getPasswordStrength = (pwd: string): PasswordStrength => {
     if (pwd.length === 0) {
       return { score: 0, label: '', color: '#E5E7EB' };
     }
-    if (pwd.length < 6) {
-      return { score: 1, label: 'ضعيف جداً', color: '#EF4444' };
-    }
 
-    let score = 0;
+    const score = Math.min(4, Math.max(1, Math.ceil((pwd.length / 20) * 4)));
+    const isValidLength = pwd.length >= 6 && pwd.length <= 20;
 
-    if (pwd.length >= 8) score += 1;
-    if (pwd.length >= 10) score += 1;
-    if (pwd.length >= 12) score += 1;
-    if (/[0-9]/.test(pwd)) score += 1;
-    if (/[A-Z]/.test(pwd)) score += 1;
-    if (/[a-z]/.test(pwd)) score += 1;
-    if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
-
-    if (score <= 2) {
-      return { score: 1, label: 'ضعيف', color: '#EF4444' };
-    } else if (score <= 4) {
-      return { score: 2, label: 'متوسط', color: '#F59E0B' };
-    } else if (score <= 5) {
-      return { score: 3, label: 'قوي', color: '#10B981' };
-    } else {
-      return { score: 4, label: 'قوي جداً', color: '#059669' };
-    }
+    return {
+      score,
+      label: `${pwd.length} / 20 رقم`,
+      color: isValidLength ? '#10B981' : '#EF4444',
+    };
   };
 
   const passwordStrength = getPasswordStrength(password);
@@ -122,12 +109,17 @@ export default function RegisterScreen() {
     }
 
     if (password.length < 6) {
-      setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      setError('كلمة المرور يجب أن تكون 6 أرقام على الأقل');
       return;
     }
 
     if (password.length > 20) {
-      setError('كلمة المرور يجب ألا تتجاوز 20 حرف');
+      setError('كلمة المرور يجب ألا تتجاوز 20 رقم');
+      return;
+    }
+
+    if (!/^\d+$/.test(password)) {
+      setError('كلمة المرور يجب أن تحتوي على أرقام فقط');
       return;
     }
 
@@ -207,7 +199,7 @@ export default function RegisterScreen() {
                   <UserPlus size={20} color="#6B7280" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="الاسم الكامل"
+                    placeholder="ادخل الاسم كامل بالانجليزي"
                     placeholderTextColor="#9CA3AF"
                     value={fullName}
                     onChangeText={setFullName}
@@ -222,7 +214,7 @@ export default function RegisterScreen() {
                   <User size={20} color="#6B7280" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="اسم المستخدم (3 أحرف على الأقل)"
+                    placeholder="ادخل اسم المستخدم بالانجليزي (3 أحرف على الأقل)"
                     placeholderTextColor="#9CA3AF"
                     value={userName}
                     onChangeText={(text) => {
@@ -234,15 +226,14 @@ export default function RegisterScreen() {
                       }
                     }}
                     autoCapitalize="none"
+                    autoCorrect={false}
                     editable={!isLoading}
                   />
                   {isCheckingUsername && (
                     <ActivityIndicator size="small" color="#6B7280" style={styles.checkingIcon} />
                   )}
                 </View>
-                {usernameError ? (
-                  <Text style={styles.fieldError}>{usernameError}</Text>
-                ) : null}
+                {usernameError ? <Text style={styles.fieldError}>{usernameError}</Text> : null}
               </View>
 
               <View style={styles.inputContainer}>
@@ -250,12 +241,14 @@ export default function RegisterScreen() {
                   <Lock size={20} color="#6B7280" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="كلمة المرور (6-20 حرف)"
+                    placeholder="كلمة المرور (6-20 رقم)"
                     placeholderTextColor="#9CA3AF"
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(text) => setPassword(onlyNumbers(text))}
                     secureTextEntry={!showPassword}
+                    keyboardType="number-pad"
                     autoCapitalize="none"
+                    autoCorrect={false}
                     editable={!isLoading}
                     maxLength={20}
                   />
@@ -299,9 +292,11 @@ export default function RegisterScreen() {
                     placeholder="تأكيد كلمة المرور"
                     placeholderTextColor="#9CA3AF"
                     value={confirmPassword}
-                    onChangeText={setConfirmPassword}
+                    onChangeText={(text) => setConfirmPassword(onlyNumbers(text))}
                     secureTextEntry={!showConfirmPassword}
+                    keyboardType="number-pad"
                     autoCapitalize="none"
+                    autoCorrect={false}
                     editable={!isLoading}
                     maxLength={20}
                   />

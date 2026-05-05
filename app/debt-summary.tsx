@@ -12,9 +12,8 @@ import { useRouter } from 'expo-router';
 import { ArrowRight, Download } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-
 import { supabase } from '@/lib/supabase';
-import { CustomerBalanceByCurrency, CURRENCIES } from '@/types/database';
+import { CURRENCIES, CustomerBalanceByCurrency } from '@/types/database';
 import { generatePDFHeaderHTML, generatePDFHeaderStyles } from '@/utils/pdfHeaderGenerator';
 import { getLogoBase64 } from '@/utils/logoHelper';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,11 +24,13 @@ type CustomerRow = {
   id: string;
   name: string;
   accountNumber: string;
+  customerKey: string;
 };
 
 type ReportRow = {
   key: string;
   customerId: string;
+  customerKey: string;
   customerName: string;
   accountNumber: string;
   currency: string;
@@ -54,8 +55,8 @@ function toLatinDigits(input: number | string) {
   const easternArabicIndic = '۰۱۲۳۴۵۶۷۸۹';
 
   return String(input ?? '')
-    .replace(/[٠-٩]/g, (d) => String(arabicIndic.indexOf(d)))
-    .replace(/[۰-۹]/g, (d) => String(easternArabicIndic.indexOf(d)));
+    .replace(/[٠-٩]/g, (digit) => String(arabicIndic.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String(easternArabicIndic.indexOf(digit)));
 }
 
 function getCurrencyInfo(code: string) {
@@ -80,11 +81,54 @@ function getBalanceMeta(amount: number) {
   return { label: 'متساوي' as const, color: '#6B7280', bg: '#F3F4F6', sign: '' as const };
 }
 
+function buildCustomerKey(customer: { id: string; account_number?: string | null }) {
+  const accountNumber = String(customer.account_number || '').trim();
+  return accountNumber || customer.id;
+}
+
+function normalizeCustomerRow(customer: any): CustomerRow {
+  const accountNumber = String(customer.account_number || '').trim() || '-';
+
+  return {
+    id: customer.id,
+    name: customer.name || 'عميل',
+    accountNumber,
+    customerKey: buildCustomerKey(customer),
+  };
+}
+
+function buildReportRow(base: {
+  customerId: string;
+  customerKey: string;
+  customerName: string;
+  accountNumber: string;
+  currency: string;
+  amount: number;
+}): ReportRow {
+  const currencyInfo = getCurrencyInfo(base.currency);
+  const meta = getBalanceMeta(base.amount);
+
+  return {
+    key: `${base.customerKey}-${base.currency}`,
+    customerId: base.customerId,
+    customerKey: base.customerKey,
+    customerName: base.customerName,
+    accountNumber: base.accountNumber,
+    currency: base.currency,
+    currencyName: currencyInfo.name,
+    currencySymbol: currencyInfo.symbol,
+    amount: base.amount,
+    statusLabel: meta.label,
+    statusColor: meta.color,
+    statusBg: meta.bg,
+    amountPrefix: meta.sign,
+  };
+}
+
 export default function DebtSummaryScreen() {
   const router = useRouter();
   const { currentUser } = useAuth();
   const { lastRefreshTime } = useDataRefresh();
-
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,14 +161,7 @@ export default function DebtSummaryScreen() {
 
         const visibleCustomers = ((customersData || []) as any[])
           .filter((customer) => !customer.is_profit_loss_account)
-          .map(
-            (customer) =>
-              ({
-                id: customer.id,
-                name: customer.name,
-                accountNumber: customer.account_number || '-',
-              }) satisfies CustomerRow,
-          );
+          .map(normalizeCustomerRow);
 
         if (visibleCustomers.length === 0) {
           setRows([]);
@@ -132,12 +169,12 @@ export default function DebtSummaryScreen() {
           return;
         }
 
-        const customerMap = new Map<string, CustomerRow>(
-          visibleCustomers.map((customer) => [customer.id, customer]),
-        );
+        const customerMap = new Map<string, CustomerRow>();
+        visibleCustomers.forEach((customer) => {
+          customerMap.set(customer.id, customer);
+        });
 
         const customerIds = visibleCustomers.map((customer) => customer.id);
-
         const { data: balancesData, error: balancesError } = await supabase
           .from('customer_balances_by_currency')
           .select('*')
@@ -148,31 +185,43 @@ export default function DebtSummaryScreen() {
           throw balancesError;
         }
 
-        const nextRows: ReportRow[] = ((balancesData || []) as CustomerBalanceByCurrency[])
-          .map((balance) => {
-            const customer = customerMap.get(balance.customer_id);
-            if (!customer) return null;
+        const groupedRows = new Map<
+          string,
+          {
+            customerId: string;
+            customerKey: string;
+            customerName: string;
+            accountNumber: string;
+            currency: string;
+            amount: number;
+          }
+        >();
 
-            const amount = Number((balance as any).balance || 0);
-            const currencyInfo = getCurrencyInfo(balance.currency);
-            const meta = getBalanceMeta(amount);
+        ((balancesData || []) as CustomerBalanceByCurrency[]).forEach((balance) => {
+          const customer = customerMap.get(balance.customer_id);
+          if (!customer) return;
 
-            return {
-              key: `${balance.customer_id}-${balance.currency}`,
-              customerId: balance.customer_id,
-              customerName: customer.name || (balance as any).customer_name || 'عميل',
-              accountNumber: customer.accountNumber || '-',
-              currency: balance.currency,
-              currencyName: currencyInfo.name,
-              currencySymbol: currencyInfo.symbol,
-              amount,
-              statusLabel: meta.label,
-              statusColor: meta.color,
-              statusBg: meta.bg,
-              amountPrefix: meta.sign,
-            } satisfies ReportRow;
-          })
-          .filter((item): item is ReportRow => Boolean(item))
+          const amount = Number((balance as any).balance || 0);
+          const groupKey = `${customer.customerKey}-${balance.currency}`;
+          const existing = groupedRows.get(groupKey);
+
+          if (existing) {
+            existing.amount += amount;
+            return;
+          }
+
+          groupedRows.set(groupKey, {
+            customerId: customer.id,
+            customerKey: customer.customerKey,
+            customerName: customer.name || (balance as any).customer_name || 'عميل',
+            accountNumber: customer.accountNumber || '-',
+            currency: balance.currency,
+            amount,
+          });
+        });
+
+        const nextRows = Array.from(groupedRows.values())
+          .map(buildReportRow)
           .sort((a, b) => {
             const customerCompare = a.customerName.localeCompare(b.customerName, 'ar');
             if (customerCompare !== 0) return customerCompare;
@@ -210,7 +259,6 @@ export default function DebtSummaryScreen() {
   useEffect(() => {
     if (!currentUser?.userId) return;
     if (!hasLoadedOnceRef.current) return;
-
     loadData({ silent: true });
   }, [lastRefreshTime, currentUser?.userId, loadData]);
 
@@ -224,7 +272,8 @@ export default function DebtSummaryScreen() {
   };
 
   const summary = useMemo(() => {
-    const uniqueCustomers = new Set(rows.map((row) => row.customerId)).size;
+    const uniqueCustomers = new Set(rows.map((row) => row.customerKey)).size;
+
     return {
       customersCount: uniqueCustomers,
       balancesCount: rows.length,
@@ -234,8 +283,8 @@ export default function DebtSummaryScreen() {
   const generatePDF = async () => {
     try {
       setIsGeneratingPdf(true);
-
       let logoDataUrl: string | undefined;
+
       try {
         logoDataUrl = await getLogoBase64(false, null, { userId: currentUser?.userId });
       } catch (logoError) {
@@ -255,134 +304,134 @@ export default function DebtSummaryScreen() {
         .map(
           (row) => `
             <tr>
-              <td>${row.customerName}</td>
-              <td>${row.accountNumber || '-'}</td>
-              <td>${row.currencyName}</td>
               <td>
-                <span style="
-                  display:inline-block;
-                  padding:4px 10px;
-                  border-radius:999px;
-                  background:${row.statusBg};
-                  color:${row.statusColor};
-                  font-weight:700;
-                  font-size:12px;
-                ">
-                  ${row.statusLabel}
-                </span>
+                <strong>${row.customerName}</strong>
+                <span>#${row.accountNumber || '-'}</span>
               </td>
-              <td style="font-weight:700; color:${row.statusColor};">
-                ${row.amountPrefix ? `${row.amountPrefix} ` : ''}${formatAmount(Math.abs(row.amount))} ${row.currencySymbol}
+              <td>
+                <strong>${row.currency}</strong>
+                <span>${row.currencyName}</span>
               </td>
+              <td><span class="status-pill" style="background:${row.statusBg}; color:${row.statusColor};">${row.statusLabel}</span></td>
+              <td class="amount" style="color:${row.statusColor};">${row.amountPrefix ? `${row.amountPrefix} ` : ''}${formatAmount(Math.abs(row.amount))} ${row.currencySymbol}</td>
             </tr>
           `,
         )
         .join('');
 
       const html = `
-        <html dir="rtl" lang="ar">
+        <!DOCTYPE html>
+        <html lang="ar" dir="rtl">
           <head>
-            <meta charset="utf-8" />
+            <meta charset="UTF-8" />
             <style>
               ${generatePDFHeaderStyles()}
               body {
-                font-family: Arial, sans-serif;
-                direction: rtl;
-                color: #111827;
                 margin: 0;
-                padding: 0;
-                background: #ffffff;
-              }
-              .page {
                 padding: 24px;
+                direction: rtl;
+                font-family: Arial, sans-serif;
+                color: #1E1B4B;
+                background: #FFFFFF;
               }
               .summary {
                 display: flex;
                 gap: 12px;
-                margin-bottom: 18px;
-                flex-wrap: wrap;
+                margin: 18px 0;
               }
-              .summary-box {
-                border: 1px solid #E5E7EB;
-                border-radius: 12px;
-                padding: 12px 14px;
-                min-width: 150px;
-                background: #F9FAFB;
+              .summary-card {
+                flex: 1;
+                border: 1px solid #ECECF7;
+                border-radius: 16px;
+                padding: 16px;
+                text-align: center;
+                background: #F8FAFC;
+              }
+              .summary-value {
+                font-size: 22px;
+                font-weight: 900;
+                margin-bottom: 6px;
               }
               .summary-label {
                 font-size: 12px;
-                color: #6B7280;
-                margin-bottom: 6px;
-              }
-              .summary-value {
-                font-size: 18px;
-                font-weight: 800;
-                color: #111827;
+                color: #64748B;
               }
               table {
                 width: 100%;
                 border-collapse: collapse;
-                margin-top: 8px;
-                font-size: 13px;
+                border: 1px solid #ECECF7;
+                border-radius: 16px;
+                overflow: hidden;
               }
               th {
                 background: #F8FAFC;
-                color: #374151;
-                font-weight: 700;
-                border: 1px solid #E5E7EB;
-                padding: 10px;
-                text-align: center;
+                color: #475569;
+                font-size: 12px;
+                padding: 12px;
+                border-bottom: 1px solid #E5E7EB;
               }
               td {
-                border: 1px solid #E5E7EB;
-                padding: 10px;
+                padding: 12px;
+                border-bottom: 1px solid #EEF2F7;
                 text-align: center;
+                vertical-align: middle;
+                font-size: 13px;
+              }
+              td span {
+                display: block;
+                margin-top: 4px;
+                color: #64748B;
+                font-size: 11px;
+              }
+              .status-pill {
+                display: inline-block;
+                padding: 6px 10px;
+                border-radius: 999px;
+                font-weight: 800;
+                font-size: 11px;
+              }
+              .amount {
+                direction: ltr;
+                font-weight: 900;
               }
               .empty {
-                text-align: center;
                 padding: 24px;
-                color: #6B7280;
-                border: 1px solid #E5E7EB;
-                border-radius: 14px;
-                margin-top: 18px;
+                text-align: center;
+                color: #64748B;
+                border: 1px solid #ECECF7;
+                border-radius: 16px;
               }
             </style>
           </head>
           <body>
             ${headerHTML}
-            <div class="page">
-              <div class="summary">
-                <div class="summary-box">
-                  <div class="summary-label">عدد العملاء</div>
-                  <div class="summary-value">${toLatinDigits(summary.customersCount)}</div>
-                </div>
-                <div class="summary-box">
-                  <div class="summary-label">عدد الصفوف</div>
-                  <div class="summary-value">${toLatinDigits(summary.balancesCount)}</div>
-                </div>
+            <div class="summary">
+              <div class="summary-card">
+                <div class="summary-value">${toLatinDigits(summary.customersCount)}</div>
+                <div class="summary-label">عدد العملاء</div>
               </div>
-
-              ${
-                rowsHtml
-                  ? `
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>اسم العميل</th>
-                          <th>رقم الحساب</th>
-                          <th>العملة</th>
-                          <th>الحالة</th>
-                          <th>المبلغ</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        ${rowsHtml}
-                      </tbody>
-                    </table>
-                  `
-                  : `<div class="empty">لا توجد بيانات</div>`
-              }
+              <div class="summary-card">
+                <div class="summary-value">${toLatinDigits(summary.balancesCount)}</div>
+                <div class="summary-label">عدد الصفوف</div>
+              </div>
             </div>
+            ${
+              rowsHtml
+                ? `
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>العميل</th>
+                        <th>العملة</th>
+                        <th>الحالة</th>
+                        <th>المبلغ</th>
+                      </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                  </table>
+                `
+                : '<div class="empty">لا توجد بيانات</div>'
+            }
           </body>
         </html>
       `;
@@ -404,43 +453,41 @@ export default function DebtSummaryScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.topHeader}>
-        <TouchableOpacity
-          style={styles.topIconButton}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <ArrowRight size={20} color="#1E1B4B" />
-        </TouchableOpacity>
-
-        <View style={styles.titleWrap}>
-          <Text style={styles.pageTitle}>تقرير الديون الشامل</Text>
-          <Text style={styles.pageSubtitle}>عرض مبسط على شكل بيانات واضحة</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.topActionButton}
-          onPress={generatePDF}
-          activeOpacity={0.8}
-          disabled={isGeneratingPdf}
-        >
-          <Download size={16} color="#5B5AF7" />
-          <Text style={styles.topActionText}>{isGeneratingPdf ? 'جاري...' : 'PDF'}</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        <View style={styles.topHeader}>
+          <TouchableOpacity
+            style={styles.topIconButton}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <ArrowRight size={22} color="#1E1B4B" />
+          </TouchableOpacity>
+
+          <View style={styles.titleWrap}>
+            <Text style={styles.pageTitle}>تقرير الديون الشامل</Text>
+            <Text style={styles.pageSubtitle}>عرض مبسط على شكل بيانات واضحة</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.topActionButton}
+            onPress={generatePDF}
+            activeOpacity={0.8}
+            disabled={isGeneratingPdf}
+          >
+            <Text style={styles.topActionText}>{isGeneratingPdf ? 'جاري...' : 'PDF'}</Text>
+            <Download size={16} color="#5B5AF7" />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryValue}>{toLatinDigits(summary.customersCount)}</Text>
             <Text style={styles.summaryLabel}>عدد العملاء</Text>
           </View>
-
           <View style={styles.summaryCard}>
             <Text style={styles.summaryValue}>{toLatinDigits(summary.balancesCount)}</Text>
             <Text style={styles.summaryLabel}>عدد الصفوف</Text>
@@ -467,10 +514,12 @@ export default function DebtSummaryScreen() {
             rows.map((row, index) => (
               <View
                 key={row.key}
-                style={[styles.tableRow, index !== rows.length - 1 && styles.rowBorder]}
+                style={[styles.tableRow, index < rows.length - 1 && styles.rowBorder]}
               >
                 <View style={styles.customerCell}>
-                  <Text style={styles.customerName}>{row.customerName}</Text>
+                  <Text style={styles.customerName} numberOfLines={1}>
+                    {row.customerName}
+                  </Text>
                   <Text style={styles.accountNumber}>#{row.accountNumber || '-'}</Text>
                 </View>
 
@@ -514,7 +563,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 24,
   },
-
   topHeader: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -541,7 +589,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
-
   topIconButton: {
     width: 42,
     height: 42,
@@ -576,7 +623,6 @@ const styles = StyleSheet.create({
     color: '#5B5AF7',
     fontWeight: '800',
   },
-
   summaryRow: {
     flexDirection: 'row',
     gap: 10,
@@ -604,7 +650,6 @@ const styles = StyleSheet.create({
     color: '#7C84A3',
     fontWeight: '600',
   },
-
   tableCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
@@ -626,7 +671,6 @@ const styles = StyleSheet.create({
     color: '#475569',
     textAlign: 'center',
   },
-
   tableRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -638,7 +682,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EEF2F7',
   },
-
   customerCell: {
     flex: 1.6,
     alignItems: 'flex-end',
@@ -659,7 +702,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: 4,
   },
-
   customerName: {
     fontSize: 13,
     fontWeight: '800',
@@ -672,7 +714,6 @@ const styles = StyleSheet.create({
     marginTop: 3,
     textAlign: 'right',
   },
-
   currencyCode: {
     fontSize: 12,
     fontWeight: '800',
@@ -685,7 +726,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
   },
-
   statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -695,13 +735,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
-
   amountText: {
     fontSize: 13,
     fontWeight: '900',
     textAlign: 'left',
   },
-
   emptyBox: {
     padding: 24,
     alignItems: 'center',

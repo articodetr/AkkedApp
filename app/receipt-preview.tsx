@@ -25,6 +25,49 @@ import { getCustomerReceiptHeaderBase64 } from '@/utils/logoHelper';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchAccessibleCustomerById } from '@/services/userScopeService';
 
+
+function sanitizeReceiptPdfFileName(value: string | number | null | undefined): string {
+  const safe = String(value || 'عميل')
+    .trim()
+    .replace(/[\\/:*?\"<>|#%{}~&]/g, '-')
+    .replace(/\s+/g, ' ')
+    .slice(0, 70);
+  return safe || 'عميل';
+}
+
+function buildReceiptPdfName(customerName: string | null | undefined, receiptNo: string | number | null | undefined): string {
+  const safeCustomerName = sanitizeReceiptPdfFileName(customerName);
+  const safeReceiptNo = sanitizeReceiptPdfFileName(receiptNo || new Date().toISOString().slice(0, 10));
+  return `سند_${safeCustomerName}_${safeReceiptNo}.pdf`;
+}
+
+
+async function prepareNamedReceiptPdf(sourceUri: string, fileName: string): Promise<string> {
+  const baseDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+
+  if (!baseDirectory) {
+    return sourceUri;
+  }
+
+  const targetUri = `${baseDirectory}${fileName}`;
+
+  if (targetUri === sourceUri) {
+    return sourceUri;
+  }
+
+  try {
+    const existing = await FileSystem.getInfoAsync(targetUri);
+    if (existing.exists) {
+      await FileSystem.deleteAsync(targetUri, { idempotent: true });
+    }
+  } catch {
+    // تجاهل خطأ فحص الملف القديم.
+  }
+
+  await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
+  return targetUri;
+}
+
 export default function ReceiptPreviewScreen() {
   const router = useRouter();
   const { currentUser } = useAuth();
@@ -209,8 +252,8 @@ export default function ReceiptPreviewScreen() {
       });
       console.log('[ReceiptPreview] PDF created at:', uri);
 
-      const pdfName = `receipt_${movementData.receipt_number || movementData.movement_number}.pdf`;
-      const pdfPath = `${FileSystem.documentDirectory}${pdfName}`;
+      const pdfName = buildReceiptPdfName(receiptData.customerName, movementData.receipt_number || movementData.movement_number);
+      const pdfPath = await prepareNamedReceiptPdf(uri, pdfName);
 
       console.log('[ReceiptPreview] Moving PDF to:', pdfPath);
       await FileSystem.moveAsync({
@@ -247,8 +290,10 @@ export default function ReceiptPreviewScreen() {
       console.log('[ReceiptPreview] Can share:', canShare);
 
       if (canShare) {
-        console.log('[ReceiptPreview] Sharing PDF:', pdfUri);
-        await Sharing.shareAsync(pdfUri, {
+        const sharePdfName = buildReceiptPdfName((movement as any)?.customers?.name || (customerName as string) || 'عميل', (movement as any)?.receipt_number || (movement as any)?.movement_number);
+        const sharePdfUri = await prepareNamedReceiptPdf(pdfUri, sharePdfName);
+        console.log('[ReceiptPreview] Sharing PDF:', sharePdfUri);
+        await Sharing.shareAsync(sharePdfUri, {
           mimeType: 'application/pdf',
           dialogTitle: 'مشاركة السند',
           UTI: 'com.adobe.pdf',
@@ -278,7 +323,7 @@ export default function ReceiptPreviewScreen() {
       console.log('[ReceiptPreview] Starting download process...');
       setIsDownloading(true);
 
-      const pdfName = `receipt_${movement.receipt_number || movement.movement_number}.pdf`;
+      const pdfName = buildReceiptPdfName((movement as any)?.customers?.name || (customerName as string) || 'عميل', movement.receipt_number || movement.movement_number);
       console.log('[ReceiptPreview] PDF name:', pdfName);
 
       if (Platform.OS === 'web') {

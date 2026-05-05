@@ -1,0 +1,13 @@
+تقرير تطبيق تعديلات AkkedApp
+================================
+لم يتغير الملف: app/(tabs)/index.tsx
+تم تطبيق تعديل احتياطي لتنبيه نجاح الحركة.
+نسخة احتياطية: components\QuickAddMovementSheet.tsx.bak_2026-05-05T15-30-01-893Z
+تم تعديل: components/QuickAddMovementSheet.tsx
+تنبيه: لم أجد نص من العميل/للعميل أو getMovementCreatorLabel داخل جدول الحركات. قد تحتاج تعديل موضع العرض يدوياً.
+تنبيه: لم أجد زر مشاركة الحساب لتعديله تلقائياً.
+لم يتغير الملف: app/customer-details.tsx
+
+بعد التشغيل نفذ:
+npx tsc --noEmit
+npm run dev
