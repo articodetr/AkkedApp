@@ -38,3 +38,9 @@ android_backup/
 apply-*.js
 fix-*.js
 repair-*.js
+apply_*.js
+patch-assets/
+backup_after_import_fix.tsx
+*.bak_*
+.expo/
+.env
