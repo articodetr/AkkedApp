@@ -69,6 +69,7 @@ export default function NotificationCard({
 
   const meta = getNotificationMeta(notification, currentUser);
   const canUseQuickAction = meta.canTakeAction && Boolean(onAccept && onReject);
+  const canDelete = meta.visualState !== 'pending';
   const createdAtText = formatArabicDateTime(notification.created_at);
   const noteText = String(meta.noteText || '').trim();
   const rejectReasonText = String(meta.rejectReason || '').trim();
@@ -148,18 +149,20 @@ export default function NotificationCard({
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => onDelete(notification)}
-            disabled={isDeleting || isProcessing}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            {isDeleting ? (
-              <ActivityIndicator size="small" color="#64748B" />
-            ) : (
-              <Trash2 size={16} color="#94A3B8" />
-            )}
-          </TouchableOpacity>
+          {canDelete && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => onDelete(notification)}
+              disabled={isDeleting || isProcessing}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#64748B" />
+              ) : (
+                <Trash2 size={16} color="#94A3B8" />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {hasUsefulText(noteText) && (

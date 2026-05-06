@@ -513,6 +513,14 @@ export default function NotificationsTabScreen() {
   const confirmDelete = (item: MovementNotification) => {
     if (!currentUser?.userId) return;
 
+    if (isNotificationPending(item)) {
+      Alert.alert(
+        'لا يمكن حذف الإشعار',
+        'هذه الحركة لا تزال معلّقة. يمكن حذف الإشعار بعد قبول الحركة أو رفضها.',
+      );
+      return;
+    }
+
     Alert.alert(
       'حذف الإشعار',
       'سيتم إخفاء الإشعار من هذه القائمة فقط، ولن يتم حذف الحركة المالية.\nهل تريد المتابعة؟',

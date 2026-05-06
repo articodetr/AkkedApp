@@ -686,6 +686,19 @@ export async function markNotificationAsRead(notificationId: string, userId?: st
 }
 
 export async function softDeleteNotification(notificationId: string, userId: string) {
+  const { data: currentNotification, error: loadError } = await supabase
+    .from('movement_notifications')
+    .select(NOTIFICATION_SELECT)
+    .eq('id', notificationId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (loadError) throw loadError;
+
+  if (currentNotification && isNotificationPending(normalizeNotification(currentNotification as MovementNotification))) {
+    throw new Error('لا يمكن حذف إشعار حركة معلّقة قبل قبولها أو رفضها');
+  }
+
   const { error } = await supabase
     .from('movement_notifications')
     .update({

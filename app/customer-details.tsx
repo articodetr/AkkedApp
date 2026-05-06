@@ -209,6 +209,59 @@ function calculateRunningBalanceAfterMovement(
     }, 0);
 }
 
+function shouldIncludeMovementInProjectedApprovalBalance(movement: AccountMovement): boolean {
+  return (
+    !(movement as any).is_commission_movement &&
+    !(movement as any).is_voided &&
+    (isPostedMovement(movement) || isPendingMovement(movement))
+  );
+}
+
+function isMovementAtOrBefore(
+  movement: AccountMovement,
+  targetMovement: AccountMovement,
+): boolean {
+  const movementTime = new Date(movement.created_at).getTime();
+  const targetTime = new Date(targetMovement.created_at).getTime();
+
+  if (movementTime < targetTime) return true;
+  if (movementTime > targetTime) return false;
+
+  return String(movement.id || '') <= String(targetMovement.id || '');
+}
+
+function calculateProjectedBalanceIfApproved(
+  movement: AccountMovement,
+  allMovements: AccountMovement[],
+): number {
+  return allMovements
+    .filter((item) => shouldIncludeMovementInProjectedApprovalBalance(item))
+    .filter((item) => item.currency === movement.currency)
+    .filter((item) => isMovementAtOrBefore(item, movement))
+    .sort((a, b) => {
+      const timeDiff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    })
+    .reduce((sum, item) => {
+      const amount = getCombinedAmount(item, allMovements);
+      return item.movement_type === 'incoming' ? sum + amount : sum - amount;
+    }, 0);
+}
+
+function formatBalanceAfterLabel(
+  balance: number,
+  currency: string,
+  label: string,
+): string {
+  const symbol = getCurrencySymbol(currency);
+  const amount = Math.round(Math.abs(balance));
+
+  if (balance > 0) return `${label}: ${amount} ${symbol} له`;
+  if (balance < 0) return `${label}: ${amount} ${symbol} عليه`;
+  return `${label}: متساوي`;
+}
+
 function formatMovementBalanceLabel(
   movement: AccountMovement,
   allMovements: AccountMovement[],
@@ -221,12 +274,19 @@ function formatMovementBalanceLabel(
   }
 
   const balance = calculateRunningBalanceAfterMovement(movement, allMovements);
-  const symbol = getCurrencySymbol(movement.currency);
-  const amount = Math.round(Math.abs(balance));
+  return formatBalanceAfterLabel(balance, movement.currency, 'الرصيد بعد الحركة');
+}
 
-  if (balance > 0) return `الرصيد بعد الحركة: ${amount} ${symbol} له`;
-  if (balance < 0) return `الرصيد بعد الحركة: ${amount} ${symbol} عليه`;
-  return 'الرصيد بعد الحركة: متساوي';
+function formatMovementAmountBalanceLabel(
+  movement: AccountMovement,
+  allMovements: AccountMovement[],
+): string {
+  if (isPendingMovement(movement) && !(movement as any).is_commission_movement) {
+    const balance = calculateProjectedBalanceIfApproved(movement, allMovements);
+    return formatBalanceAfterLabel(balance, movement.currency, 'الرصيد اذا وافق');
+  }
+
+  return formatMovementBalanceLabel(movement, allMovements);
 }
 
 
@@ -1235,8 +1295,15 @@ export default function CustomerDetailsScreen() {
           <TouchableOpacity
             style={styles.tabButton}
             onPress={() => openCustomerNotifications()}
-          >
+          >
             <Text style={styles.tabButtonText}>الإشعارات</Text>
+            {pendingMovements.length > 0 && (
+              <View style={styles.tabButtonCountBadge}>
+                <Text style={styles.tabButtonCountText}>
+                  {pendingMovements.length > 99 ? '99+' : pendingMovements.length}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -1296,7 +1363,7 @@ export default function CustomerDetailsScreen() {
                       </View>
                     </View>
 	                  {monthMovements.map((movement) => {
-                      const creatorLabel = formatMovementBalanceLabel(movement, approvedMovements);
+                      const creatorLabel = getMovementCreatorLabel(movement, currentUser);
                       const isCurrentUserCreator = isMovementCreatedByCurrentUser(
                         movement,
                         currentUser,
@@ -1430,7 +1497,7 @@ export default function CustomerDetailsScreen() {
 	                        <Text style={styles.movementLabel}>
 	                          {(movement as any).is_internal_transfer
 	                            ? 'تحويل'
-	                            : formatMovementBalanceLabel(movement, approvedMovements)}
+	                            : formatMovementAmountBalanceLabel(movement, movements)}
 	                        </Text>
 	                      </View>
 	                    </TouchableOpacity>
@@ -1963,6 +2030,21 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontSize: 13,
     fontWeight: '600',
+  },
+  tabButtonCountBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabButtonCountText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 14,
   },
   movementsSection: {
     backgroundColor: '#FFFFFF',
