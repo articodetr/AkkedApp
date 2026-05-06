@@ -21,6 +21,7 @@ import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { supabase } from '@/lib/supabase';
 import { AccountMovement, Currency, CURRENCIES } from '@/types/database';
 import { isPendingMovement } from '@/utils/movementApproval';
+import { syncEditedMovementNotifications } from '@/services/movementNotificationSyncService';
 
 interface EditMovementSheetProps {
   visible: boolean;
@@ -181,28 +182,7 @@ export default function EditMovementSheet({
           ? currentUser.fullName || currentUser.userName
           : customerName;
 
-      const updatePayload = {
-        movement_type: movementType,
-        amount: parsedAmount,
-        currency,
-        commission: null,
-        commission_currency: null,
-        notes: trimmedNotes,
-        sender_name: senderName,
-        beneficiary_name: beneficiaryName,
-        transfer_number: (movement as any).transfer_number || null,
-      };
-
-      const { data: updatedRow, error } = await supabase
-        .from('account_movements')
-        .update(updatePayload)
-        .eq('id', movement.id)
-        .select('id')
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (!updatedRow) {
+      {
         const { data: rpcUpdateResult, error: rpcUpdateError } = await supabase.rpc(
           'force_update_movement_for_user',
           {
@@ -225,6 +205,20 @@ export default function EditMovementSheet({
           throw new Error(rpcResult?.error || 'حدث خطأ أثناء تعديل الحركة');
         }
       }
+
+      await syncEditedMovementNotifications({
+        movementId: String(movement.id),
+        movement,
+        snapshot: {
+          movement_type: movementType,
+          amount: parsedAmount,
+          currency,
+          notes: trimmedNotes,
+          sender_name: senderName,
+          beneficiary_name: beneficiaryName,
+          transfer_number: (movement as any).transfer_number || null,
+        },
+      });
 
       closeAfterSuccess('تم تعديل الحركة بنجاح');
       setTimeout(() => {

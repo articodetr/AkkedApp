@@ -149,6 +149,55 @@ export default function QuickAddMovementSheet({
 
   const isPendingApproval = requiresApproval && !!movementType;
 
+  const ensureReciprocalLinkedCustomer = async () => {
+    if (!currentUser?.userId) return;
+
+    const { data: customerData, error: customerError } = await supabase
+      .from('customers')
+      .select('id, name, account_number, user_id, linked_user_id')
+      .eq('id', customerId)
+      .maybeSingle();
+
+    if (customerError) throw customerError;
+
+    if (
+      !customerData?.linked_user_id ||
+      customerData.linked_user_id === customerData.user_id
+    ) {
+      return;
+    }
+
+    const { data: existingReciprocal, error: existingError } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('user_id', customerData.linked_user_id)
+      .eq('linked_user_id', customerData.user_id)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (existingReciprocal?.id) return;
+
+    const reciprocalName =
+      currentUser.fullName ||
+      currentUser.userName ||
+      customerName ||
+      'الطرف المقابل';
+
+    const { error: insertError } = await supabase
+      .from('customers')
+      .insert({
+        user_id: customerData.linked_user_id,
+        linked_user_id: customerData.user_id,
+        name: reciprocalName,
+        phone: '',
+        account_number: customerData.account_number,
+        notes: 'تم إنشاؤه تلقائياً للحركات المرتبطة',
+      });
+
+    if (insertError) throw insertError;
+  };
+
   const handleSave = async () => {
     const trimmedNotes = notes.trim();
     const parsedAmount = parseFloat(amount);
@@ -175,6 +224,8 @@ export default function QuickAddMovementSheet({
         Alert.alert('خطأ', 'يجب تسجيل الدخول أولاً');
         return;
       }
+
+      await ensureReciprocalLinkedCustomer();
 
       const { data: insertedData, error } = await supabase.rpc('insert_movement_with_user', {
         p_user_name: currentUser.userName,

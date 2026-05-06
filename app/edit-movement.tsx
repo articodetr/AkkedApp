@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { fetchAccessibleCustomerById } from '@/services/userScopeService';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { isMovementCreator, isPendingMovement } from '@/utils/movementApproval';
+import { syncEditedMovementNotifications } from '@/services/movementNotificationSyncService';
 
 export default function EditMovementScreen() {
   const router = useRouter();
@@ -194,6 +195,22 @@ export default function EditMovementScreen() {
         const result = data as any;
         const creatorEditing = isMovementCreator(originalMovement, currentUser.userId);
 
+        if (!result?.requires_approval || creatorEditing) {
+          await syncEditedMovementNotifications({
+            movementId: String(movementId),
+            movement: originalMovement,
+            snapshot: {
+              movement_type: formData.movement_type,
+              amount: Number(formData.amount),
+              currency: formData.currency,
+              notes: formData.notes.trim(),
+              sender_name: formData.sender_name.trim() || null,
+              beneficiary_name: formData.beneficiary_name.trim() || null,
+              transfer_number: formData.transfer_number.trim() || null,
+            },
+          });
+        }
+
         Alert.alert(
           result?.requires_approval && !creatorEditing ? 'تم إرسال الطلب' : 'تم حفظ التعديل',
           result?.requires_approval && !creatorEditing
@@ -204,28 +221,11 @@ export default function EditMovementScreen() {
         return;
       }
 
-      const updatePayload = {
-        movement_type: formData.movement_type,
-        amount: Number(formData.amount),
-        currency: formData.currency,
-        commission: null,
-        commission_currency: null,
-        notes: formData.notes.trim(),
-        sender_name: formData.sender_name.trim() || null,
-        beneficiary_name: formData.beneficiary_name.trim() || null,
-        transfer_number: formData.transfer_number.trim() || null,
-      };
+      if (!currentUser?.userName) {
+        throw new Error('تعذر معرفة المستخدم الحالي');
+      }
 
-      const { data: updatedRow, error } = await supabase
-        .from('account_movements')
-        .update(updatePayload)
-        .eq('id', movementId)
-        .select('id')
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (!updatedRow && currentUser?.userName) {
+      {
         const { data: rpcUpdateResult, error: rpcUpdateError } = await supabase.rpc(
           'force_update_movement_for_user',
           {
@@ -248,6 +248,20 @@ export default function EditMovementScreen() {
           throw new Error(rpcResult?.error || 'حدث خطأ أثناء تحديث الحركة');
         }
       }
+
+      await syncEditedMovementNotifications({
+        movementId: String(movementId),
+        movement: originalMovement,
+        snapshot: {
+          movement_type: formData.movement_type,
+          amount: Number(formData.amount),
+          currency: formData.currency,
+          notes: formData.notes.trim(),
+          sender_name: formData.sender_name.trim() || null,
+          beneficiary_name: formData.beneficiary_name.trim() || null,
+          transfer_number: formData.transfer_number.trim() || null,
+        },
+      });
 
       triggerRefresh('all');
       setShowSuccessModal(true);
