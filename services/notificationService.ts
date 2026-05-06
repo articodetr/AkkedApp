@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 
 export type NotificationSource = 'general' | 'customer' | 'customer-details';
 export type NotificationFilter = 'all' | 'action' | 'unread' | 'pending' | 'approved' | 'rejected';
-export type NotificationVisualState = 'action' | 'pending' | 'approved' | 'rejected' | 'info';
+export type NotificationVisualState = 'action' | 'pending' | 'approved' | 'rejected' | 'customer' | 'info';
 
 export interface NotificationExtraData {
   reason?: string;
@@ -15,6 +15,9 @@ export interface NotificationExtraData {
   source_user_id?: string;
   creator_user_name?: string;
   creator_full_name?: string;
+  owner_name?: string;
+  linked_customer_name?: string;
+  account_number?: string;
   approval_status?: string;
   requires_action?: boolean;
   [key: string]: unknown;
@@ -263,6 +266,10 @@ export function isNotificationUnread(item: MovementNotification) {
 }
 
 export function isNotificationPending(item: MovementNotification) {
+  if (isCustomerAddedNotification(item)) {
+    return false;
+  }
+
   const rawStatus = getNotificationRawStatus(item);
 
   if (rawStatus === 'approved' || rawStatus === 'rejected' || rawStatus === 'done') {
@@ -275,6 +282,20 @@ export function isNotificationPending(item: MovementNotification) {
     item.notification_type === 'movement_pending' ||
     Boolean(item.movement?.pending_approval)
   );
+}
+
+export function isCustomerAddedNotification(item: MovementNotification) {
+  return (
+    item.notification_type === 'customer_added' ||
+    item.notification_type === 'linked_account_added'
+  );
+}
+
+function extractCustomerAdderName(message?: string | null) {
+  const text = String(message || '').trim();
+  const match = text.match(/(?:من قبل|بواسطة)\s+(.+?)(?:\s*\(|$| بسبب)/u);
+
+  return String(match?.[1] || '').trim();
 }
 
 export function isNotificationCreatedByCurrentUser(
@@ -386,6 +407,48 @@ export function getNotificationMeta(
   const noteText = getCleanNotificationNote(item) || getNotificationNote(item) || undefined;
 const isIncoming = movementType === 'incoming';
   const isOutgoing = movementType === 'outgoing';
+
+  if (isCustomerAddedNotification(item)) {
+    const addedByName = pickText(
+      item.extra_data?.owner_name,
+      item.actor_name,
+      item.extra_data?.created_by_name,
+      item.extra_data?.creator_full_name,
+      item.extra_data?.creator_user_name,
+      extractCustomerAdderName(item.message),
+    ) || 'مستخدم آخر';
+    const linkedCustomerName = pickText(
+      item.extra_data?.linked_customer_name,
+      item.extra_data?.customer_name,
+    );
+    const accountNumber = pickText(
+      item.extra_data?.account_number,
+      (item.extra_data as any)?.owner_account_number,
+      (item.extra_data as any)?.linked_account_number,
+    );
+
+    return {
+      title: 'تمت إضافتك كعميل جديد',
+      subtitle: `${addedByName} أضافك إلى قائمة عملائه${linkedCustomerName ? ` باسم ${linkedCustomerName}` : ''}.`,
+      customerName: linkedCustomerName || item.customer_name || addedByName,
+      actorName: addedByName,
+      amountText: '',
+      amountSentenceText: '',
+      directionLabel: 'إضافة',
+      directionColor: '#2563EB',
+      statusText: accountNumber ? `رقم الحساب ${accountNumber}` : 'إضافة عميل',
+      statusColor: '#1D4ED8',
+      statusBg: '#DBEAFE',
+      rowBorderColor: '#93C5FD',
+      rowBg: '#EFF6FF',
+      visualState: 'customer',
+      isUnread: isNotificationUnread(item),
+      canTakeAction: false,
+      createdByCurrentUser: false,
+      noteText: undefined,
+      rejectReason: undefined,
+    };
+  }
 
   let directionLabel = 'حركة';
   let directionColor = '#2563EB';

@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Check, Clock, Trash2, X } from 'lucide-react-native';
+import { Check, Clock, Trash2, UserPlus, X } from 'lucide-react-native';
 
 import {
   CurrentUserLike,
@@ -137,6 +137,11 @@ export default function NotificationCard({
             <View style={styles.titleRow}>
               {meta.isUnread && (
                 <View style={[styles.unreadDot, { backgroundColor: unreadColor }]} />
+              )}
+              {meta.visualState === 'customer' && (
+                <View style={styles.customerAddedIcon}>
+                  <UserPlus size={13} color="#1D4ED8" />
+                </View>
               )}
 
               <Text style={styles.cardTitle} numberOfLines={2}>
@@ -319,6 +324,14 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
+  },
+  customerAddedIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardTitle: {
     flex: 1,

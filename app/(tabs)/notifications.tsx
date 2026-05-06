@@ -84,6 +84,13 @@ function isNotificationPending(item: MovementNotification) {
   const anyItem = item as any;
   const rawStatus = getNotificationRawStatus(item);
 
+  if (
+    anyItem.notification_type === 'customer_added' ||
+    anyItem.notification_type === 'linked_account_added'
+  ) {
+    return false;
+  }
+
   if (rawStatus === 'approved' || rawStatus === 'rejected' || rawStatus === 'done') {
     return false;
   }
