@@ -44,3 +44,5 @@ backup_after_import_fix.tsx
 *.bak_*
 .expo/
 .env
+desktop.ini
+tools/
