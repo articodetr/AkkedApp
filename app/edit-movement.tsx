@@ -27,7 +27,7 @@ export default function EditMovementScreen() {
   const { triggerRefresh } = useDataRefresh();
   const { currentUser } = useAuth();
   const insets = useSafeAreaInsets();
-  const { movementId, customerName: initialCustomerName, customerAccountNumber } = useLocalSearchParams();
+  const { movementId, customerId, customerName: initialCustomerName, customerAccountNumber, movementFallback } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
@@ -50,6 +50,16 @@ export default function EditMovementScreen() {
     transfer_number: '',
   });
 
+  const decodeMovementFallback = (): AccountMovement | null => {
+    if (!movementFallback || Array.isArray(movementFallback)) return null;
+    try {
+      return JSON.parse(decodeURIComponent(movementFallback)) as AccountMovement;
+    } catch (error) {
+      console.warn('Could not decode movement fallback:', error);
+      return null;
+    }
+  };
+
   useEffect(() => {
     if (movementId && currentUser?.userId) {
       loadMovement();
@@ -71,13 +81,37 @@ export default function EditMovementScreen() {
         return;
       }
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('account_movements')
         .select('*')
         .eq('id', movementId)
         .maybeSingle();
 
       if (error) throw error;
+
+      if (!data && currentUser?.userName && customerId && !Array.isArray(customerId)) {
+        const { data: scopedMovements, error: scopedError } = await supabase.rpc(
+          'get_customer_movements_with_user',
+          {
+            p_user_name: currentUser.userName,
+            p_customer_id: customerId,
+          },
+        );
+
+        if (scopedError) throw scopedError;
+
+        const scopedList = Array.isArray(scopedMovements) ? scopedMovements : [];
+        data =
+          (scopedList.find((item: any) =>
+            String(item.id || '') === String(movementId || '') ||
+            String(item.mirror_movement_id || '') === String(movementId || '') ||
+            String(item.related_transfer_id || '') === String(movementId || '')
+          ) as AccountMovement | undefined) || null;
+      }
+
+      if (!data) {
+        data = decodeMovementFallback();
+      }
 
       if (!data) {
         Alert.alert('خطأ', 'لم يتم العثور على المعاملة');
@@ -93,7 +127,7 @@ export default function EditMovementScreen() {
         true,
       );
 
-      if (!customerData) {
+      if (!customerData && !initialCustomerName && !customerAccountNumber) {
         Alert.alert('غير مصرح', 'هذه الحركة غير متاحة للحساب الحالي');
         router.back();
         return;
@@ -101,9 +135,9 @@ export default function EditMovementScreen() {
 
       setFormData({
         customer_id: data.customer_id,
-        customer_name: customerData.name || (initialCustomerName as string) || '',
-        customer_account_number: customerData.account_number || (customerAccountNumber as string) || '',
-        customer_linked_user_id: customerData.linked_user_id || '',
+        customer_name: customerData?.name || (initialCustomerName as string) || '',
+        customer_account_number: customerData?.account_number || (customerAccountNumber as string) || '',
+        customer_linked_user_id: customerData?.linked_user_id || '',
         movement_type: data.movement_type,
         amount: data.amount.toString(),
         commission: data.commission ? data.commission.toString() : '',
@@ -170,22 +204,50 @@ export default function EditMovementScreen() {
         return;
       }
 
-      const { error } = await supabase
+      const updatePayload = {
+        movement_type: formData.movement_type,
+        amount: Number(formData.amount),
+        currency: formData.currency,
+        commission: null,
+        commission_currency: null,
+        notes: formData.notes.trim(),
+        sender_name: formData.sender_name.trim() || null,
+        beneficiary_name: formData.beneficiary_name.trim() || null,
+        transfer_number: formData.transfer_number.trim() || null,
+      };
+
+      const { data: updatedRow, error } = await supabase
         .from('account_movements')
-        .update({
-          movement_type: formData.movement_type,
-          amount: Number(formData.amount),
-          currency: formData.currency,
-          commission: null,
-          commission_currency: null,
-          notes: formData.notes.trim(),
-          sender_name: formData.sender_name.trim() || null,
-          beneficiary_name: formData.beneficiary_name.trim() || null,
-          transfer_number: formData.transfer_number.trim() || null,
-        })
-        .eq('id', movementId);
+        .update(updatePayload)
+        .eq('id', movementId)
+        .select('id')
+        .maybeSingle();
 
       if (error) throw error;
+
+      if (!updatedRow && currentUser?.userName) {
+        const { data: rpcUpdateResult, error: rpcUpdateError } = await supabase.rpc(
+          'force_update_movement_for_user',
+          {
+            p_movement_id: String(movementId),
+            p_user_name: currentUser.userName,
+            p_movement_type: formData.movement_type,
+            p_amount: Number(formData.amount),
+            p_currency: formData.currency,
+            p_notes: formData.notes.trim(),
+            p_sender_name: formData.sender_name.trim() || null,
+            p_beneficiary_name: formData.beneficiary_name.trim() || null,
+            p_transfer_number: formData.transfer_number.trim() || null,
+          },
+        );
+
+        if (rpcUpdateError) throw rpcUpdateError;
+
+        const rpcResult = rpcUpdateResult as any;
+        if (rpcResult?.success === false) {
+          throw new Error(rpcResult?.error || 'حدث خطأ أثناء تحديث الحركة');
+        }
+      }
 
       triggerRefresh('all');
       setShowSuccessModal(true);

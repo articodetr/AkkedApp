@@ -46,7 +46,7 @@ import {
 
 export default function MovementDetailsScreen() {
   const router = useRouter();
-  const { movementId } = useLocalSearchParams();
+  const { movementId, customerId, customerName: initialCustomerName, customerAccountNumber: initialCustomerAccountNumber, movementFallback } = useLocalSearchParams();
   const { currentUser } = useAuth();
   const { triggerRefresh } = useDataRefresh();
   const [movement, setMovement] = useState<AccountMovement | null>(null);
@@ -60,6 +60,16 @@ export default function MovementDetailsScreen() {
   const [isRejecting, setIsRejecting] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+
+  const decodeMovementFallback = (): AccountMovement | null => {
+    if (!movementFallback || Array.isArray(movementFallback)) return null;
+    try {
+      return JSON.parse(decodeURIComponent(movementFallback)) as AccountMovement;
+    } catch (error) {
+      console.warn('Could not decode movement fallback:', error);
+      return null;
+    }
+  };
 
   useEffect(() => {
     if (movementId && currentUser?.userId) {
@@ -90,35 +100,61 @@ export default function MovementDetailsScreen() {
 
       if (movementResult.error) throw movementResult.error;
 
-      if (!movementResult.data) {
+      let resolvedMovement = movementResult.data as AccountMovement | null;
+
+      if (!resolvedMovement && currentUser?.userName && customerId && !Array.isArray(customerId)) {
+        const { data: scopedMovements, error: scopedError } = await supabase.rpc(
+          'get_customer_movements_with_user',
+          {
+            p_user_name: currentUser.userName,
+            p_customer_id: customerId,
+          },
+        );
+
+        if (scopedError) throw scopedError;
+
+        const scopedList = Array.isArray(scopedMovements) ? scopedMovements : [];
+        resolvedMovement =
+          (scopedList.find((item: any) =>
+            String(item.id || '') === String(movementId || '') ||
+            String(item.mirror_movement_id || '') === String(movementId || '') ||
+            String(item.related_transfer_id || '') === String(movementId || '')
+          ) as AccountMovement | undefined) || null;
+      }
+
+      if (!resolvedMovement) {
+        resolvedMovement = decodeMovementFallback();
+      }
+
+      if (!resolvedMovement) {
         Alert.alert('خطأ', 'لم يتم العثور على المعاملة');
         router.back();
         return;
       }
 
-      setMovement(movementResult.data);
+      setMovement(resolvedMovement);
       const customerData = await fetchAccessibleCustomerById(
         currentUser.userId,
-        movementResult.data.customer_id,
+        resolvedMovement.customer_id,
         true,
       );
 
-      if (!customerData) {
+      if (!customerData && !initialCustomerName && !initialCustomerAccountNumber) {
         Alert.alert('غير مصرح', 'هذه الحركة غير متاحة للحساب الحالي');
         router.back();
         return;
       }
 
-      setCustomerName(customerData.name);
-      setCustomerAccountNumber(customerData.account_number);
-      setCustomerLinkedUserId(customerData.linked_user_id || null);
+      setCustomerName(customerData?.name || (initialCustomerName as string) || '');
+      setCustomerAccountNumber(customerData?.account_number || (initialCustomerAccountNumber as string) || '');
+      setCustomerLinkedUserId(customerData?.linked_user_id || null);
 
       if (commissionsResult.data) {
         const customerCommissions = commissionsResult.data.filter(
           (c) =>
-            c.customer_id === movementResult.data.customer_id &&
-            c.movement_type === movementResult.data.movement_type &&
-            c.currency === movementResult.data.currency
+            c.customer_id === resolvedMovement.customer_id &&
+            c.movement_type === resolvedMovement.movement_type &&
+            c.currency === resolvedMovement.currency
         );
         setRelatedCommissionMovements(customerCommissions);
       }
@@ -131,39 +167,41 @@ export default function MovementDetailsScreen() {
     }
   };
 
-  const handleDelete = () => {
-    if (!movement) return;
+  
+const handleDelete = () => {
+  if (!movement) return;
 
-    const movementTypeText = movement.movement_type === 'incoming' ? 'له' : 'عليه';
-    const currencySymbol = getCurrencySymbol(movement.currency);
-    const pending = isPendingMovement(movement);
-    const creatorDeleting = isMovementCreator(movement, currentUser?.userId);
-    const deleteMessage = pending
-      ? creatorDeleting
-        ? `هل أنت متأكد من حذف هذه الحركة المعلقة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nسيتم حذفها مباشرة وإشعار الطرف الآخر.`
-        : `هل تريد طلب حذف هذه الحركة المعلقة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nسيتم إرسال طلب موافقة إلى منشئ الحركة.`
-      : `هل أنت متأكد من حذف هذه المعاملة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nملاحظة: لا يمكن التراجع عن هذا الإجراء`;
+  const movementTypeText = movement.movement_type === 'incoming' ? 'له' : 'عليه';
+  const currencySymbol = getCurrencySymbol(movement.currency);
+  const pending = isPendingMovement(movement);
 
-    Alert.alert(
-      'تأكيد الحذف',
-      deleteMessage,
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'حذف',
-          style: 'destructive',
-          onPress: confirmDelete,
-        },
-      ]
-    );
-  };
+  const deleteMessage = pending
+    ? `هل أنت متأكد من حذف هذه الحركة المعلقة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nسيتم حذفها مباشرة حتى لو كانت بانتظار الموافقة، ولا يمكن التراجع عن ذلك.`
+    : `هل أنت متأكد من حذف هذه المعاملة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nملاحظة: لا يمكن التراجع عن هذا الإجراء`;
 
-  const confirmDelete = async () => {
-    if (!movement || !currentUser?.userName) return;
+  Alert.alert(
+    'تأكيد الحذف',
+    deleteMessage,
+    [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: confirmDelete,
+      },
+    ],
+  );
+};
 
-    setIsDeleting(true);
-    try {
-      const { data, error } = await supabase.rpc('request_movement_deletion', {
+  
+const confirmDelete = async () => {
+  if (!movement || !currentUser?.userName) return;
+
+  setIsDeleting(true);
+
+  try {
+    if (isPendingMovement(movement)) {
+      const { data, error } = await supabase.rpc('force_delete_pending_movement', {
         p_movement_id: movement.id,
         p_user_name: currentUser.userName,
       });
@@ -171,50 +209,73 @@ export default function MovementDetailsScreen() {
       if (error) throw error;
 
       const result = data as any;
-      if (result?.deleted) {
-        triggerRefresh('all');
-        Alert.alert('نجح', 'تم حذف المعاملة بنجاح', [
-          {
-            text: 'موافق',
-            onPress: () => router.back(),
-          },
-        ]);
-        return;
-      }
-
-      if (result?.requires_approval) {
-        triggerRefresh('all');
-        Alert.alert(
-          'طلب الموافقة',
-          'تم إرسال طلب الموافقة على الحذف إلى منشئ الحركة. سيتم حذف الحركة بعد موافقته.',
-          [
-            {
-              text: 'موافق',
-              onPress: () => router.back(),
-            },
-          ],
-        );
-        return;
-      }
-
       if (result?.success === false) {
-        throw new Error(result?.error || 'فشل حذف الحركة');
+        throw new Error(result?.error || 'فشل حذف الحركة المعلقة');
       }
 
       triggerRefresh('all');
-      Alert.alert('نجح', 'تم تنفيذ طلب الحذف بنجاح', [
+      Alert.alert('نجح', 'تم حذف الحركة المعلقة بنجاح', [
         {
           text: 'موافق',
           onPress: () => router.back(),
         },
       ]);
-    } catch (error: any) {
-      console.error('Error deleting movement:', error);
-      Alert.alert('خطأ', error.message || 'حدث خطأ أثناء حذف المعاملة');
-    } finally {
-      setIsDeleting(false);
+      return;
     }
-  };
+
+    const { data, error } = await supabase.rpc('request_movement_deletion', {
+      p_movement_id: movement.id,
+      p_user_name: currentUser.userName,
+    });
+
+    if (error) throw error;
+
+    const result = data as any;
+
+    if (result?.deleted) {
+      triggerRefresh('all');
+      Alert.alert('نجح', 'تم حذف المعاملة بنجاح', [
+        {
+          text: 'موافق',
+          onPress: () => router.back(),
+        },
+      ]);
+      return;
+    }
+
+    if (result?.requires_approval) {
+      triggerRefresh('all');
+      Alert.alert(
+        'طلب الموافقة',
+        'تم إرسال طلب الموافقة على الحذف إلى منشئ الحركة. سيتم حذف الحركة بعد موافقته.',
+        [
+          {
+            text: 'موافق',
+            onPress: () => router.back(),
+          },
+        ],
+      );
+      return;
+    }
+
+    if (result?.success === false) {
+      throw new Error(result?.error || 'فشل حذف الحركة');
+    }
+
+    triggerRefresh('all');
+    Alert.alert('نجح', 'تم تنفيذ طلب الحذف بنجاح', [
+      {
+        text: 'موافق',
+        onPress: () => router.back(),
+      },
+    ]);
+  } catch (error: any) {
+    console.error('Error deleting movement:', error);
+    Alert.alert('خطأ', error.message || 'حدث خطأ أثناء حذف المعاملة');
+  } finally {
+    setIsDeleting(false);
+  }
+};
 
   const handleApprove = async () => {
     if (!movement || !currentUser?.userName) return;
@@ -284,8 +345,10 @@ export default function MovementDetailsScreen() {
       pathname: '/edit-movement',
       params: {
         movementId: movement.id,
+        customerId: movement.customer_id,
         customerName: customerName,
         customerAccountNumber: customerAccountNumber,
+        movementFallback: encodeURIComponent(JSON.stringify(movement)),
       },
     });
   };

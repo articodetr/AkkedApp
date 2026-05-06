@@ -8,7 +8,8 @@ import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowRight, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { buildReadableCustomerFilter } from '@/services/userScopeService';import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
+import { buildReadableCustomerFilter } from '@/services/userScopeService';
+import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
 import { format, isSameMonth, isSameYear, startOfDay, endOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import * as Print from 'expo-print';
@@ -17,6 +18,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { generateAccountStatementHTML } from '@/utils/accountStatementGenerator';
 import { getLogoBase64 } from '@/utils/logoHelper';
 import QuickAddMovementSheet from '@/components/QuickAddMovementSheet';
+import EditMovementSheet from '@/components/EditMovementSheet';
 import CalendarRangePicker from '@/components/CalendarRangePicker';
 import {
   fetchWhatsAppTemplates,
@@ -429,6 +431,7 @@ export default function CustomerDetailsScreen() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [showCurrencyDetails, setShowCurrencyDetails] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [editingMovement, setEditingMovement] = useState<AccountMovement | null>(null);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchScrollRef = useRef<ScrollView>(null);
@@ -553,7 +556,8 @@ export default function CustomerDetailsScreen() {
         // Ignore duplicate cleanup errors.
       }
     };
-  }, [currentUser?.userId]);
+  }, [currentUser?.userId]);
+
 
   const handleWhatsApp = async () => {
     if (customer?.phone) {
@@ -895,6 +899,7 @@ export default function CustomerDetailsScreen() {
 
   const handleAddMovement = () => {
     console.log('[CustomerDetails] handleAddMovement called');
+    setEditingMovement(null);
     setShowQuickAdd(true);
     console.log('[CustomerDetails] setShowQuickAdd(true) called');
   };
@@ -911,93 +916,91 @@ export default function CustomerDetailsScreen() {
     });
   }, [customer?.name, id, router]);
 
-  const handleMovementPress = async (movement: AccountMovement) => {
-    const movementTypeText =
-      movement.movement_type === 'outgoing' ? 'عليه' : 'له';
-    const currencySymbol = getCurrencySymbol(movement.currency);
-    const amount = Math.round(Number(movement.amount));
+  
+const handleMovementPress = async (movement: AccountMovement) => {
+  const movementTypeText = movement.movement_type === 'outgoing' ? 'عليه' : 'له';
+  const currencySymbol = getCurrencySymbol(movement.currency);
+  const amount = Math.round(Number(movement.amount));
 
-    Alert.alert(
-      movementTypeText,
-      `${amount} ${currencySymbol}`,
-      [
-        {
-          text: 'عرض التفاصيل',
-          onPress: () => handleViewMovementDetails(movement),
-        },
-        {
-          text: 'تعديل',
-          onPress: () => handleEditMovement(movement),
-        },
-        {
-          text: 'حذف',
-          onPress: () => handleDeleteMovement(movement),
-          style: 'destructive',
-        },
-        {
-          text: 'إلغاء',
-          style: 'cancel',
-        },
-      ],
-    );
-  };
+  Alert.alert(
+    movementTypeText,
+    `${amount} ${currencySymbol}`,
+    [
+      {
+        text: 'عرض التفاصيل',
+        onPress: () => handleViewMovementDetails(movement),
+      },
+      {
+        text: 'تعديل',
+        onPress: () => handleEditMovement(movement),
+      },
+      {
+        text: 'حذف',
+        onPress: () => handleDeleteMovement(movement),
+        style: 'destructive',
+      },
+      {
+        text: 'إلغاء',
+        style: 'cancel',
+      },
+    ],
+  );
+};
 
-  const handleViewMovementDetails = (movement: AccountMovement) => {
+  
+const handleViewMovementDetails = (movement: AccountMovement) => {
     router.push({
       pathname: '/movement-details',
       params: {
         movementId: movement.id,
+        customerId: customer?.id || movement.customer_id,
+        customerName: customer?.name || '',
+        customerAccountNumber: customer?.account_number || '',
+        movementFallback: encodeURIComponent(JSON.stringify(movement)),
       },
     });
   };
 
-  const handleEditMovement = (movement: AccountMovement) => {
-    router.push({
-      pathname: '/edit-movement',
-      params: {
-        movementId: movement.id,
-        customerName: customer?.name,
-        customerAccountNumber: customer?.account_number,
-  customerId: customer?.id,
+  
+const handleEditMovement = (movement: AccountMovement) => {
+    setEditingMovement(movement);
+  };
+
+  
+const handleDeleteMovement = (movement: AccountMovement) => {
+  const movementTypeText = movement.movement_type === 'outgoing' ? 'عليه' : 'له';
+  const currencySymbol = getCurrencySymbol(movement.currency);
+  const amount = Math.round(Number(movement.amount));
+  const pending = isPendingMovement(movement);
+
+  const deleteMessage = pending
+    ? `هل أنت متأكد من حذف هذه الحركة المعلقة؟\n\n${movementTypeText}\nالمبلغ: ${amount} ${currencySymbol}\n\nسيتم حذفها مباشرة حتى لو كانت بانتظار الموافقة، ولا يمكن التراجع عن ذلك.`
+    : `هل أنت متأكد من حذف هذه الحركة؟\n\n${movementTypeText}\nالمبلغ: ${amount} ${currencySymbol}\n\nلا يمكن التراجع.`;
+
+  Alert.alert(
+    'تأكيد الحذف',
+    deleteMessage,
+    [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: () => confirmDeleteMovement(movement),
       },
-    });
-  };
+    ],
+  );
+};
 
-  const handleDeleteMovement = (movement: AccountMovement) => {
-    const movementTypeText =
-      movement.movement_type === 'outgoing' ? 'عليه' : 'له';
-    const currencySymbol = getCurrencySymbol(movement.currency);
-    const amount = Math.round(Number(movement.amount));
-    const pending = isPendingMovement(movement);
-    const creatorDeleting = isMovementCreator(movement, currentUser?.userId);
-    const deleteMessage = pending
-      ? creatorDeleting
-        ? `هل أنت متأكد من حذف هذه الحركة المعلقة؟\n\n${movementTypeText}\nالمبلغ: ${amount} ${currencySymbol}\n\nسيتم حذفها مباشرة وإشعار الطرف الآخر.`
-        : `هل تريد طلب حذف هذه الحركة المعلقة؟\n\n${movementTypeText}\nالمبلغ: ${amount} ${currencySymbol}\n\nسيتم إرسال طلب موافقة إلى منشئ الحركة.`
-      : `هل أنت متأكد من حذف هذه الحركة؟\n\n${movementTypeText}\nالمبلغ: ${amount} ${currencySymbol}\n\nلا يمكن التراجع.`;
+  
+const confirmDeleteMovement = async (movement: AccountMovement) => {
+  if (!currentUser?.userName) {
+    Alert.alert('خطأ', 'لم يتم العثور على معلومات المستخدم');
+    return;
+  }
 
-    Alert.alert(
-      'تأكيد الحذف',
-      deleteMessage,
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'حذف',
-          style: 'destructive',
-          onPress: () => confirmDeleteMovement(movement),
-        },
-      ],
-    );
-  };
-
-  const confirmDeleteMovement = async (movement: AccountMovement) => {
-    if (!currentUser?.userName) {
-      Alert.alert('خطأ', 'لم يتم العثور على معلومات المستخدم');
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.rpc('request_movement_deletion', {
+  try {
+    if (isPendingMovement(movement)) {
+      const { data, error } = await supabase.rpc('force_delete_pending_movement', {
         p_movement_id: movement.id,
         p_user_name: currentUser.userName,
       });
@@ -1005,23 +1008,41 @@ export default function CustomerDetailsScreen() {
       if (error) throw error;
 
       const result = data as any;
-
-      if (result?.deleted) {
-        Alert.alert('تم الحذف', 'تم حذف الحركة بنجاح');
-      } else if (result?.requires_approval) {
-        Alert.alert(
-          'طلب الموافقة',
-          'تم إرسال طلب الموافقة على الحذف إلى منشئ الحركة. سيتم حذف الحركة بعد موافقته.'
-        );
+      if (result?.success === false) {
+        throw new Error(result?.error || 'فشل حذف الحركة المعلقة');
       }
 
-      triggerRefresh('all');
+      Alert.alert('تم الحذف', 'تم حذف الحركة المعلقة بنجاح');
+      triggerRefresh?.('all');
       loadCustomerData();
-    } catch (error: any) {
-      console.error('Error deleting movement:', error);
-      Alert.alert('خطأ', error.message || 'حدث خطأ أثناء حذف الحركة');
+      return;
     }
-  };
+
+    const { data, error } = await supabase.rpc('request_movement_deletion', {
+      p_movement_id: movement.id,
+      p_user_name: currentUser.userName,
+    });
+
+    if (error) throw error;
+
+    const result = data as any;
+
+    if (result?.deleted) {
+      Alert.alert('تم الحذف', 'تم حذف الحركة بنجاح');
+    } else if (result?.requires_approval) {
+      Alert.alert(
+        'طلب الموافقة',
+        'تم إرسال طلب الموافقة على الحذف إلى منشئ الحركة. سيتم حذف الحركة بعد موافقته.',
+      );
+    }
+
+    triggerRefresh?.('all');
+    loadCustomerData();
+  } catch (error: any) {
+    console.error('Error deleting movement:', error);
+    Alert.alert('خطأ', error.message || 'حدث خطأ أثناء حذف الحركة');
+  }
+};
 
   const handlePrintMovementReceipt = (movement: AccountMovement) => {
     router.push({
@@ -1240,7 +1261,8 @@ export default function CustomerDetailsScreen() {
                 )}
               </View>
             </View>
-          </View>
+          </View>
+
         </View>
 
         {currencyTotals.length > 0 && (
@@ -1311,7 +1333,8 @@ export default function CustomerDetailsScreen() {
               <FileText size={16} color="#6B7280" />
             )}
             <Text style={styles.tabButtonText}>طباعة PDF</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>
+
           
           <TouchableOpacity
             style={styles.tabButton}
@@ -1536,7 +1559,8 @@ export default function CustomerDetailsScreen() {
       </TouchableOpacity>
 
       {customer && (
-        <QuickAddMovementSheet
+        <>
+          <QuickAddMovementSheet
           visible={showQuickAdd}
           onClose={() => setShowQuickAdd(false)}
           customerId={customer.id}
@@ -1546,6 +1570,17 @@ export default function CustomerDetailsScreen() {
           requiresApproval={requiresCounterpartyApproval(customer.linked_user_id, currentUser?.userId)}
           onSuccess={loadCustomerData}
         />
+          <EditMovementSheet
+          visible={Boolean(editingMovement)}
+          onClose={() => setEditingMovement(null)}
+          movement={editingMovement}
+          customerId={customer.id}
+          customerName={customer.name}
+          currentBalances={currencyBalances}
+          requiresApproval={requiresCounterpartyApproval(customer.linked_user_id, currentUser?.userId)}
+          onSuccess={loadCustomerData}
+        />
+        </>
       )}
 
       
