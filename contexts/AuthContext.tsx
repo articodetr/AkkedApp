@@ -11,6 +11,7 @@ interface AuthContextType {
   login: (userName: string, pin: string) => Promise<{ success: boolean; error?: string }>;
   register: (fullName: string, userName: string, password: string) => Promise<{ success: boolean; accountNumber?: string; error?: string }>;
   logout: () => Promise<void>;
+  refreshCurrentUser: () => Promise<void>;
   checkUsernameAvailability: (userName: string) => Promise<boolean>;
   settings: AppSettings | null;
   refreshSettings: () => Promise<void>;
@@ -251,6 +252,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshCurrentUser = async () => {
+    if (!currentUser?.userId) return;
+    try {
+      const { data, error } = await supabase
+        .from('app_security')
+        .select('id, user_name, role, full_name, account_number')
+        .eq('id', currentUser.userId)
+        .maybeSingle();
+
+      if (error || !data) return;
+
+      const updated = {
+        userName: data.user_name,
+        role: data.role,
+        userId: data.id,
+        fullName: data.full_name,
+        accountNumber: data.account_number,
+      };
+
+      setCurrentUser(updated);
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
+    } catch (error) {
+      console.error('Error refreshing current user:', error);
+    }
+  };
+
   const logout = async () => {
     try {
       await AsyncStorage.removeItem(AUTH_KEY);
@@ -453,6 +480,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         register,
         logout,
+        refreshCurrentUser,
         checkUsernameAvailability,
         settings,
         refreshSettings,
@@ -475,6 +503,7 @@ export function useAuth() {
       login: async (_userName: string, _pin: string) => ({ success: false, error: 'Initializing...' }),
       register: async (_fullName: string, _userName: string, _password: string) => ({ success: false, error: 'Initializing...' }),
       logout: async () => {},
+      refreshCurrentUser: async () => {},
       checkUsernameAvailability: async (_userName: string) => false,
       settings: null,
       refreshSettings: async () => {},
