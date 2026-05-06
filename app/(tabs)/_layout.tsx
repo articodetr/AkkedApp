@@ -6,15 +6,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDataRefresh } from '@/contexts/DataRefreshContext';
 
 // =========================================================
-// Pending notifications badge helpers
-// The tab badge should count still-pending approvals,
-// not only unread notifications.
+// Notification badge helpers.
+// The tab badge follows unread notifications so tapping a notification
+// immediately removes it from the visible count.
 // =========================================================
 
 type PendingNotificationRow = {
   id: string;
+  is_read?: boolean | null;
   status?: string | null;
   action_required?: boolean | null;
   notification_type?: string | null;
@@ -28,35 +30,18 @@ type PendingNotificationRow = {
   } | null;
 };
 
-function isStillPendingNotification(item: PendingNotificationRow) {
+function isUnreadNotification(item: PendingNotificationRow) {
   const status = String(
-    item.status ||
-      item.extra_data?.approval_status ||
-      item.movement?.approval_status ||
-      '',
+    item.status || '',
   ).toLowerCase();
 
-  if (
-    status === 'approved' ||
-    status === 'rejected' ||
-    status === 'done' ||
-    status === 'cancelled' ||
-    status === 'canceled'
-  ) {
-    return false;
-  }
-
-  return (
-    status === 'pending' ||
-    item.notification_type === 'approval_needed' ||
-    item.action_required === true ||
-    item.movement?.pending_approval === true
-  );
+  return item.is_read === false || status === 'unread';
 }
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { currentUser } = useAuth();
+  const { lastRefreshTime } = useDataRefresh();
   const [unreadCount, setUnreadCount] = useState(0);
 
   const loadUnreadCount = useCallback(async () => {
@@ -69,6 +54,7 @@ export default function TabsLayout() {
       .from('movement_notifications')
       .select(`
         id,
+        is_read,
         status,
         action_required,
         notification_type,
@@ -87,16 +73,20 @@ export default function TabsLayout() {
       return;
     }
 
-    const pendingCount = ((data || []) as PendingNotificationRow[]).filter(
-      isStillPendingNotification,
+    const unreadNotificationsCount = ((data || []) as PendingNotificationRow[]).filter(
+      isUnreadNotification,
     ).length;
 
-    setUnreadCount(pendingCount);
+    setUnreadCount(unreadNotificationsCount);
   }, [currentUser?.userId]);
 
   useEffect(() => {
     loadUnreadCount();
   }, [loadUnreadCount]);
+
+  useEffect(() => {
+    loadUnreadCount();
+  }, [lastRefreshTime, loadUnreadCount]);
 
   useEffect(() => {
     if (!currentUser?.userId) return;

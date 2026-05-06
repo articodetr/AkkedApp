@@ -33,10 +33,12 @@ import { AccountMovement, CURRENCIES } from '@/types/database';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { fetchAccessibleCustomerById } from '@/services/userScopeService';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import {
   getMovementApprovalLabel,
+  isMovementCreator,
   isPendingMovement,
   isRejectedMovement,
   normalizeMovementApprovalStatus,
@@ -46,6 +48,7 @@ export default function MovementDetailsScreen() {
   const router = useRouter();
   const { movementId } = useLocalSearchParams();
   const { currentUser } = useAuth();
+  const { triggerRefresh } = useDataRefresh();
   const [movement, setMovement] = useState<AccountMovement | null>(null);
   const [customerName, setCustomerName] = useState<string>('');
   const [customerAccountNumber, setCustomerAccountNumber] = useState<string>('');
@@ -133,10 +136,17 @@ export default function MovementDetailsScreen() {
 
     const movementTypeText = movement.movement_type === 'incoming' ? 'له' : 'عليه';
     const currencySymbol = getCurrencySymbol(movement.currency);
+    const pending = isPendingMovement(movement);
+    const creatorDeleting = isMovementCreator(movement, currentUser?.userId);
+    const deleteMessage = pending
+      ? creatorDeleting
+        ? `هل أنت متأكد من حذف هذه الحركة المعلقة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nسيتم حذفها مباشرة وإشعار الطرف الآخر.`
+        : `هل تريد طلب حذف هذه الحركة المعلقة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nسيتم إرسال طلب موافقة إلى منشئ الحركة.`
+      : `هل أنت متأكد من حذف هذه المعاملة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nملاحظة: لا يمكن التراجع عن هذا الإجراء`;
 
     Alert.alert(
       'تأكيد الحذف',
-      `هل أنت متأكد من حذف هذه المعاملة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nملاحظة: لا يمكن التراجع عن هذا الإجراء`,
+      deleteMessage,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -153,21 +163,46 @@ export default function MovementDetailsScreen() {
 
     setIsDeleting(true);
     try {
-      const { data, error } = await supabase.rpc('void_movement_and_mirror', {
+      const { data, error } = await supabase.rpc('request_movement_deletion', {
         p_movement_id: movement.id,
         p_user_name: currentUser.userName,
-        p_action: 'deleted',
-        p_reason: 'تم حذف الحركة من قبل المستخدم',
       });
 
       if (error) throw error;
 
       const result = data as any;
-      if (!result?.success) {
+      if (result?.deleted) {
+        triggerRefresh('all');
+        Alert.alert('نجح', 'تم حذف المعاملة بنجاح', [
+          {
+            text: 'موافق',
+            onPress: () => router.back(),
+          },
+        ]);
+        return;
+      }
+
+      if (result?.requires_approval) {
+        triggerRefresh('all');
+        Alert.alert(
+          'طلب الموافقة',
+          'تم إرسال طلب الموافقة على الحذف إلى منشئ الحركة. سيتم حذف الحركة بعد موافقته.',
+          [
+            {
+              text: 'موافق',
+              onPress: () => router.back(),
+            },
+          ],
+        );
+        return;
+      }
+
+      if (result?.success === false) {
         throw new Error(result?.error || 'فشل حذف الحركة');
       }
 
-      Alert.alert('نجح', 'تم حذف المعاملة بنجاح', [
+      triggerRefresh('all');
+      Alert.alert('نجح', 'تم تنفيذ طلب الحذف بنجاح', [
         {
           text: 'موافق',
           onPress: () => router.back(),
@@ -193,6 +228,7 @@ export default function MovementDetailsScreen() {
 
       if (error) throw error;
 
+      triggerRefresh('all');
       Alert.alert('تم القبول', 'تم اعتماد الحركة، وأصبحت مؤثرة في الإجماليات.', [
         {
           text: 'موافق',
@@ -226,6 +262,7 @@ export default function MovementDetailsScreen() {
 
       setShowRejectModal(false);
       setRejectReason('');
+      triggerRefresh('all');
       Alert.alert('تم الرفض', 'تم رفض الحركة، ولن تؤثر في الإجماليات.', [
         {
           text: 'موافق',
@@ -242,14 +279,6 @@ export default function MovementDetailsScreen() {
 
   const handleEdit = () => {
     if (!movement) return;
-
-    if (movement.mirror_movement_id && isPendingMovement(movement)) {
-      Alert.alert(
-        'غير مسموح',
-        'لا يمكن تعديل الحركة المعلّقة المرتبطة قبل اعتمادها أو رفضها. احذفها وأعد إنشاؤها إذا لزم الأمر.',
-      );
-      return;
-    }
 
     router.push({
       pathname: '/edit-movement',

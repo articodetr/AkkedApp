@@ -14,8 +14,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import { ArrowDownCircle, ArrowUpCircle, Printer, Save, X } from 'lucide-react-native';
+import { ArrowDownCircle, ArrowUpCircle, Save, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,7 +34,7 @@ interface QuickAddMovementSheetProps {
     balance: number;
   }>;
   requiresApproval?: boolean;
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
 }
 
 export default function QuickAddMovementSheet({
@@ -43,12 +42,10 @@ export default function QuickAddMovementSheet({
   onClose,
   customerId,
   customerName,
-  customerAccountNumber,
   currentBalances,
   requiresApproval = false,
   onSuccess,
 }: QuickAddMovementSheetProps) {
-  const router = useRouter();
   const { triggerRefresh } = useDataRefresh();
   const { currentUser } = useAuth();
   const insets = useSafeAreaInsets();
@@ -98,13 +95,9 @@ export default function QuickAddMovementSheet({
     return curr?.symbol || code;
   };
 
-  const calculateNewBalance = () => {
+  const calculateProjectedBalance = () => {
     const amountNum = parseFloat(amount) || 0;
     const currentBalance = currentBalances.find((item) => item.currency === currency)?.balance || 0;
-
-    if (requiresApproval && movementType) {
-      return currentBalance;
-    }
 
     if (movementType === 'incoming') {
       return currentBalance + amountNum;
@@ -115,6 +108,16 @@ export default function QuickAddMovementSheet({
     }
 
     return currentBalance;
+  };
+
+  const calculateAppliedBalanceAfterSave = () => {
+    const currentBalance = currentBalances.find((item) => item.currency === currency)?.balance || 0;
+
+    if (requiresApproval && movementType) {
+      return currentBalance;
+    }
+
+    return calculateProjectedBalance();
   };
 
   const formatBalance = (balance: number) => {
@@ -146,7 +149,7 @@ export default function QuickAddMovementSheet({
 
   const isPendingApproval = requiresApproval && !!movementType;
 
-  const handleSave = async (withPrint: boolean = false) => {
+  const handleSave = async () => {
     const trimmedNotes = notes.trim();
     const parsedAmount = parseFloat(amount);
 
@@ -196,27 +199,17 @@ export default function QuickAddMovementSheet({
       const movement = Array.isArray(insertedData) ? insertedData[0] : insertedData;
 
       await saveLastUsedCurrency(currency);
-      triggerRefresh('movements');
-      onSuccess();
-
       const pendingMessage = isPendingMovement(movement)
         ? 'تم تسجيل الحركة بانتظار موافقة الطرف الآخر، ولن تؤثر في الإجماليات قبل القبول.'
         : 'تمت إضافة الحركة بنجاح';
 
-      if (withPrint) {
-        Keyboard.dismiss();
-        onClose();
-        router.push({
-          pathname: '/receipt-preview',
-          params: {
-            movementId: movement.id,
-            customerName,
-            customerAccountNumber,
-          },
+      showSuccessAlert(pendingMessage);
+      setTimeout(() => {
+        triggerRefresh('all');
+        Promise.resolve(onSuccess()).catch((refreshError) => {
+          console.warn('Movement saved, but refresh failed:', refreshError);
         });
-      } else {
-        showSuccessAlert(pendingMessage);
-      }
+      }, 450);
     } catch (error) {
       console.error('Error adding movement:', error);
       Alert.alert('خطأ', 'حدث خطأ أثناء إضافة الحركة');
@@ -226,7 +219,8 @@ export default function QuickAddMovementSheet({
   };
 
   const currentBalance = currentBalances.find((item) => item.currency === currency)?.balance || 0;
-  const newBalance = calculateNewBalance();
+  const appliedBalanceAfterSave = calculateAppliedBalanceAfterSave();
+  const projectedBalanceIfApproved = calculateProjectedBalance();
 
   return (
     <>
@@ -239,7 +233,7 @@ export default function QuickAddMovementSheet({
             <TouchableOpacity activeOpacity={1} onPress={(event) => event.stopPropagation()} style={styles.sheet}>
               <View style={styles.header}>
                 <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                  <X size={24} color="#6B7280" />
+                  <X size={22} color="#6B7280" />
                 </TouchableOpacity>
 
                 <Text style={styles.headerTitle}>إضافة حركة</Text>
@@ -266,7 +260,7 @@ export default function QuickAddMovementSheet({
                       onPress={() => setMovementType('outgoing')}
                     >
                       <ArrowDownCircle
-                        size={28}
+                        size={22}
                         color={movementType === 'outgoing' ? '#FFFFFF' : '#EF4444'}
                       />
                       <Text
@@ -295,7 +289,7 @@ export default function QuickAddMovementSheet({
                       onPress={() => setMovementType('incoming')}
                     >
                       <ArrowUpCircle
-                        size={28}
+                        size={22}
                         color={movementType === 'incoming' ? '#FFFFFF' : '#10B981'}
                       />
                       <Text
@@ -373,47 +367,66 @@ export default function QuickAddMovementSheet({
                           styles.previewValueBold,
                           {
                             color:
-                              newBalance > 0 ? '#10B981' : newBalance < 0 ? '#EF4444' : '#6B7280',
+                              appliedBalanceAfterSave > 0
+                                ? '#10B981'
+                                : appliedBalanceAfterSave < 0
+                                  ? '#EF4444'
+                                  : '#6B7280',
                           },
                         ]}
                       >
-                        {formatBalance(newBalance)}
+                        {formatBalance(appliedBalanceAfterSave)}
                       </Text>
-                      <Text style={styles.previewLabel}>الإجمالي بعد:</Text>
+                      <Text style={styles.previewLabel}>
+                        {isPendingApproval ? 'الرصيد بعد الحفظ:' : 'الرصيد بعد الحركة:'}
+                      </Text>
                     </View>
 
                     {isPendingApproval && (
-                      <Text style={styles.previewPendingNote}>
-                        هذه الحركة ستبقى بانتظار الموافقة، ولن تؤثر في الإجمالي قبل قبول الطرف الآخر.
-                      </Text>
+                      <>
+                        <View style={styles.previewRow}>
+                          <Text
+                            style={[
+                              styles.previewValue,
+                              styles.previewValueBold,
+                              {
+                                color:
+                                  projectedBalanceIfApproved > 0
+                                    ? '#10B981'
+                                    : projectedBalanceIfApproved < 0
+                                      ? '#EF4444'
+                                      : '#6B7280',
+                              },
+                            ]}
+                          >
+                            {formatBalance(projectedBalanceIfApproved)}
+                          </Text>
+                          <Text style={styles.previewLabel}>الرصيد اذا وافق:</Text>
+                        </View>
+
+                        <Text style={styles.previewPendingNote}>
+                          بعد الحفظ ستبقى الحركة معلقة، ولا يتغير الرصيد الفعلي إلا بعد الموافقة.
+                        </Text>
+                      </>
                     )}
                   </View>
                 )}
               </ScrollView>
 
-              <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+              <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
                 <TouchableOpacity
                   style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
-                  onPress={() => handleSave(false)}
+                  onPress={handleSave}
                   disabled={isLoading}
                 >
                   {isLoading ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <>
-                      <Save size={20} color="#FFFFFF" />
+                      <Save size={18} color="#FFFFFF" />
                       <Text style={styles.saveButtonText}>حفظ</Text>
                     </>
                   )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.savePrintButton, isLoading && styles.saveButtonDisabled]}
-                  onPress={() => handleSave(true)}
-                  disabled={isLoading}
-                >
-                  <Printer size={18} color="#3B82F6" />
-                  <Text style={styles.savePrintButtonText}>حفظ + طباعة</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -469,7 +482,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    height: '90%',
+    height: '92%',
   },
   sheet: {
     backgroundColor: '#FFFFFF',
@@ -482,7 +495,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
@@ -498,18 +511,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 120,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 104,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 14,
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 10,
+    marginBottom: 8,
     textAlign: 'right',
   },
   required: {
@@ -517,13 +530,14 @@ const styles = StyleSheet.create({
   },
   typeButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   typeButton: {
     flex: 1,
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#E5E7EB',
@@ -537,32 +551,33 @@ const styles = StyleSheet.create({
     borderColor: '#10B981',
   },
   typeButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
-    marginTop: 8,
+    marginTop: 4,
   },
   typeButtonSubtext: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11,
+    marginTop: 1,
   },
   amountRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   currencyButton: {
     backgroundColor: '#4F46E5',
     borderRadius: 12,
-    padding: 14,
-    width: 90,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    width: 76,
     alignItems: 'center',
   },
   currencyCode: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   currencySymbol: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#E0E7FF',
     marginTop: 2,
   },
@@ -573,7 +588,8 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     borderRadius: 12,
     paddingHorizontal: 16,
-    fontSize: 20,
+    paddingVertical: 8,
+    fontSize: 19,
     fontWeight: '600',
     color: '#111827',
     textAlign: 'center',
@@ -584,10 +600,10 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     fontSize: 15,
     color: '#111827',
-    minHeight: 100,
+    minHeight: 84,
     textAlignVertical: 'top',
   },
   previewSection: {
@@ -630,16 +646,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 18,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
-    gap: 10,
+    gap: 8,
   },
   saveButton: {
     backgroundColor: '#10B981',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 13,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -652,22 +668,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: 'bold',
     color: '#FFFFFF',
-  },
-  savePrintButton: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  savePrintButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#3B82F6',
   },
   pickerContainer: {
     flex: 1,

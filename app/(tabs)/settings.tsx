@@ -167,12 +167,13 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#111827',
-    textAlign: 'right',
+    textAlign: 'center',
   },
   content: {
     flex: 1,

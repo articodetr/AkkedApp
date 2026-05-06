@@ -107,7 +107,14 @@ BEGIN
   ORDER BY created_at DESC
   LIMIT 1;
 
-  v_message := format('قام %s بإضافتك إلى قائمة عملائه.', v_owner_display_name);
+  v_message := format(
+    'قام %s بإضافتك إلى قائمة عملائه.%s',
+    v_owner_display_name,
+    CASE
+      WHEN COALESCE(v_owner_account_number, '') <> '' THEN ' رقم الحساب: ' || v_owner_account_number || '.'
+      ELSE ''
+    END
+  );
 
   SELECT id
     INTO v_existing_notification_id
@@ -137,6 +144,7 @@ BEGIN
              jsonb_build_object(
                'owner_name', v_owner_display_name,
                'owner_user_id', p_owner_user_id,
+               'account_number', v_owner_account_number,
                'owner_account_number', v_owner_account_number,
                'customer_name', v_customer_display_name,
                'linked_customer_name', v_customer_display_name
@@ -180,6 +188,7 @@ BEGIN
       jsonb_build_object(
         'owner_name', v_owner_display_name,
         'owner_user_id', p_owner_user_id,
+        'account_number', v_owner_account_number,
         'owner_account_number', v_owner_account_number,
         'customer_name', v_customer_display_name,
         'linked_customer_name', v_customer_display_name

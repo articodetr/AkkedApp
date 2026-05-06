@@ -27,6 +27,7 @@ import {
 } from '@/utils/whatsappTemplates';
 import {
   getMovementApprovalLabel,
+  isMovementCreator,
   isPendingMovement,
   isPostedMovement,
   isRejectedMovement,
@@ -418,7 +419,7 @@ function getMovementApprovalLookupIds(movement: AccountMovement): string[] {
 export default function CustomerDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const { lastRefreshTime } = useDataRefresh();
+  const { lastRefreshTime, triggerRefresh } = useDataRefresh();
   const { settings, currentUser } = useAuth();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [movements, setMovements] = useState<AccountMovement[]>([]);
@@ -696,6 +697,10 @@ export default function CustomerDetailsScreen() {
 
   const handleResetAccount = () => {
     if (!customer) return;
+    if (customer.is_profit_loss_account) {
+      Alert.alert('غير مسموح', 'حساب الأرباح والخسائر حساب ثابت ولا يمكن تصفيره.');
+      return;
+    }
 
     Alert.alert(
       'تصفير الحساب',
@@ -754,6 +759,10 @@ export default function CustomerDetailsScreen() {
 
   const handleDeleteCustomer = () => {
     if (!customer) return;
+    if (customer.is_profit_loss_account) {
+      Alert.alert('غير مسموح', 'حساب الأرباح والخسائر حساب ثابت ولا يمكن حذفه.');
+      return;
+    }
 
     const approvedOnlyMovements = movements.filter(shouldIncludeMovementInBalance);
     const balances = calculateBalanceByCurrency(approvedOnlyMovements);
@@ -903,11 +912,6 @@ export default function CustomerDetailsScreen() {
   }, [customer?.name, id, router]);
 
   const handleMovementPress = async (movement: AccountMovement) => {
-    if (isPendingMovement(movement)) {
-      openCustomerNotifications();
-      return;
-    }
-
     const movementTypeText =
       movement.movement_type === 'outgoing' ? 'عليه' : 'له';
     const currencySymbol = getCurrencySymbol(movement.currency);
@@ -918,8 +922,8 @@ export default function CustomerDetailsScreen() {
       `${amount} ${currencySymbol}`,
       [
         {
-          text: 'طباعة السند',
-          onPress: () => handlePrintMovementReceipt(movement),
+          text: 'عرض التفاصيل',
+          onPress: () => handleViewMovementDetails(movement),
         },
         {
           text: 'تعديل',
@@ -936,6 +940,15 @@ export default function CustomerDetailsScreen() {
         },
       ],
     );
+  };
+
+  const handleViewMovementDetails = (movement: AccountMovement) => {
+    router.push({
+      pathname: '/movement-details',
+      params: {
+        movementId: movement.id,
+      },
+    });
   };
 
   const handleEditMovement = (movement: AccountMovement) => {
@@ -955,10 +968,17 @@ export default function CustomerDetailsScreen() {
       movement.movement_type === 'outgoing' ? 'عليه' : 'له';
     const currencySymbol = getCurrencySymbol(movement.currency);
     const amount = Math.round(Number(movement.amount));
+    const pending = isPendingMovement(movement);
+    const creatorDeleting = isMovementCreator(movement, currentUser?.userId);
+    const deleteMessage = pending
+      ? creatorDeleting
+        ? `هل أنت متأكد من حذف هذه الحركة المعلقة؟\n\n${movementTypeText}\nالمبلغ: ${amount} ${currencySymbol}\n\nسيتم حذفها مباشرة وإشعار الطرف الآخر.`
+        : `هل تريد طلب حذف هذه الحركة المعلقة؟\n\n${movementTypeText}\nالمبلغ: ${amount} ${currencySymbol}\n\nسيتم إرسال طلب موافقة إلى منشئ الحركة.`
+      : `هل أنت متأكد من حذف هذه الحركة؟\n\n${movementTypeText}\nالمبلغ: ${amount} ${currencySymbol}\n\nلا يمكن التراجع.`;
 
     Alert.alert(
       'تأكيد الحذف',
-      `هل أنت متأكد من حذف هذه الحركة؟\n\n${movementTypeText}\nالمبلغ: ${amount} ${currencySymbol}\n\nلا يمكن التراجع.`,
+      deleteMessage,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -995,6 +1015,7 @@ export default function CustomerDetailsScreen() {
         );
       }
 
+      triggerRefresh('all');
       loadCustomerData();
     } catch (error: any) {
       console.error('Error deleting movement:', error);
@@ -1523,9 +1544,7 @@ export default function CustomerDetailsScreen() {
           customerAccountNumber={customer.account_number}
           currentBalances={currencyBalances}
           requiresApproval={requiresCounterpartyApproval(customer.linked_user_id, currentUser?.userId)}
-          onSuccess={() => {
-            loadCustomerData();
-          }}
+          onSuccess={loadCustomerData}
         />
       )}
 
@@ -1545,48 +1564,54 @@ export default function CustomerDetailsScreen() {
           />
 
           <View style={styles.settingsSheet}>
-            <Text style={styles.settingsSheetTitle}>إدارة العميل</Text>
+            <Text style={styles.settingsSheetTitle}>
+              {customer?.is_profit_loss_account ? 'إدارة الحساب' : 'إدارة العميل'}
+            </Text>
             <Text style={styles.settingsSheetSubtitle}>{customer?.name}</Text>
 
-            <TouchableOpacity
-              style={styles.settingsMenuItem}
-              activeOpacity={0.75}
-              onPress={() => {
-                setShowSettingsMenu(false);
-                router.push({
-                  pathname: '/add-customer',
-                  params: { id: String(customer?.id || id || '') },
-                });
-              }}
-            >
-              <Text style={styles.settingsMenuItemText}>تعديل البيانات</Text>
-            </TouchableOpacity>
+            {!customer?.is_profit_loss_account && (
+              <>
+                <TouchableOpacity
+                  style={styles.settingsMenuItem}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowSettingsMenu(false);
+                    router.push({
+                      pathname: '/add-customer',
+                      params: { id: String(customer?.id || id || '') },
+                    });
+                  }}
+                >
+                  <Text style={styles.settingsMenuItemText}>تعديل البيانات</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.settingsMenuItem}
-              activeOpacity={0.75}
-              onPress={() => {
-                setShowSettingsMenu(false);
-                setTimeout(handleResetAccount, 150);
-              }}
-            >
-              <Text style={[styles.settingsMenuItemText, styles.settingsMenuItemDanger]}>
-                تصفير الحساب
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.settingsMenuItem}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowSettingsMenu(false);
+                    setTimeout(handleResetAccount, 150);
+                  }}
+                >
+                  <Text style={[styles.settingsMenuItemText, styles.settingsMenuItemDanger]}>
+                    تصفير الحساب
+                  </Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.settingsMenuItem}
-              activeOpacity={0.75}
-              onPress={() => {
-                setShowSettingsMenu(false);
-                setTimeout(handleDeleteCustomer, 150);
-              }}
-            >
-              <Text style={[styles.settingsMenuItemText, styles.settingsMenuItemDanger]}>
-                حذف العميل
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.settingsMenuItem}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowSettingsMenu(false);
+                    setTimeout(handleDeleteCustomer, 150);
+                  }}
+                >
+                  <Text style={[styles.settingsMenuItemText, styles.settingsMenuItemDanger]}>
+                    حذف العميل
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
 
             <TouchableOpacity
               style={styles.settingsCancelButton}

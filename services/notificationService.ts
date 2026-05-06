@@ -279,6 +279,9 @@ export function isNotificationPending(item: MovementNotification) {
   return (
     rawStatus === 'pending' ||
     item.notification_type === 'approval_needed' ||
+    item.notification_type === 'deletion_request' ||
+    item.extra_data?.request_type === 'movement_update_request' ||
+    item.extra_data?.request_type === 'deletion_request' ||
     item.notification_type === 'movement_pending' ||
     Boolean(item.movement?.pending_approval)
   );
@@ -288,6 +291,17 @@ export function isCustomerAddedNotification(item: MovementNotification) {
   return (
     item.notification_type === 'customer_added' ||
     item.notification_type === 'linked_account_added'
+  );
+}
+
+export function isMovementUpdateRequestNotification(item: MovementNotification) {
+  return item.extra_data?.request_type === 'movement_update_request';
+}
+
+export function isMovementDeletionRequestNotification(item: MovementNotification) {
+  return (
+    item.notification_type === 'deletion_request' ||
+    item.extra_data?.request_type === 'deletion_request'
   );
 }
 
@@ -338,13 +352,19 @@ export function canTakeNotificationAction(
 ) {
   const rawStatus = getNotificationRawStatus(item);
   const isRecipient = sameId(item.user_id, currentUser?.userId) || sameId(item.recipient_user_id, currentUser?.userId);
+  const isRequestNotification =
+    isMovementDeletionRequestNotification(item) ||
+    isMovementUpdateRequestNotification(item);
 
   return (
-    item.notification_type === 'approval_needed' &&
+    (
+      item.notification_type === 'approval_needed' ||
+      isRequestNotification
+    ) &&
     Boolean(item.movement_id) &&
     item.action_required !== false &&
     isRecipient &&
-    !isNotificationCreatedByCurrentUser(item, currentUser) &&
+    (isRequestNotification || !isNotificationCreatedByCurrentUser(item, currentUser)) &&
     rawStatus !== 'approved' &&
     rawStatus !== 'rejected' &&
     rawStatus !== 'done'
@@ -427,9 +447,11 @@ const isIncoming = movementType === 'incoming';
       (item.extra_data as any)?.linked_account_number,
     );
 
+    const accountNumberText = accountNumber ? ` رقم الحساب: ${accountNumber}.` : '';
+
     return {
       title: 'تمت إضافتك كعميل جديد',
-      subtitle: `${addedByName} أضافك إلى قائمة عملائه${linkedCustomerName ? ` باسم ${linkedCustomerName}` : ''}.`,
+      subtitle: `${addedByName} أضافك إلى قائمة عملائه${linkedCustomerName ? ` باسم ${linkedCustomerName}` : ''}.${accountNumberText}`,
       customerName: linkedCustomerName || item.customer_name || addedByName,
       actorName: addedByName,
       amountText: '',
@@ -447,6 +469,70 @@ const isIncoming = movementType === 'incoming';
       createdByCurrentUser: false,
       noteText: undefined,
       rejectReason: undefined,
+    };
+  }
+
+  if (isMovementUpdateRequestNotification(item)) {
+    const requestedPayload = (item.extra_data?.requested_payload || {}) as Record<string, unknown>;
+    const requestedAmount = Number(requestedPayload.amount ?? amount ?? 0);
+    const requestedCurrency = String(requestedPayload.currency || currency || '');
+
+    return {
+      title: 'طلب تعديل حركة معلقة',
+      subtitle: canTakeAction
+        ? `${actorName} طلب تعديل بيانات هذه الحركة. راجع التغيير ثم وافق أو ارفض.`
+        : rawStatus === 'approved'
+          ? 'تمت الموافقة على طلب تعديل الحركة.'
+          : rawStatus === 'rejected'
+            ? 'تم رفض طلب تعديل الحركة.'
+            : item.message || 'طلب تعديل بانتظار المراجعة.',
+      customerName,
+      actorName,
+      amountText: formatNotificationAmount(Number.isFinite(requestedAmount) ? requestedAmount : amount, requestedCurrency),
+      amountSentenceText: formatNotificationAmountForSentence(Number.isFinite(requestedAmount) ? requestedAmount : amount, requestedCurrency),
+      directionLabel: 'تعديل',
+      directionColor: '#7C3AED',
+      statusText: canTakeAction ? 'يحتاج موافقة' : rawStatus === 'rejected' ? 'مرفوض' : rawStatus === 'approved' ? 'مقبول' : 'معلق',
+      statusColor: canTakeAction ? '#B45309' : rawStatus === 'rejected' ? '#B91C1C' : rawStatus === 'approved' ? '#047857' : '#B45309',
+      statusBg: canTakeAction ? '#FEF3C7' : rawStatus === 'rejected' ? '#FEE2E2' : rawStatus === 'approved' ? '#DCFCE7' : '#FEF3C7',
+      rowBorderColor: canTakeAction ? '#F59E0B' : rawStatus === 'rejected' ? '#FECACA' : rawStatus === 'approved' ? '#BBF7D0' : '#FBBF24',
+      rowBg: canTakeAction ? '#FFFBEB' : rawStatus === 'rejected' ? '#FEF2F2' : rawStatus === 'approved' ? '#F0FDF4' : '#FFFBEB',
+      visualState: canTakeAction ? 'action' : rawStatus === 'rejected' ? 'rejected' : rawStatus === 'approved' ? 'approved' : 'pending',
+      isUnread: isNotificationUnread(item),
+      canTakeAction,
+      createdByCurrentUser,
+      noteText: pickText(requestedPayload.notes, noteText),
+      rejectReason,
+    };
+  }
+
+  if (isMovementDeletionRequestNotification(item)) {
+    return {
+      title: 'طلب حذف حركة معلقة',
+      subtitle: canTakeAction
+        ? `${actorName} طلب حذف هذه الحركة. يجب موافقتك قبل حذفها.`
+        : rawStatus === 'approved' || rawStatus === 'done'
+          ? 'تمت الموافقة على حذف الحركة.'
+          : rawStatus === 'rejected'
+            ? 'تم رفض طلب حذف الحركة.'
+            : item.message || 'طلب حذف بانتظار المراجعة.',
+      customerName,
+      actorName,
+      amountText,
+      amountSentenceText,
+      directionLabel: 'حذف',
+      directionColor: '#DC2626',
+      statusText: canTakeAction ? 'يحتاج موافقة' : rawStatus === 'rejected' ? 'مرفوض' : rawStatus === 'approved' || rawStatus === 'done' ? 'تم الحذف' : 'معلق',
+      statusColor: canTakeAction ? '#B45309' : rawStatus === 'rejected' ? '#B91C1C' : rawStatus === 'approved' || rawStatus === 'done' ? '#047857' : '#B45309',
+      statusBg: canTakeAction ? '#FEF3C7' : rawStatus === 'rejected' ? '#FEE2E2' : rawStatus === 'approved' || rawStatus === 'done' ? '#DCFCE7' : '#FEF3C7',
+      rowBorderColor: canTakeAction ? '#F59E0B' : rawStatus === 'rejected' ? '#FECACA' : rawStatus === 'approved' || rawStatus === 'done' ? '#BBF7D0' : '#FBBF24',
+      rowBg: canTakeAction ? '#FFFBEB' : rawStatus === 'rejected' ? '#FEF2F2' : rawStatus === 'approved' || rawStatus === 'done' ? '#F0FDF4' : '#FFFBEB',
+      visualState: canTakeAction ? 'action' : rawStatus === 'rejected' ? 'rejected' : rawStatus === 'approved' || rawStatus === 'done' ? 'approved' : 'pending',
+      isUnread: isNotificationUnread(item),
+      canTakeAction,
+      createdByCurrentUser,
+      noteText,
+      rejectReason,
     };
   }
 
@@ -812,7 +898,13 @@ export async function approveMovementNotification(
     throw new Error('تعذر معرفة اسم المستخدم الحالي');
   }
 
-  const { error } = await supabase.rpc('approve_movement', {
+  const rpcName = isMovementDeletionRequestNotification(item)
+    ? 'approve_movement_deletion'
+    : isMovementUpdateRequestNotification(item)
+      ? 'approve_movement_update_request'
+      : 'approve_movement';
+
+  const { error } = await supabase.rpc(rpcName, {
     p_movement_id: item.movement_id,
     p_user_name: userName,
   });
@@ -849,7 +941,13 @@ export async function rejectMovementNotification(
     throw new Error('يرجى كتابة سبب الرفض');
   }
 
-  const { error } = await supabase.rpc('reject_movement_with_reason', {
+  const rpcName = isMovementDeletionRequestNotification(item)
+    ? 'reject_movement_deletion_request'
+    : isMovementUpdateRequestNotification(item)
+      ? 'reject_movement_update_request'
+      : 'reject_movement_with_reason';
+
+  const { error } = await supabase.rpc(rpcName, {
     p_movement_id: item.movement_id,
     p_user_name: userName,
     p_reject_reason: trimmedReason,

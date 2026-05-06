@@ -66,8 +66,8 @@ export function sortCustomersByDisplayPriority<T extends CustomerDisplaySource>(
 ): T[] {
   const priority = (customer: CustomerDisplaySource) => {
     const status = getCustomerDisplayStatus(customer);
-    if (status === 'linked') return 0;
-    if (status === 'unlinked') return 1;
+    if (status === 'system') return 0;
+    if (status === 'linked') return 1;
     return 2;
   };
 
@@ -86,14 +86,14 @@ export function sortCustomersKeepingOriginalOrder<T extends CustomerDisplaySourc
     .map((customer, index) => ({ customer, index }))
     .sort((a, b) => {
       const statusDiff =
-        (getCustomerDisplayStatus(a.customer) === 'linked'
+        (getCustomerDisplayStatus(a.customer) === 'system'
           ? 0
-          : getCustomerDisplayStatus(a.customer) === 'unlinked'
+          : getCustomerDisplayStatus(a.customer) === 'linked'
             ? 1
             : 2) -
-        (getCustomerDisplayStatus(b.customer) === 'linked'
+        (getCustomerDisplayStatus(b.customer) === 'system'
           ? 0
-          : getCustomerDisplayStatus(b.customer) === 'unlinked'
+          : getCustomerDisplayStatus(b.customer) === 'linked'
             ? 1
             : 2);
 

@@ -116,6 +116,12 @@ export interface AccountMovement {
   approval_status?: 'pending' | 'approved' | 'rejected';
   approved_by_user_id?: string;
   approved_at?: string;
+  deletion_requested?: boolean;
+  deletion_requested_by?: string;
+  deletion_requested_at?: string;
+  pending_update_payload?: Record<string, unknown> | null;
+  update_requested_by?: string;
+  update_requested_at?: string;
   void_type?: string;
   void_reason?: string;
   reject_reason?: string;

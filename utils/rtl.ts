@@ -24,6 +24,7 @@ export const ltrNumberText: TextStyle = {
 
 export const rtlRow: ViewStyle = {
   flexDirection: 'row',
+  direction: 'rtl',
 };
 
 export const rtlScreen: ViewStyle = {

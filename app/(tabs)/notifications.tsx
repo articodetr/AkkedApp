@@ -22,6 +22,7 @@ import {
   approveMovementNotification,
   getGeneralNotifications,
   getNotificationCustomerId,
+  markNotificationAsRead,
   MovementNotification,
   rejectMovementNotification,
   softDeleteNotification,
@@ -512,9 +513,35 @@ export default function NotificationsTabScreen() {
     loadNotifications();
   };
 
-  const openNotification = (_item: MovementNotification) => {
+  const openNotification = async (item: MovementNotification) => {
     // تم حذف صفحة تفاصيل الإشعار الخاصة.
     // القبول والرفض والملاحظة تظهر مباشرة داخل بطاقة الإشعار.
+    if (!currentUser?.userId || item.is_read) return;
+
+    const nextReadAt = new Date().toISOString();
+    setNotifications((current) =>
+      current.map((notification) =>
+        notification.id === item.id
+          ? {
+              ...notification,
+              is_read: true,
+              read_at: nextReadAt,
+              status:
+                !notification.status || notification.status === 'unread'
+                  ? 'read'
+                  : notification.status,
+            }
+          : notification,
+      ),
+    );
+
+    try {
+      await markNotificationAsRead(item.id, currentUser.userId, item.status);
+      triggerRefresh('all');
+    } catch (error) {
+      console.error('[Notifications] Error marking notification as read:', error);
+      await loadNotifications();
+    }
   };
 
   const confirmDelete = (item: MovementNotification) => {

@@ -78,7 +78,7 @@ export default function NewTransactionScreen() {
       const { data, error } = await supabase
         .from('customers')
         .select('*')
-        .neq('phone', 'PROFIT_LOSS_ACCOUNT')
+        .not('is_profit_loss_account', 'is', true)
         .or(buildOwnedCustomerFilter(currentUser.userId))
         .order('name', { ascending: true });
 

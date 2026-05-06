@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Link2, Plus, Search } from 'lucide-react-native';
+import { Clock, Link2, Plus, Search, Wallet } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { CURRENCIES, Customer, CustomerBalanceByCurrency } from '@/types/database';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
@@ -21,6 +21,35 @@ import { sortCustomersKeepingOriginalOrder } from '@/utils/customerDisplay';
 interface CustomerWithBalances extends Customer {
   balances: CustomerBalanceByCurrency[];
   last_activity?: string | null;
+  pending_movements_count?: number;
+}
+
+type PendingNotificationIndicatorRow = {
+  customer_id: string | null;
+  status?: string | null;
+  notification_type?: string | null;
+  action_required?: boolean | null;
+  movement?: {
+    approval_status?: string | null;
+    pending_approval?: boolean | null;
+    is_voided?: boolean | null;
+  } | null;
+};
+
+function isPendingNotificationIndicator(row: PendingNotificationIndicatorRow) {
+  const status = String(row.status || row.movement?.approval_status || '').toLowerCase();
+
+  if (status === 'approved' || status === 'rejected' || status === 'done') {
+    return false;
+  }
+
+  return (
+    status === 'pending' ||
+    row.notification_type === 'approval_needed' ||
+    row.notification_type === 'movement_pending' ||
+    Boolean(row.action_required) ||
+    Boolean(row.movement?.pending_approval)
+  );
 }
 
 function getCustomerUniqueKey(customer: Customer): string {
@@ -85,6 +114,14 @@ export default function CustomersScreen() {
         return;
       }
 
+      try {
+        await supabase.rpc('ensure_profit_loss_account_for_user', {
+          p_user_id: currentUser.userId,
+        });
+      } catch (ensureError) {
+        console.warn('[Customers] Unable to ensure profit/loss account:', ensureError);
+      }
+
       const { data: customersData, error: customersError } = await supabase
         .from('customers_with_last_activity')
         .select('*')
@@ -97,33 +134,67 @@ export default function CustomersScreen() {
 
       const visibleCustomers = ((customersData || []) as CustomerWithBalances[]).filter(
         (customer) =>
-          customer.user_id === currentUser.userId && !customer.is_profit_loss_account,
+          customer.user_id === currentUser.userId,
       );
 
       const visibleCustomerIds = visibleCustomers.map((customer) => customer.id);
       const balancesMap = new Map<string, CustomerBalanceByCurrency[]>();
+      const pendingMovementsMap = new Map<string, number>();
 
       if (visibleCustomerIds.length > 0) {
-        const { data: balancesData, error: balancesError } = await supabase
-          .from('customer_balances_by_currency')
-          .select('*')
-          .in('customer_id', visibleCustomerIds);
+        const [balancesResult, pendingNotificationsResult] = await Promise.all([
+          supabase
+            .from('customer_balances_by_currency')
+            .select('*')
+            .in('customer_id', visibleCustomerIds),
+          supabase
+            .from('movement_notifications')
+            .select(`
+              customer_id,
+              status,
+              notification_type,
+              action_required,
+              movement:account_movements!movement_id(
+                approval_status,
+                pending_approval,
+                is_voided
+              )
+            `)
+            .eq('user_id', currentUser.userId)
+            .in('customer_id', visibleCustomerIds)
+            .is('deleted_at', null),
+        ]);
 
-        if (balancesError) {
-          throw balancesError;
+        if (balancesResult.error) {
+          throw balancesResult.error;
         }
 
-        ((balancesData || []) as CustomerBalanceByCurrency[]).forEach((balance) => {
+        ((balancesResult.data || []) as CustomerBalanceByCurrency[]).forEach((balance) => {
           if (!balancesMap.has(balance.customer_id)) {
             balancesMap.set(balance.customer_id, []);
           }
           balancesMap.get(balance.customer_id)?.push(balance);
         });
+
+        if (pendingNotificationsResult.error) {
+          console.warn('[Customers] Unable to load pending movement indicators:', pendingNotificationsResult.error);
+        } else {
+          ((pendingNotificationsResult.data || []) as PendingNotificationIndicatorRow[])
+            .filter(isPendingNotificationIndicator)
+            .forEach((notification) => {
+              if (!notification.customer_id) return;
+              pendingMovementsMap.set(
+                notification.customer_id,
+                (pendingMovementsMap.get(notification.customer_id) || 0) + 1,
+              );
+            });
+        }
       }
 
       const customersWithBalances: CustomerWithBalances[] = visibleCustomers.map((customer) => ({
         ...customer,
         balances: balancesMap.get(customer.id) || [],
+        pending_movements_count: pendingMovementsMap.get(customer.id) || 0,
       }));
 
       const regularCustomers = sortCustomersKeepingOriginalOrder(
@@ -265,6 +336,17 @@ export default function CustomersScreen() {
   };
 
   const handleCustomerLongPress = (customer: CustomerWithBalances) => {
+    if (customer.is_profit_loss_account) {
+      Alert.alert('خيارات الحساب', customer.name, [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'فتح',
+          onPress: () => router.push(`/customer-details?id=${customer.id}` as any),
+        },
+      ]);
+      return;
+    }
+
     Alert.alert('خيارات العميل', `اختر العملية لـ ${customer.name}:`, [
       { text: 'إلغاء', style: 'cancel' },
       {
@@ -287,10 +369,16 @@ export default function CustomersScreen() {
     const hasBalances = item.balances.length > 0;
     const displayBalances = item.balances.slice(0, 2);
     const isLinkedUser = !!item.linked_user_id;
+    const isProfitLossAccount = !!item.is_profit_loss_account;
+    const pendingMovementsCount = Number(item.pending_movements_count || 0);
 
     return (
       <TouchableOpacity
-        style={[styles.customerCard, isLinkedUser && styles.linkedUserCard]}
+        style={[
+          styles.customerCard,
+          isLinkedUser && styles.linkedUserCard,
+          isProfitLossAccount && styles.profitLossCard,
+        ]}
         activeOpacity={0.8}
         onPress={() => router.push(`/customer-details?id=${item.id}` as any)}
         onLongPress={() => handleCustomerLongPress(item)}
@@ -300,14 +388,28 @@ export default function CustomersScreen() {
             <Text style={styles.customerName} numberOfLines={1}>
               {item.name}
             </Text>
-            {isLinkedUser ? (
+            {isProfitLossAccount ? (
+              <View style={styles.profitLossIndicator}>
+                <Wallet size={12} color="#B45309" />
+              </View>
+            ) : isLinkedUser ? (
               <View style={styles.linkIndicator}>
                 <Link2 size={12} color="#6366F1" />
               </View>
             ) : null}
+            {pendingMovementsCount > 0 && (
+              <View style={styles.pendingMovementIndicator}>
+                <Clock size={11} color="#D97706" />
+                <Text style={styles.pendingMovementIndicatorText}>
+                  {pendingMovementsCount > 99 ? '99+' : pendingMovementsCount}
+                </Text>
+              </View>
+            )}
           </View>
           <Text style={styles.customerMetaText} numberOfLines={1}>
-            {isLinkedUser
+            {isProfitLossAccount
+              ? `حساب ثابت • رقم الحساب: ${item.account_number}`
+              : isLinkedUser
               ? `رقم الحساب: ${item.account_number}`
               : `${item.phone || ''} • رقم الحساب: ${item.account_number}`}
           </Text>
@@ -398,12 +500,13 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#111827',
-    textAlign: 'right',
+    textAlign: 'center',
   },
   searchContainer: {
     flexDirection: 'row-reverse',
@@ -455,6 +558,10 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
   },
+  profitLossCard: {
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFBEB',
+  },
   customerInfo: {
     flex: 1,
     minWidth: 0,
@@ -504,6 +611,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEF2FF',
     borderWidth: 1,
     borderColor: '#E0E7FF',
+  },
+  profitLossIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  pendingMovementIndicator: {
+    minWidth: 32,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 3,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  pendingMovementIndicatorText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+    writingDirection: 'ltr',
   },
   moreBalancesText: {
     fontSize: 11,

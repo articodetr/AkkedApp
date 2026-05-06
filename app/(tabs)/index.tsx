@@ -104,18 +104,19 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#111827',
     marginBottom: 4,
-    textAlign: 'right',
+    textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: 14,
     color: '#6B7280',
-    textAlign: 'right',
+    textAlign: 'center',
   },
   content: {
     flex: 1,

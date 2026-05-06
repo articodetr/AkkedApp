@@ -20,7 +20,7 @@ import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchAccessibleCustomerById } from '@/services/userScopeService';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
-import { isPendingMovement } from '@/utils/movementApproval';
+import { isMovementCreator, isPendingMovement } from '@/utils/movementApproval';
 
 export default function EditMovementScreen() {
   const router = useRouter();
@@ -134,16 +134,42 @@ export default function EditMovementScreen() {
       return;
     }
 
-    if (originalMovement?.mirror_movement_id && isPendingMovement(originalMovement)) {
-      Alert.alert(
-        'غير مسموح',
-        'لا يمكن تعديل الحركة المعلّقة المرتبطة قبل اعتمادها أو رفضها. احذفها وأعد إنشاؤها إذا لزم الأمر.',
-      );
-      return;
-    }
-
     setIsSaving(true);
     try {
+      if (originalMovement && isPendingMovement(originalMovement)) {
+        if (!currentUser?.userName) {
+          throw new Error('تعذر معرفة المستخدم الحالي');
+        }
+
+        const { data, error } = await supabase.rpc('request_movement_update', {
+          p_movement_id: movementId,
+          p_user_name: currentUser.userName,
+          p_movement_type: formData.movement_type,
+          p_amount: Number(formData.amount),
+          p_currency: formData.currency,
+          p_notes: formData.notes.trim(),
+          p_sender_name: formData.sender_name.trim() || null,
+          p_beneficiary_name: formData.beneficiary_name.trim() || null,
+          p_transfer_number: formData.transfer_number.trim() || null,
+        });
+
+        if (error) throw error;
+
+        triggerRefresh('all');
+
+        const result = data as any;
+        const creatorEditing = isMovementCreator(originalMovement, currentUser.userId);
+
+        Alert.alert(
+          result?.requires_approval && !creatorEditing ? 'تم إرسال الطلب' : 'تم حفظ التعديل',
+          result?.requires_approval && !creatorEditing
+            ? 'تم إرسال طلب تعديل الحركة إلى منشئها للموافقة.'
+            : 'تم تعديل الحركة المعلقة وإشعار الطرف الآخر بالتغيير.',
+          [{ text: 'موافق', onPress: () => router.back() }],
+        );
+        return;
+      }
+
       const { error } = await supabase
         .from('account_movements')
         .update({
@@ -161,7 +187,7 @@ export default function EditMovementScreen() {
 
       if (error) throw error;
 
-      triggerRefresh('movements');
+      triggerRefresh('all');
       setShowSuccessModal(true);
     } catch (error) {
       console.error('Error updating movement:', error);

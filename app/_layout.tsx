@@ -2,6 +2,7 @@ import '@/utils/arabicRTL';
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -65,8 +66,10 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <DataRefreshProvider>
-          <SafeAreaView style={{ flex: 1, direction: 'rtl' }} edges={['top']}>
-            <RootLayoutNav />
+          <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <View style={styles.rtlRoot}>
+              <RootLayoutNav />
+            </View>
             <StatusBar style="auto" />
           </SafeAreaView>
         </DataRefreshProvider>
@@ -74,3 +77,14 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    direction: 'rtl',
+  },
+  rtlRoot: {
+    flex: 1,
+    direction: 'rtl',
+  },
+});
