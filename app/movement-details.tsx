@@ -648,11 +648,6 @@ const confirmDelete = async () => {
         )}
 
         <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.printButton} onPress={handlePrintReceipt}>
-            <FileText size={20} color="#FFFFFF" />
-            <Text style={styles.printButtonText}>طباعة السند</Text>
-          </TouchableOpacity>
-
           {canReviewPendingMovement && (
             <TouchableOpacity
               style={[styles.approveButton, isApproving && styles.approveButtonDisabled]}
@@ -687,25 +682,6 @@ const confirmDelete = async () => {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-            <Edit3 size={20} color="#FFFFFF" />
-            <Text style={styles.editButtonText}>تعديل المعاملة</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.deleteButton, isDeleting && styles.deleteButtonDisabled]}
-            onPress={handleDelete}
-            disabled={isDeleting}
-          >
-            {isDeleting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Trash2 size={20} color="#FFFFFF" />
-            )}
-            <Text style={styles.deleteButtonText}>
-              {isDeleting ? 'جاري الحذف...' : 'حذف المعاملة'}
-            </Text>
-          </TouchableOpacity>
         </View>
 
         <View style={{ height: 40 }} />
