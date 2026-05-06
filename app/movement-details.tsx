@@ -169,112 +169,11 @@ export default function MovementDetailsScreen() {
 
   
 const handleDelete = () => {
-  if (!movement) return;
-
-  const movementTypeText = movement.movement_type === 'incoming' ? 'له' : 'عليه';
-  const currencySymbol = getCurrencySymbol(movement.currency);
-  const pending = isPendingMovement(movement);
-
-  const deleteMessage = pending
-    ? `هل أنت متأكد من حذف هذه الحركة المعلقة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nسيتم حذفها مباشرة حتى لو كانت بانتظار الموافقة، ولا يمكن التراجع عن ذلك.`
-    : `هل أنت متأكد من حذف هذه المعاملة؟\n\n${movementTypeText} - ${movement.movement_number}\nالمبلغ: ${Math.round(Number(movement.amount))} ${currencySymbol}\n\nملاحظة: لا يمكن التراجع عن هذا الإجراء`;
-
-  Alert.alert(
-    'تأكيد الحذف',
-    deleteMessage,
-    [
-      { text: 'إلغاء', style: 'cancel' },
-      {
-        text: 'حذف',
-        style: 'destructive',
-        onPress: confirmDelete,
-      },
-    ],
-  );
+  Alert.alert('تنبيه', 'تم إيقاف خاصية حذف الحركات');
 };
 
-  
-const confirmDelete = async () => {
-  if (!movement || !currentUser?.userName) return;
-
-  setIsDeleting(true);
-
-  try {
-    if (isPendingMovement(movement)) {
-      const { data, error } = await supabase.rpc('force_delete_pending_movement', {
-        p_movement_id: movement.id,
-        p_user_name: currentUser.userName,
-      });
-
-      if (error) throw error;
-
-      const result = data as any;
-      if (result?.success === false) {
-        throw new Error(result?.error || 'فشل حذف الحركة المعلقة');
-      }
-
-      triggerRefresh('all');
-      Alert.alert('نجح', 'تم حذف الحركة المعلقة بنجاح', [
-        {
-          text: 'موافق',
-          onPress: () => router.back(),
-        },
-      ]);
-      return;
-    }
-
-    const { data, error } = await supabase.rpc('request_movement_deletion', {
-      p_movement_id: movement.id,
-      p_user_name: currentUser.userName,
-    });
-
-    if (error) throw error;
-
-    const result = data as any;
-
-    if (result?.deleted) {
-      triggerRefresh('all');
-      Alert.alert('نجح', 'تم حذف المعاملة بنجاح', [
-        {
-          text: 'موافق',
-          onPress: () => router.back(),
-        },
-      ]);
-      return;
-    }
-
-    if (result?.requires_approval) {
-      triggerRefresh('all');
-      Alert.alert(
-        'طلب الموافقة',
-        'تم إرسال طلب الموافقة على الحذف إلى منشئ الحركة. سيتم حذف الحركة بعد موافقته.',
-        [
-          {
-            text: 'موافق',
-            onPress: () => router.back(),
-          },
-        ],
-      );
-      return;
-    }
-
-    if (result?.success === false) {
-      throw new Error(result?.error || 'فشل حذف الحركة');
-    }
-
-    triggerRefresh('all');
-    Alert.alert('نجح', 'تم تنفيذ طلب الحذف بنجاح', [
-      {
-        text: 'موافق',
-        onPress: () => router.back(),
-      },
-    ]);
-  } catch (error: any) {
-    console.error('Error deleting movement:', error);
-    Alert.alert('خطأ', error.message || 'حدث خطأ أثناء حذف المعاملة');
-  } finally {
-    setIsDeleting(false);
-  }
+  const confirmDelete = async () => {
+  Alert.alert('تنبيه', 'تم إيقاف خاصية حذف الحركات');
 };
 
   const handleApprove = async () => {
@@ -339,20 +238,8 @@ const confirmDelete = async () => {
   };
 
   const handleEdit = () => {
-    if (!movement) return;
-
-    router.push({
-      pathname: '/edit-movement',
-      params: {
-        movementId: movement.id,
-        customerId: movement.customer_id,
-        customerName: customerName,
-        customerAccountNumber: customerAccountNumber,
-        movementFallback: encodeURIComponent(JSON.stringify(movement)),
-      },
-    });
+    Alert.alert('تنبيه', 'تم إيقاف خاصية تعديل الحركات');
   };
-
   const handlePrintReceipt = () => {
     if (!movement) return;
 

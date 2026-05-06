@@ -147,15 +147,26 @@ export const NOTIFICATION_SELECT = `
 
 function normalizeNotification(item: MovementNotification): MovementNotification {
   const movement = item.movement || null;
+  const hasSyncedSnapshot = Boolean((item.extra_data as any)?.updated_movement_at);
 
   return {
     ...item,
-    customer_id: item.customer_id || movement?.customer_id || null,
+    customer_id: hasSyncedSnapshot
+      ? item.customer_id || movement?.customer_id || null
+      : movement?.customer_id || item.customer_id || null,
     customer_name: movement?.customer?.name || item.customer_name || null,
-    movement_number: item.movement_number || movement?.movement_number || null,
-    amount: item.amount ?? movement?.amount ?? null,
-    currency: item.currency || movement?.currency || null,
-    movement_type: item.movement_type || movement?.movement_type || null,
+    movement_number: hasSyncedSnapshot
+      ? item.movement_number || movement?.movement_number || null
+      : movement?.movement_number || item.movement_number || null,
+    amount: hasSyncedSnapshot
+      ? item.amount ?? movement?.amount ?? null
+      : movement?.amount ?? item.amount ?? null,
+    currency: hasSyncedSnapshot
+      ? item.currency || movement?.currency || null
+      : movement?.currency || item.currency || null,
+    movement_type: hasSyncedSnapshot
+      ? item.movement_type || movement?.movement_type || null
+      : movement?.movement_type || item.movement_type || null,
     extra_data: {
       ...(item.extra_data || {}),
       movement_notes: movement?.notes || (item.extra_data as any)?.movement_notes || (item.extra_data as any)?.notes || null,

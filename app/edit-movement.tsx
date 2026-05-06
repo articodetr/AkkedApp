@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { fetchAccessibleCustomerById } from '@/services/userScopeService';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { isMovementCreator, isPendingMovement } from '@/utils/movementApproval';
+import { syncEditedMovementNotifications } from '@/services/movementNotificationSyncService';
 
 export default function EditMovementScreen() {
   const router = useRouter();
@@ -158,105 +159,7 @@ export default function EditMovementScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.customer_id || !formData.movement_type || !formData.amount) {
-      Alert.alert('خطأ', 'الرجاء إدخال جميع البيانات المطلوبة');
-      return;
-    }
-
-    if (!formData.notes.trim()) {
-      Alert.alert('خطأ', 'الملاحظة مطلوبة لكل حركة');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      if (originalMovement && isPendingMovement(originalMovement)) {
-        if (!currentUser?.userName) {
-          throw new Error('تعذر معرفة المستخدم الحالي');
-        }
-
-        const { data, error } = await supabase.rpc('request_movement_update', {
-          p_movement_id: movementId,
-          p_user_name: currentUser.userName,
-          p_movement_type: formData.movement_type,
-          p_amount: Number(formData.amount),
-          p_currency: formData.currency,
-          p_notes: formData.notes.trim(),
-          p_sender_name: formData.sender_name.trim() || null,
-          p_beneficiary_name: formData.beneficiary_name.trim() || null,
-          p_transfer_number: formData.transfer_number.trim() || null,
-        });
-
-        if (error) throw error;
-
-        triggerRefresh('all');
-
-        const result = data as any;
-        const creatorEditing = isMovementCreator(originalMovement, currentUser.userId);
-
-        Alert.alert(
-          result?.requires_approval && !creatorEditing ? 'تم إرسال الطلب' : 'تم حفظ التعديل',
-          result?.requires_approval && !creatorEditing
-            ? 'تم إرسال طلب تعديل الحركة إلى منشئها للموافقة.'
-            : 'تم تعديل الحركة المعلقة وإشعار الطرف الآخر بالتغيير.',
-          [{ text: 'موافق', onPress: () => router.back() }],
-        );
-        return;
-      }
-
-      const updatePayload = {
-        movement_type: formData.movement_type,
-        amount: Number(formData.amount),
-        currency: formData.currency,
-        commission: null,
-        commission_currency: null,
-        notes: formData.notes.trim(),
-        sender_name: formData.sender_name.trim() || null,
-        beneficiary_name: formData.beneficiary_name.trim() || null,
-        transfer_number: formData.transfer_number.trim() || null,
-      };
-
-      const { data: updatedRow, error } = await supabase
-        .from('account_movements')
-        .update(updatePayload)
-        .eq('id', movementId)
-        .select('id')
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (!updatedRow && currentUser?.userName) {
-        const { data: rpcUpdateResult, error: rpcUpdateError } = await supabase.rpc(
-          'force_update_movement_for_user',
-          {
-            p_movement_id: String(movementId),
-            p_user_name: currentUser.userName,
-            p_movement_type: formData.movement_type,
-            p_amount: Number(formData.amount),
-            p_currency: formData.currency,
-            p_notes: formData.notes.trim(),
-            p_sender_name: formData.sender_name.trim() || null,
-            p_beneficiary_name: formData.beneficiary_name.trim() || null,
-            p_transfer_number: formData.transfer_number.trim() || null,
-          },
-        );
-
-        if (rpcUpdateError) throw rpcUpdateError;
-
-        const rpcResult = rpcUpdateResult as any;
-        if (rpcResult?.success === false) {
-          throw new Error(rpcResult?.error || 'حدث خطأ أثناء تحديث الحركة');
-        }
-      }
-
-      triggerRefresh('all');
-      setShowSuccessModal(true);
-    } catch (error) {
-      console.error('Error updating movement:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء تحديث الحركة');
-    } finally {
-      setIsSaving(false);
-    }
+    Alert.alert('تنبيه', 'تم إيقاف خاصية تعديل الحركات');
   };
 
   const handleOpenReceipt = () => {

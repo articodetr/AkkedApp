@@ -20,7 +20,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { supabase } from '@/lib/supabase';
 import { AccountMovement, Currency, CURRENCIES } from '@/types/database';
-import { isPendingMovement } from '@/utils/movementApproval';
+import { isMovementCreator, isPendingMovement } from '@/utils/movementApproval';
+import { syncEditedMovementNotifications } from '@/services/movementNotificationSyncService';
 
 interface EditMovementSheetProps {
   visible: boolean;
@@ -141,106 +142,8 @@ export default function EditMovementSheet({
   };
 
   const handleSave = async () => {
-    const trimmedNotes = notes.trim();
-    const parsedAmount = parseFloat(amount);
-
-    if (!movement?.id) {
-      Alert.alert('خطأ', 'لم يتم العثور على الحركة المراد تعديلها');
-      return;
-    }
-
-    if (!movementType || !amount || parsedAmount <= 0) {
-      Alert.alert('خطأ', 'الرجاء إدخال نوع الحركة والمبلغ');
-      return;
-    }
-
-    if (parsedAmount < 0) {
-      Alert.alert('خطأ', 'المبلغ لا يمكن أن يكون سالباً');
-      return;
-    }
-
-    if (!trimmedNotes) {
-      Alert.alert('خطأ', 'الملاحظة مطلوبة لكل حركة');
-      return;
-    }
-
-    if (!currentUser?.userName) {
-      Alert.alert('خطأ', 'يجب تسجيل الدخول أولاً');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const senderName =
-        movementType === 'outgoing'
-          ? customerName
-          : currentUser.fullName || currentUser.userName;
-      const beneficiaryName =
-        movementType === 'outgoing'
-          ? currentUser.fullName || currentUser.userName
-          : customerName;
-
-      const updatePayload = {
-        movement_type: movementType,
-        amount: parsedAmount,
-        currency,
-        commission: null,
-        commission_currency: null,
-        notes: trimmedNotes,
-        sender_name: senderName,
-        beneficiary_name: beneficiaryName,
-        transfer_number: (movement as any).transfer_number || null,
-      };
-
-      const { data: updatedRow, error } = await supabase
-        .from('account_movements')
-        .update(updatePayload)
-        .eq('id', movement.id)
-        .select('id')
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (!updatedRow) {
-        const { data: rpcUpdateResult, error: rpcUpdateError } = await supabase.rpc(
-          'force_update_movement_for_user',
-          {
-            p_movement_id: String(movement.id),
-            p_user_name: currentUser.userName,
-            p_movement_type: movementType,
-            p_amount: parsedAmount,
-            p_currency: currency,
-            p_notes: trimmedNotes,
-            p_sender_name: senderName,
-            p_beneficiary_name: beneficiaryName,
-            p_transfer_number: (movement as any).transfer_number || null,
-          },
-        );
-
-        if (rpcUpdateError) throw rpcUpdateError;
-
-        const rpcResult = rpcUpdateResult as any;
-        if (rpcResult?.success === false) {
-          throw new Error(rpcResult?.error || 'حدث خطأ أثناء تعديل الحركة');
-        }
-      }
-
-      closeAfterSuccess('تم تعديل الحركة بنجاح');
-      setTimeout(() => {
-        triggerRefresh('all');
-        Promise.resolve(onSuccess()).catch((refreshError) => {
-          console.warn('Movement updated, but refresh failed:', refreshError);
-        });
-      }, 450);
-    } catch (error: any) {
-      console.error('Error editing movement:', error);
-      Alert.alert('خطأ', error?.message || 'حدث خطأ أثناء تعديل الحركة');
-    } finally {
-      setIsLoading(false);
-    }
+    Alert.alert('تنبيه', 'تم إيقاف خاصية تعديل الحركات');
   };
-
   const baseBalance = getBaseBalanceForPreview();
   const appliedBalanceAfterSave = calculateAppliedBalanceAfterSave();
   const projectedBalanceIfApproved = calculateProjectedBalance();

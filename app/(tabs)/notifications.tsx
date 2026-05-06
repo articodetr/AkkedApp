@@ -475,6 +475,17 @@ export default function NotificationsTabScreen() {
           loadRef.current?.();
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'account_movements',
+        },
+        () => {
+          loadRef.current?.();
+        },
+      )
       .subscribe();
 
     return () => {

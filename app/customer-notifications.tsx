@@ -399,6 +399,18 @@ export default function CustomerNotificationsScreen() {
           loadRef.current?.();
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'account_movements',
+          filter: `customer_id=eq.${customerId}`,
+        },
+        () => {
+          loadRef.current?.();
+        },
+      )
       .subscribe();
 
     return () => {
