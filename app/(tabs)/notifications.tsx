@@ -290,7 +290,7 @@ function extractCustomerNameFromNotificationText(value?: unknown) {
   const patterns = [
     /أنتs+قيدتs+(?:على|لـ|ل)s+(.+?)(?:s+مبلغ|$)/u,
     /قيدتs+(?:على|لـ|ل)s+(.+?)(?:s+مبلغ|$)/u,
-    /تمتs+موافقةs+(.+?)s+علىs+الحركة/u,
+    /تمتs+(?:موافقة|تأكيد)s+(.+?)s+علىs+الحركة/u,
     /رفضs+(.+?)s+هذهs+الحركة/u,
   ];
 
@@ -526,7 +526,7 @@ export default function NotificationsTabScreen() {
 
   const openNotification = async (item: MovementNotification) => {
     // تم حذف صفحة تفاصيل الإشعار الخاصة.
-    // القبول والرفض والملاحظة تظهر مباشرة داخل بطاقة الإشعار.
+    // التأكيد والرفض والملاحظة تظهر مباشرة داخل بطاقة الإشعار.
     if (!currentUser?.userId || item.is_read) return;
 
     const nextReadAt = new Date().toISOString();
@@ -561,7 +561,7 @@ export default function NotificationsTabScreen() {
     if (isNotificationPending(item)) {
       Alert.alert(
         'لا يمكن حذف الإشعار',
-        'هذه الحركة لا تزال معلّقة. يمكن حذف الإشعار بعد قبول الحركة أو رفضها.',
+        'هذه الحركة لا تزال معلّقة. يمكن حذف الإشعار بعد تأكيد الحركة أو رفضها.',
       );
       return;
     }
@@ -640,7 +640,7 @@ export default function NotificationsTabScreen() {
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>الإشعارات العامة</Text>
           <Text style={styles.headerSubtitle}>
-            تابع الحركات التي تحتاج مراجعة أو التي تم قبولها أو رفضها.
+            تابع الحركات التي تحتاج مراجعة أو التي تم تأكيدها أو رفضها.
           </Text>
         </View>
 

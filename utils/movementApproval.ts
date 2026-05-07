@@ -54,11 +54,11 @@ export function getMovementApprovalLabel(
 ): string {
   switch (normalizeMovementApprovalStatus(value)) {
     case 'pending':
-      return 'بانتظار الموافقة';
+      return 'بانتظار التأكيد';
     case 'rejected':
       return 'مرفوضة';
     default:
-      return 'مقبولة';
+      return 'مؤكدة';
   }
 }
 

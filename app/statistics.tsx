@@ -401,7 +401,7 @@ function PerformanceCard({
   return (
     <View>
       <SectionHeader
-        title="أداء الموافقات (آخر 7 أيام)"
+        title="أداء التأكيدات (آخر 7 أيام)"
         rightSlot={
           <View style={[styles.sectionIcon, { backgroundColor: C.blueSoft }]}>
             <BarChart3 size={14} color={C.blue} />
@@ -415,7 +415,7 @@ function PerformanceCard({
             <Text style={[styles.perfValue, { color: C.green }]}>
               {toLatinDigits(ratePct)}%
             </Text>
-            <Text style={styles.perfLabel}>معدل الموافقة</Text>
+            <Text style={styles.perfLabel}>معدل التأكيد</Text>
           </View>
           <View style={styles.perfDivider} />
           <View style={styles.perfStat}>

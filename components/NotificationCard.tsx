@@ -78,18 +78,18 @@ export default function NotificationCard({
     if (!onAccept || isProcessing) return;
 
     Alert.alert(
-      'قبول الحركة',
-      'هل تريد قبول هذه الحركة واعتمادها؟ بعد القبول ستدخل الحركة في الإجماليات.',
+      'تأكيد الحركة',
+      'هل تريد تأكيد هذه الحركة؟ بعد التأكيد ستدخل الحركة في الإجماليات.',
       [
         { text: 'إلغاء', style: 'cancel' },
         {
-          text: 'قبول',
+          text: 'أكد',
           onPress: async () => {
             try {
               await onAccept(notification);
-              Alert.alert('تم القبول', 'تم اعتماد الحركة بنجاح.');
+              Alert.alert('تم التأكيد', 'تم تأكيد الحركة بنجاح.');
             } catch (error: any) {
-              Alert.alert('خطأ', error?.message || 'تعذر قبول الحركة');
+              Alert.alert('خطأ', error?.message || 'تعذر تأكيد الحركة');
             }
           },
         },
@@ -215,7 +215,7 @@ export default function NotificationCard({
               ) : (
                 <Check size={17} color="#FFFFFF" />
               )}
-              <Text style={styles.acceptButtonText}>قبول واعتماد</Text>
+              <Text style={styles.acceptButtonText}>أكد</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -228,7 +228,7 @@ export default function NotificationCard({
               activeOpacity={0.85}
             >
               <X size={17} color="#FFFFFF" />
-              <Text style={styles.rejectButtonText}>رفض</Text>
+              <Text style={styles.rejectButtonText}>أرفض</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -280,7 +280,7 @@ export default function NotificationCard({
                 {isProcessing ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>تأكيد الرفض</Text>
+                  <Text style={styles.modalConfirmText}>أرفض</Text>
                 )}
               </TouchableOpacity>
             </View>

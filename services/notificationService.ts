@@ -491,9 +491,9 @@ const isIncoming = movementType === 'incoming';
     return {
       title: 'طلب تعديل حركة معلقة',
       subtitle: canTakeAction
-        ? `${actorName} طلب تعديل بيانات هذه الحركة. راجع التغيير ثم وافق أو ارفض.`
+        ? `${actorName} طلب تعديل بيانات هذه الحركة. راجع التغيير ثم أكد أو أرفض.`
         : rawStatus === 'approved'
-          ? 'تمت الموافقة على طلب تعديل الحركة.'
+          ? 'تم تأكيد طلب تعديل الحركة.'
           : rawStatus === 'rejected'
             ? 'تم رفض طلب تعديل الحركة.'
             : item.message || 'طلب تعديل بانتظار المراجعة.',
@@ -503,7 +503,7 @@ const isIncoming = movementType === 'incoming';
       amountSentenceText: formatNotificationAmountForSentence(Number.isFinite(requestedAmount) ? requestedAmount : amount, requestedCurrency),
       directionLabel: 'تعديل',
       directionColor: '#7C3AED',
-      statusText: canTakeAction ? 'يحتاج موافقة' : rawStatus === 'rejected' ? 'مرفوض' : rawStatus === 'approved' ? 'مقبول' : 'معلق',
+      statusText: canTakeAction ? 'يحتاج تأكيد' : rawStatus === 'rejected' ? 'مرفوض' : rawStatus === 'approved' ? 'مؤكد' : 'معلق',
       statusColor: canTakeAction ? '#B45309' : rawStatus === 'rejected' ? '#B91C1C' : rawStatus === 'approved' ? '#047857' : '#B45309',
       statusBg: canTakeAction ? '#FEF3C7' : rawStatus === 'rejected' ? '#FEE2E2' : rawStatus === 'approved' ? '#DCFCE7' : '#FEF3C7',
       rowBorderColor: canTakeAction ? '#F59E0B' : rawStatus === 'rejected' ? '#FECACA' : rawStatus === 'approved' ? '#BBF7D0' : '#FBBF24',
@@ -521,9 +521,9 @@ const isIncoming = movementType === 'incoming';
     return {
       title: 'طلب حذف حركة معلقة',
       subtitle: canTakeAction
-        ? `${actorName} طلب حذف هذه الحركة. يجب موافقتك قبل حذفها.`
+        ? `${actorName} طلب حذف هذه الحركة. يجب تأكيدك قبل حذفها.`
         : rawStatus === 'approved' || rawStatus === 'done'
-          ? 'تمت الموافقة على حذف الحركة.'
+          ? 'تم تأكيد حذف الحركة.'
           : rawStatus === 'rejected'
             ? 'تم رفض طلب حذف الحركة.'
             : item.message || 'طلب حذف بانتظار المراجعة.',
@@ -533,7 +533,7 @@ const isIncoming = movementType === 'incoming';
       amountSentenceText,
       directionLabel: 'حذف',
       directionColor: '#DC2626',
-      statusText: canTakeAction ? 'يحتاج موافقة' : rawStatus === 'rejected' ? 'مرفوض' : rawStatus === 'approved' || rawStatus === 'done' ? 'تم الحذف' : 'معلق',
+      statusText: canTakeAction ? 'يحتاج تأكيد' : rawStatus === 'rejected' ? 'مرفوض' : rawStatus === 'approved' || rawStatus === 'done' ? 'تم الحذف' : 'معلق',
       statusColor: canTakeAction ? '#B45309' : rawStatus === 'rejected' ? '#B91C1C' : rawStatus === 'approved' || rawStatus === 'done' ? '#047857' : '#B45309',
       statusBg: canTakeAction ? '#FEF3C7' : rawStatus === 'rejected' ? '#FEE2E2' : rawStatus === 'approved' || rawStatus === 'done' ? '#DCFCE7' : '#FEF3C7',
       rowBorderColor: canTakeAction ? '#F59E0B' : rawStatus === 'rejected' ? '#FECACA' : rawStatus === 'approved' || rawStatus === 'done' ? '#BBF7D0' : '#FBBF24',
@@ -579,7 +579,7 @@ const isIncoming = movementType === 'incoming';
   let visualState: NotificationVisualState = 'info';
 
   if (canTakeAction) {
-    subtitle = 'هذه الحركة تحتاج موافقتك قبل أن تدخل في الإجماليات.';
+    subtitle = 'هذه الحركة تحتاج تأكيدك قبل أن تدخل في الإجماليات.';
     statusText = 'تحتاج إجراء';
     statusColor = '#B45309';
     statusBg = '#FEF3C7';
@@ -587,8 +587,8 @@ const isIncoming = movementType === 'incoming';
     rowBg = '#FFFBEB';
     visualState = 'action';
   } else if (rawStatus === 'approved' || item.notification_type === 'movement_approved') {
-    subtitle = createdByCurrentUser ? `تمت موافقة ${customerName} على الحركة.` : 'تمت الموافقة على هذه الحركة.';
-    statusText = 'مقبولة';
+    subtitle = createdByCurrentUser ? `أكد ${customerName} الحركة.` : 'تم تأكيد هذه الحركة.';
+    statusText = 'مؤكدة';
     statusColor = '#047857';
     statusBg = '#DCFCE7';
     rowBorderColor = '#BBF7D0';
@@ -605,12 +605,12 @@ const isIncoming = movementType === 'incoming';
   } else if (pending) {
   if (createdByCurrentUser) {
     subtitle = customerName
-      ? `أنت قيدت على ${customerName}${amountSentenceText ? ` مبلغ ${amountSentenceText}` : ''} وبانتظار موافقته.`
-      : 'أنت أضفت هذه الحركة وهي بانتظار موافقة الطرف الآخر.';
+      ? `أنت قيدت على ${customerName}${amountSentenceText ? ` مبلغ ${amountSentenceText}` : ''} وبانتظار تأكيده.`
+      : 'أنت أضفت هذه الحركة وهي بانتظار تأكيد الطرف الآخر.';
   } else {
     subtitle = actorName
-      ? `${actorName} قيد عليك${amountSentenceText ? ` مبلغ ${amountSentenceText}` : ''} وبانتظار موافقتك.`
-      : 'هذه الحركة بانتظار موافقتك قبل أن تدخل في الإجماليات.';
+      ? `${actorName} قيد عليك${amountSentenceText ? ` مبلغ ${amountSentenceText}` : ''} وبانتظار تأكيدك.`
+      : 'هذه الحركة بانتظار تأكيدك قبل أن تدخل في الإجماليات.';
   }
 
   statusText = 'معلقة';
@@ -856,7 +856,7 @@ export async function softDeleteNotification(notificationId: string, userId: str
   if (loadError) throw loadError;
 
   if (currentNotification && isNotificationPending(normalizeNotification(currentNotification as MovementNotification))) {
-    throw new Error('لا يمكن حذف إشعار حركة معلّقة قبل قبولها أو رفضها');
+    throw new Error('لا يمكن حذف إشعار حركة معلّقة قبل تأكيدها أو رفضها');
   }
 
   const { error } = await supabase

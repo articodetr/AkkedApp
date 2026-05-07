@@ -189,15 +189,15 @@ const handleDelete = () => {
       if (error) throw error;
 
       triggerRefresh('all');
-      Alert.alert('تم القبول', 'تم اعتماد الحركة، وأصبحت مؤثرة في الإجماليات.', [
+      Alert.alert('تم التأكيد', 'تم تأكيد الحركة، وأصبحت مؤثرة في الإجماليات.', [
         {
-          text: 'موافق',
+          text: 'أكد',
           onPress: () => router.back(),
         },
       ]);
     } catch (error: any) {
       console.error('Error approving movement:', error);
-      Alert.alert('خطأ', error.message || 'حدث خطأ أثناء اعتماد الحركة');
+      Alert.alert('خطأ', error.message || 'حدث خطأ أثناء تأكيد الحركة');
     } finally {
       setIsApproving(false);
     }
@@ -225,7 +225,7 @@ const handleDelete = () => {
       triggerRefresh('all');
       Alert.alert('تم الرفض', 'تم رفض الحركة، ولن تؤثر في الإجماليات.', [
         {
-          text: 'موافق',
+          text: 'أكد',
           onPress: () => router.back(),
         },
       ]);
@@ -316,10 +316,10 @@ const handleDelete = () => {
       : '#DCFCE7';
   const rejectReasonText = (movement as any).void_reason || (movement as any).reject_reason;
   const approvalHint = isPendingReview
-    ? 'هذه الحركة بانتظار الموافقة ولن تؤثر في الإجماليات حتى يتم قبولها.'
+    ? 'هذه الحركة بانتظار التأكيد ولن تؤثر في الإجماليات حتى يتم تأكيدها.'
     : isRejected
       ? 'هذه الحركة مرفوضة ولن تؤثر في الإجماليات.'
-      : 'تم اعتماد هذه الحركة وهي مؤثرة الآن في الإجماليات.';
+      : 'تم تأكيد هذه الحركة وهي مؤثرة الآن في الإجماليات.';
 
   return (
     <View style={styles.container}>
@@ -546,7 +546,7 @@ const handleDelete = () => {
               ) : (
                 <>
                   <Check size={20} color="#FFFFFF" />
-                  <Text style={styles.approveButtonText}>اعتماد الحركة</Text>
+                  <Text style={styles.approveButtonText}>تأكيد الحركة</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -563,7 +563,7 @@ const handleDelete = () => {
               ) : (
                 <>
                   <XCircle size={20} color="#FFFFFF" />
-                  <Text style={styles.rejectButtonText}>رفض الحركة</Text>
+                  <Text style={styles.rejectButtonText}>أرفض الحركة</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -595,7 +595,7 @@ const handleDelete = () => {
                 {isRejecting ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>تأكيد الرفض</Text>
+                  <Text style={styles.modalConfirmText}>أرفض</Text>
                 )}
               </TouchableOpacity>
             </View>
