@@ -250,7 +250,7 @@ export function MovementActionSheet({
                     ) : (
                       <>
                         <CheckCircle2 size={18} color="#FFFFFF" />
-                        <Text style={styles.btnText}>تأكيد</Text>
+                        <Text style={styles.btnText}>أكد</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -262,7 +262,7 @@ export function MovementActionSheet({
                     activeOpacity={0.85}
                   >
                     <XCircle size={18} color="#FFFFFF" />
-                    <Text style={styles.btnText}>رفض</Text>
+                    <Text style={styles.btnText}>أرفض</Text>
                   </TouchableOpacity>
                 </>
               ) : null}

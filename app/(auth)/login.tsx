@@ -68,7 +68,7 @@ export default function LoginScreen() {
           />
         </View>
 
-        <Text style={styles.title}>ArtiCode</Text>
+        <Text style={styles.title}>Akked</Text>
         <Text style={styles.subtitle}>أدخل بياناتك للدخول</Text>
 
         <View style={styles.inputContainer}>

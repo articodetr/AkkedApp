@@ -78,12 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const buildDefaultSettings = (): AppSettings => ({
     id: '',
-    shop_name: 'ArtiCode',
+    shop_name: 'Akked',
     shop_phone: '',
     shop_address: '',
     header_layout: 'centered',
     header_primary_color: '#4F46E5',
-    shop_name_en: 'ArtiCode',
+    shop_name_en: 'Akked',
     shop_phone_en: '',
     shop_address_en: '',
     selected_receipt_logo: null,

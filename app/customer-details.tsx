@@ -6,7 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowRight, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon } from 'lucide-react-native';
+import { ArrowRight, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { buildReadableCustomerFilter } from '@/services/userScopeService';
 import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
@@ -1079,83 +1079,139 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
 
             <View style={styles.summaryCardsRow}>
               <TouchableOpacity
-                style={[styles.summaryCard, styles.summaryCardNegative]}
+                style={styles.summaryCardWrap}
                 activeOpacity={0.85}
                 onPress={() => {
                   setQuickAddInitialType('outgoing');
                   setShowQuickAdd(true);
                 }}
               >
-                <View style={styles.summaryCardHeader}>
-                  <View style={styles.summaryCardHeaderSide}>
-                    <View style={[styles.summaryCardToneDot, styles.summaryCardToneDotNegative]} />
-                    <Text style={[styles.summaryCardTitle, styles.summaryCardTitleNegative]}>عليه</Text>
+                <LinearGradient
+                  colors={
+                    balancesOwedFromCustomer.length > 0
+                      ? ['#FEE2E2', '#FFF7F7']
+                      : ['#FEF2F2', '#FFFFFF']
+                  }
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={[
+                    styles.summaryCard,
+                    styles.summaryCardNegative,
+                    balancesOwedFromCustomer.length > 0 && styles.summaryCardActive,
+                  ]}
+                >
+                  <View style={styles.summaryCardHeader}>
+                    <View style={styles.summaryCardIconCircleNegative}>
+                      <TrendingDown size={14} color="#DC2626" />
+                    </View>
+                    <Text style={[styles.summaryCardTitle, styles.summaryCardTitleNegative]}>
+                      عليه
+                    </Text>
                   </View>
-                  <Text style={styles.summaryCardHint}>
-                    {balancesOwedFromCustomer.length === 0
-                      ? 'لا يوجد'
-                      : `${balancesOwedFromCustomer.length} عملات`}
-                  </Text>
-                </View>
 
-                {balancesOwedFromCustomer.length === 0 ? (
-                  <View style={styles.summaryCardEmptyRow}>
-                    <Text style={styles.summaryCardEmpty}>لا يوجد</Text>
-                  </View>
-                ) : (
-                  balancesOwedFromCustomer.map((currBalance) => (
-                    <View key={`negative-${currBalance.currency}`} style={styles.summaryCardRow}>
-                      <View style={[styles.summaryCardCurrencyChip, styles.summaryCardCurrencyChipNegative]}>
-                        <Text style={[styles.summaryCardCurrency, styles.summaryCardCurrencyNegative]}>
-                          {currBalance.currency}
+                  {balancesOwedFromCustomer.length === 0 ? (
+                    <View style={styles.summaryCardEmptyBody}>
+                      <Text style={styles.summaryCardEmptyDash}>—</Text>
+                      <Text style={styles.summaryCardEmptyHint}>لا يوجد</Text>
+                    </View>
+                  ) : balancesOwedFromCustomer.length === 1 ? (
+                    <View style={styles.summaryCardAmountList}>
+                      <View style={styles.summaryCardAmountItem}>
+                        <Text style={[styles.summaryCardBigAmount, styles.summaryCardAmountNegative]}>
+                          {Math.round(Math.abs(balancesOwedFromCustomer[0].balance))}
+                        </Text>
+                        <Text style={[styles.summaryCardCurrencyCode, styles.summaryCardCurrencyNegative]}>
+                          {getCurrencySymbol(balancesOwedFromCustomer[0].currency)} {balancesOwedFromCustomer[0].currency}
                         </Text>
                       </View>
-                      <Text style={[styles.summaryCardAmount, styles.summaryCardAmountNegative]}>
-                        {Math.round(Math.abs(currBalance.balance))} {getCurrencySymbol(currBalance.currency)}
-                      </Text>
                     </View>
-                  ))
-                )}
+                  ) : (
+                    <View style={styles.summaryCardMultiList}>
+                      {balancesOwedFromCustomer.map((currBalance) => (
+                        <View key={`negative-${currBalance.currency}`} style={styles.summaryCardMultiRow}>
+                          <Text style={[styles.summaryCardMultiAmount, styles.summaryCardAmountNegative]}>
+                            {Math.round(Math.abs(currBalance.balance))}
+                          </Text>
+                          <Text style={[styles.summaryCardMultiCode, styles.summaryCardCurrencyNegative]}>
+                            {currBalance.currency}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  <View style={styles.summaryCardFooter}>
+                    <Text style={styles.summaryCardFooterText}>+ اضغط للإضافة</Text>
+                  </View>
+                </LinearGradient>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.summaryCard, styles.summaryCardPositive]}
+                style={styles.summaryCardWrap}
                 activeOpacity={0.85}
                 onPress={() => {
                   setQuickAddInitialType('incoming');
                   setShowQuickAdd(true);
                 }}
               >
-                <View style={styles.summaryCardHeader}>
-                  <View style={styles.summaryCardHeaderSide}>
-                    <View style={[styles.summaryCardToneDot, styles.summaryCardToneDotPositive]} />
-                    <Text style={[styles.summaryCardTitle, styles.summaryCardTitlePositive]}>له</Text>
+                <LinearGradient
+                  colors={
+                    balancesOwedToCustomer.length > 0
+                      ? ['#DCFCE7', '#F0FDF4']
+                      : ['#F0FDF4', '#FFFFFF']
+                  }
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={[
+                    styles.summaryCard,
+                    styles.summaryCardPositive,
+                    balancesOwedToCustomer.length > 0 && styles.summaryCardActive,
+                  ]}
+                >
+                  <View style={styles.summaryCardHeader}>
+                    <View style={styles.summaryCardIconCirclePositive}>
+                      <TrendingUp size={14} color="#16A34A" />
+                    </View>
+                    <Text style={[styles.summaryCardTitle, styles.summaryCardTitlePositive]}>
+                      له
+                    </Text>
                   </View>
-                  <Text style={styles.summaryCardHint}>
-                    {balancesOwedToCustomer.length === 0
-                      ? 'لا يوجد'
-                      : `${balancesOwedToCustomer.length} عملات`}
-                  </Text>
-                </View>
 
-                {balancesOwedToCustomer.length === 0 ? (
-                  <View style={styles.summaryCardEmptyRow}>
-                    <Text style={styles.summaryCardEmpty}>لا يوجد</Text>
-                  </View>
-                ) : (
-                  balancesOwedToCustomer.map((currBalance) => (
-                    <View key={`positive-${currBalance.currency}`} style={styles.summaryCardRow}>
-                      <View style={[styles.summaryCardCurrencyChip, styles.summaryCardCurrencyChipPositive]}>
-                        <Text style={[styles.summaryCardCurrency, styles.summaryCardCurrencyPositive]}>
-                          {currBalance.currency}
+                  {balancesOwedToCustomer.length === 0 ? (
+                    <View style={styles.summaryCardEmptyBody}>
+                      <Text style={styles.summaryCardEmptyDash}>—</Text>
+                      <Text style={styles.summaryCardEmptyHint}>لا يوجد</Text>
+                    </View>
+                  ) : balancesOwedToCustomer.length === 1 ? (
+                    <View style={styles.summaryCardAmountList}>
+                      <View style={styles.summaryCardAmountItem}>
+                        <Text style={[styles.summaryCardBigAmount, styles.summaryCardAmountPositive]}>
+                          {Math.round(balancesOwedToCustomer[0].balance)}
+                        </Text>
+                        <Text style={[styles.summaryCardCurrencyCode, styles.summaryCardCurrencyPositive]}>
+                          {getCurrencySymbol(balancesOwedToCustomer[0].currency)} {balancesOwedToCustomer[0].currency}
                         </Text>
                       </View>
-                      <Text style={[styles.summaryCardAmount, styles.summaryCardAmountPositive]}>
-                        {Math.round(currBalance.balance)} {getCurrencySymbol(currBalance.currency)}
-                      </Text>
                     </View>
-                  ))
-                )}
+                  ) : (
+                    <View style={styles.summaryCardMultiList}>
+                      {balancesOwedToCustomer.map((currBalance) => (
+                        <View key={`positive-${currBalance.currency}`} style={styles.summaryCardMultiRow}>
+                          <Text style={[styles.summaryCardMultiAmount, styles.summaryCardAmountPositive]}>
+                            {Math.round(currBalance.balance)}
+                          </Text>
+                          <Text style={[styles.summaryCardMultiCode, styles.summaryCardCurrencyPositive]}>
+                            {currBalance.currency}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  <View style={styles.summaryCardFooter}>
+                    <Text style={styles.summaryCardFooterText}>+ اضغط للإضافة</Text>
+                  </View>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
@@ -1828,130 +1884,156 @@ const styles = StyleSheet.create({
   },
   summaryCardsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
+  },
+  summaryCardWrap: {
+    flex: 1,
   },
   summaryCard: {
     flex: 1,
-    borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderWidth: 1,
-    minHeight: 116,
+    minHeight: 130,
   },
   summaryCardPositive: {
-    backgroundColor: '#F7FEF9',
-    borderColor: '#D8F5E3',
+    borderColor: '#A7F3D0',
   },
   summaryCardNegative: {
-    backgroundColor: '#FFF7F7',
-    borderColor: '#F6D8D8',
+    borderColor: '#FCA5A5',
+  },
+  summaryCardActive: {
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   summaryCardHeader: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 4,
   },
-  summaryCardHeaderSide: {
-    flexDirection: 'row',
+  summaryCardIconCircleNegative: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
   },
-  summaryCardToneDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  summaryCardToneDotPositive: {
-    backgroundColor: '#22C55E',
-  },
-  summaryCardToneDotNegative: {
-    backgroundColor: '#EF4444',
-  },
-  summaryCardHint: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94A3B8',
-    textAlign: 'right',
+  summaryCardIconCirclePositive: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   summaryCardTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    textAlign: 'right',
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   summaryCardTitlePositive: {
     color: '#15803D',
   },
   summaryCardTitleNegative: {
-    color: '#DC2626',
+    color: '#B91C1C',
   },
-  summaryCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E8EDF4',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    marginTop: 6,
-  },
-  summaryCardEmptyRow: {
-    marginTop: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E8EDF4',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    alignItems: 'flex-end',
-  },
-  summaryCardAmount: {
+  summaryCardEmptyBody: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '800',
-    lineHeight: 18,
-    textAlign: 'right',
-    flexShrink: 1,
-  },
-  summaryCardAmountPositive: {
-    color: '#059669',
-  },
-  summaryCardAmountNegative: {
-    color: '#DC2626',
-  },
-  summaryCardCurrencyChip: {
-    minWidth: 38,
-    height: 28,
-    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingVertical: 10,
   },
-  summaryCardCurrencyChipPositive: {
-    backgroundColor: '#DCFCE7',
-  },
-  summaryCardCurrencyChipNegative: {
-    backgroundColor: '#FEE2E2',
-  },
-  summaryCardCurrency: {
-    fontSize: 9,
+  summaryCardEmptyDash: {
+    fontSize: 28,
+    color: '#94A3B8',
     fontWeight: '700',
+  },
+  summaryCardEmptyHint: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  summaryCardAmountList: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  summaryCardAmountItem: {
+    alignItems: 'center',
+  },
+  summaryCardBigAmount: {
+    fontSize: 18,
+    fontWeight: '900',
+    lineHeight: 22,
     textAlign: 'center',
+  },
+  summaryCardCurrencyCode: {
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 2,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  summaryCardMultiList: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 4,
+  },
+  summaryCardMultiRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
+  },
+  summaryCardMultiAmount: {
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  summaryCardMultiCode: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    opacity: 0.85,
+  },
+  summaryCardFooter: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.06)',
+    alignItems: 'center',
+  },
+  summaryCardFooterText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  summaryCardAmountPositive: {
+    color: '#15803D',
+  },
+  summaryCardAmountNegative: {
+    color: '#B91C1C',
   },
   summaryCardCurrencyPositive: {
     color: '#15803D',
   },
   summaryCardCurrencyNegative: {
-    color: '#DC2626',
-  },
-  summaryCardEmpty: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-    textAlign: 'right',
+    color: '#B91C1C',
   },
   currencyDetailsSection: {
     backgroundColor: '#FFFFFF',

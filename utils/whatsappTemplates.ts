@@ -273,7 +273,7 @@ export function getShareAccountVariables(): Array<{
     {
       key: '{اسم_المحل}',
       description: 'اسم المحل',
-      example: 'ArtiCode Exchange',
+      example: 'Akked Exchange',
     },
   ];
 }
@@ -297,7 +297,7 @@ export function generatePreviewMessage(
       'التاريخ: 26/04/2026',
       'الملاحظة: تسليم',
     ].join('\n'),
-    shop_name: 'ArtiCode Exchange',
+    shop_name: 'Akked Exchange',
   };
 
   const safeTemplate =

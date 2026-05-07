@@ -1,6 +1,6 @@
 export const COMPANY_INFO = {
-  nameAr: 'ArtiCode',
-  nameEn: 'ArtiCode',
+  nameAr: 'Akked',
+  nameEn: 'Akked',
   addressAr: 'اليمن صنعاء',
   addressEn: 'Yemen Sanaa',
   mainOfficeAr: 'اليمن صنعاء',

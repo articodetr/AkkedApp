@@ -87,8 +87,8 @@ export default function SettingsScreen() {
       color: '#6B7280',
       onPress: () =>
         Alert.alert(
-          'ArtiCode',
-          'الإصدار 1.0.0\n\nتطبيق ArtiCode لإدارة الحوالات المالية والعملاء'
+          'Akked',
+          'الإصدار 1.0.0\n\nتطبيق Akked لإدارة الحوالات المالية والعملاء'
         ),
     },
   ];
@@ -147,7 +147,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>ArtiCode</Text>
+          <Text style={styles.footerText}>Akked</Text>
           <Text style={styles.footerVersion}>الإصدار 1.0.0</Text>
         </View>
       </ScrollView>
