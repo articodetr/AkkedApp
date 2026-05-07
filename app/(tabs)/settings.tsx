@@ -10,11 +10,11 @@ import {
 import { useRouter } from 'expo-router';
 import {
   LogOut,
-  Lock,
   Database,
   Info,
   ChevronLeft,
   Building2,
+  User,
   MessageCircle,
   Link as LinkIcon,
 } from 'lucide-react-native';
@@ -46,10 +46,17 @@ export default function SettingsScreen() {
 
   const menuItems = [
     {
+      icon: User,
+      title: 'الحساب',
+      subtitle: 'الاسم وكلمة المرور',
+      color: '#4F46E5',
+      onPress: () => router.push('/pin-settings' as any),
+    },
+    {
       icon: Building2,
       title: 'إعدادات المحل',
       subtitle: 'اسم المحل والهاتف والعنوان والترويسة والطباعة',
-      color: '#4F46E5',
+      color: '#7C3AED',
       onPress: () => router.push('/shop-settings' as any),
     },
     {
@@ -65,13 +72,6 @@ export default function SettingsScreen() {
       subtitle: 'تخصيص قوالب الرسائل المرسلة',
       color: '#25D366',
       onPress: () => router.push('/whatsapp-templates' as any),
-    },
-    {
-      icon: Lock,
-      title: 'إدارة رمز PIN',
-      subtitle: 'تعيين أو تغيير رمز الأمان',
-      color: '#EF4444',
-      onPress: () => router.push('/pin-settings' as any),
     },
     {
       icon: Database,
