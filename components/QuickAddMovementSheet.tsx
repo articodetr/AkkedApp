@@ -35,6 +35,7 @@ interface QuickAddMovementSheetProps {
   }>;
   requiresApproval?: boolean;
   onSuccess: () => void | Promise<void>;
+  initialMovementType?: 'incoming' | 'outgoing';
 }
 
 export default function QuickAddMovementSheet({
@@ -45,6 +46,7 @@ export default function QuickAddMovementSheet({
   currentBalances,
   requiresApproval = false,
   onSuccess,
+  initialMovementType,
 }: QuickAddMovementSheetProps) {
   const { triggerRefresh } = useDataRefresh();
   const { currentUser } = useAuth();
@@ -60,10 +62,13 @@ export default function QuickAddMovementSheet({
   useEffect(() => {
     if (visible) {
       loadLastUsedCurrency();
+      if (initialMovementType) {
+        setMovementType(initialMovementType);
+      }
     } else {
       resetForm();
     }
-  }, [visible]);
+  }, [visible, initialMovementType]);
 
   const loadLastUsedCurrency = async () => {
     try {

@@ -20,6 +20,8 @@ import { getLogoBase64 } from '@/utils/logoHelper';
 import QuickAddMovementSheet from '@/components/QuickAddMovementSheet';
 import EditMovementSheet from '@/components/EditMovementSheet';
 import CalendarRangePicker from '@/components/CalendarRangePicker';
+import { MovementActionSheet } from '@/components/MovementActionSheet';
+import { PreDeleteSettlementSheet } from '@/components/PreDeleteSettlementSheet';
 import {
   fetchWhatsAppTemplates,
   replaceTemplateVariables,
@@ -432,6 +434,10 @@ export default function CustomerDetailsScreen() {
   const [showCurrencyDetails, setShowCurrencyDetails] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [editingMovement, setEditingMovement] = useState<AccountMovement | null>(null);
+  const [selectedMovement, setSelectedMovement] = useState<AccountMovement | null>(null);
+  const [quickAddInitialType, setQuickAddInitialType] = useState<'incoming' | 'outgoing' | undefined>(undefined);
+  const [showSettlementSheet, setShowSettlementSheet] = useState(false);
+  const [showResetSheet, setShowResetSheet] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchScrollRef = useRef<ScrollView>(null);
@@ -706,59 +712,26 @@ export default function CustomerDetailsScreen() {
       return;
     }
 
-    Alert.alert(
-      'تصفير الحساب',
-      `هل أنت متأكد من تصفير حساب ${customer.name}?\n\nسيتم حذف جميع الحركات (${movements.length} حركة) مع الاحتفاظ ببيانات العميل.\n\nلا يمكن التراجع عن هذه العملية!`,
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'تصفير',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { data, error } = await supabase.rpc(
-                'reset_customer_account',
-                {
-                  p_customer_id: id,
-                },
-              );
+    const effectiveMovements = movements.filter((m) => {
+      const mAny = m as any;
+      return !mAny.is_commission_movement && !mAny.is_voided && !isRejectedMovement(m);
+    });
+    const effectiveBalances = calculateBalanceByCurrency(effectiveMovements);
+    const hasEffectiveBalance =
+      effectiveBalances.length > 0 && effectiveBalances.some((b) => b.balance !== 0);
 
-              if (error) {
-                Alert.alert('خطأ', 'حدث خطأ أثناء تصفير الحساب');
-                console.error('Error resetting account:', error);
-                return;
-              }
+    if (!hasEffectiveBalance) {
+      const hasPending = movements.some((m) => isPendingMovement(m));
+      Alert.alert(
+        'الحساب مصفّر',
+        hasPending
+          ? 'الحساب مصفّر فعلياً (يوجد حركات تسوية معلّقة بانتظار الموافقة).'
+          : 'الحساب مصفّر بالفعل، لا يوجد رصيد لتصفيره.',
+      );
+      return;
+    }
 
-              const result = data as {
-                success: boolean;
-                message: string;
-                movements_deleted: number;
-              };
-
-              if (result.success) {
-                Alert.alert(
-                  'نجح',
-                  `تم تصفير الحساب بنجاح\nتم حذف ${result.movements_deleted} حركة`,
-                  [
-                    {
-                      text: 'حسناً',
-                      onPress: () => {
-                        loadCustomerData();
-                      },
-                    },
-                  ],
-                );
-              } else {
-                Alert.alert('خطأ', result.message);
-              }
-            } catch (error) {
-              console.error('Error resetting account:', error);
-              Alert.alert('خطأ', 'حدث خطأ غير متوقع');
-            }
-          },
-        },
-      ],
-    );
+    setShowResetSheet(true);
   };
 
   const handleDeleteCustomer = () => {
@@ -769,25 +742,33 @@ export default function CustomerDetailsScreen() {
     }
 
     const approvedOnlyMovements = movements.filter(shouldIncludeMovementInBalance);
-    const balances = calculateBalanceByCurrency(approvedOnlyMovements);
-    const hasBalance =
-      balances.length > 0 && balances.some((b) => b.balance !== 0);
+    const approvedBalances = calculateBalanceByCurrency(approvedOnlyMovements);
+    const hasApprovedBalance =
+      approvedBalances.length > 0 && approvedBalances.some((b) => b.balance !== 0);
 
-    let warningMessage = `هل أنت متأكد من حذف ${customer.name} نهائياً؟\n\n`;
-
-    if (hasBalance) {
-      warningMessage += 'تحذير: العميل لديه رصيد غير صفري!\n';
-      balances.forEach((currBalance) => {
-        const symbol = getCurrencySymbol(currBalance.currency);
-        if (currBalance.balance > 0) {
-          warningMessage += `• له ${Math.round(currBalance.balance)} ${symbol}\n`;
-        } else {
-          warningMessage += `• عليه ${Math.round(Math.abs(currBalance.balance))} ${symbol}\n`;
-        }
+    if (hasApprovedBalance) {
+      // Calculate effective balance including pending movements
+      const effectiveMovements = movements.filter((m) => {
+        const mAny = m as any;
+        return !mAny.is_commission_movement && !mAny.is_voided && !isRejectedMovement(m);
       });
-      warningMessage += '\n';
+      const effectiveBalances = calculateBalanceByCurrency(effectiveMovements);
+      const hasEffectiveBalance =
+        effectiveBalances.length > 0 && effectiveBalances.some((b) => b.balance !== 0);
+
+      if (!hasEffectiveBalance) {
+        Alert.alert(
+          'حركات التسوية بانتظار الموافقة',
+          'توجد حركات تسوية بانتظار موافقة الطرف الآخر تكفي لتصفير الحساب. تواصل معه ليقبلها، ثم يمكنك حذف العميل.',
+        );
+        return;
+      }
+
+      setShowSettlementSheet(true);
+      return;
     }
 
+    let warningMessage = `هل أنت متأكد من حذف ${customer.name} نهائياً؟\n\n`;
     warningMessage += `سيتم حذف:\n`;
     warningMessage += `• جميع بيانات العميل\n`;
     warningMessage += `• جميع الحركات (${movements.length} حركة)\n\n`;
@@ -916,26 +897,9 @@ export default function CustomerDetailsScreen() {
     });
   }, [customer?.name, id, router]);
 
-  
-const handleMovementPress = async (movement: AccountMovement) => {
-  const movementTypeText = movement.movement_type === 'outgoing' ? 'عليه' : 'له';
-  const currencySymbol = getCurrencySymbol(movement.currency);
-  const amount = Math.round(Number(movement.amount));
 
-  Alert.alert(
-    movementTypeText,
-    `${amount} ${currencySymbol}`,
-    [
-      {
-        text: 'عرض التفاصيل',
-        onPress: () => handleViewMovementDetails(movement),
-      },
-      {
-        text: 'إلغاء',
-        style: 'cancel',
-      },
-    ],
-  );
+const handleMovementPress = (movement: AccountMovement) => {
+  setSelectedMovement(movement);
 };
 
   const handleViewMovementDetails = (movement: AccountMovement) => {
@@ -1114,7 +1078,14 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
             </View>
 
             <View style={styles.summaryCardsRow}>
-              <View style={[styles.summaryCard, styles.summaryCardNegative]}>
+              <TouchableOpacity
+                style={[styles.summaryCard, styles.summaryCardNegative]}
+                activeOpacity={0.85}
+                onPress={() => {
+                  setQuickAddInitialType('outgoing');
+                  setShowQuickAdd(true);
+                }}
+              >
                 <View style={styles.summaryCardHeader}>
                   <View style={styles.summaryCardHeaderSide}>
                     <View style={[styles.summaryCardToneDot, styles.summaryCardToneDotNegative]} />
@@ -1145,9 +1116,16 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
                     </View>
                   ))
                 )}
-              </View>
+              </TouchableOpacity>
 
-              <View style={[styles.summaryCard, styles.summaryCardPositive]}>
+              <TouchableOpacity
+                style={[styles.summaryCard, styles.summaryCardPositive]}
+                activeOpacity={0.85}
+                onPress={() => {
+                  setQuickAddInitialType('incoming');
+                  setShowQuickAdd(true);
+                }}
+              >
                 <View style={styles.summaryCardHeader}>
                   <View style={styles.summaryCardHeaderSide}>
                     <View style={[styles.summaryCardToneDot, styles.summaryCardToneDotPositive]} />
@@ -1178,7 +1156,7 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
                     </View>
                   ))
                 )}
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -1481,13 +1459,17 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
         <>
           <QuickAddMovementSheet
           visible={showQuickAdd}
-          onClose={() => setShowQuickAdd(false)}
+          onClose={() => {
+            setShowQuickAdd(false);
+            setQuickAddInitialType(undefined);
+          }}
           customerId={customer.id}
           customerName={customer.name}
           customerAccountNumber={customer.account_number}
           currentBalances={currencyBalances}
           requiresApproval={requiresCounterpartyApproval(customer.linked_user_id, currentUser?.userId)}
           onSuccess={loadCustomerData}
+          initialMovementType={quickAddInitialType}
         />
           <EditMovementSheet
           visible={Boolean(editingMovement)}
@@ -1499,6 +1481,75 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
           requiresApproval={requiresCounterpartyApproval(customer.linked_user_id, currentUser?.userId)}
           onSuccess={loadCustomerData}
         />
+          <MovementActionSheet
+            movement={selectedMovement}
+            currentUserId={currentUser?.userId || null}
+            currentUserName={currentUser?.userName || null}
+            onClose={() => setSelectedMovement(null)}
+            onViewDetails={(m) => {
+              setSelectedMovement(null);
+              handleViewMovementDetails(m);
+            }}
+            onActionDone={() => {
+              loadCustomerData();
+              triggerRefresh('all');
+            }}
+          />
+          <PreDeleteSettlementSheet
+            visible={showSettlementSheet}
+            onClose={() => setShowSettlementSheet(false)}
+            customerId={customer.id}
+            customerName={customer.name}
+            customerLinkedUserId={customer.linked_user_id || null}
+            currentUserName={currentUser?.userName || null}
+            currentUserFullName={currentUser?.fullName || null}
+            balances={calculateBalanceByCurrency(
+              movements.filter((m) => {
+                const mAny = m as any;
+                return !mAny.is_commission_movement && !mAny.is_voided && !isRejectedMovement(m);
+              })
+            ).filter((b) => Number(b.balance) !== 0)}
+            pendingMovementsCount={movements.filter(isPendingMovement).length}
+            onSuccess={() => {
+              loadCustomerData();
+              triggerRefresh('all');
+            }}
+          />
+          <PreDeleteSettlementSheet
+            visible={showResetSheet}
+            onClose={() => setShowResetSheet(false)}
+            customerId={customer.id}
+            customerName={customer.name}
+            customerLinkedUserId={customer.linked_user_id || null}
+            currentUserName={currentUser?.userName || null}
+            currentUserFullName={currentUser?.fullName || null}
+            balances={calculateBalanceByCurrency(
+              movements.filter((m) => {
+                const mAny = m as any;
+                return !mAny.is_commission_movement && !mAny.is_voided && !isRejectedMovement(m);
+              })
+            ).filter((b) => Number(b.balance) !== 0)}
+            pendingMovementsCount={movements.filter(isPendingMovement).length}
+            onSuccess={() => {
+              loadCustomerData();
+              triggerRefresh('all');
+            }}
+            labels={{
+              title: 'تصفير الحساب',
+              subtitle: 'إنشاء حركات معاكسة لتصفير الرصيد',
+              buttonLabel: 'إنشاء حركات التصفير',
+              noteText: 'تصفير الحساب',
+              infoLinked:
+                'سيتم إنشاء حركة معاكسة لكل عملة. ستكون بانتظار موافقة الطرف الآخر، وعند موافقته يكتمل تصفير الحساب. لن يتم حذف أي حركة من السابق.',
+              infoUnlinked:
+                'سيتم إنشاء حركة معاكسة لكل عملة لتصفير الرصيد فوراً. لن يتم حذف أي حركة من السابق.',
+              successLinked:
+                'تم إنشاء حركات التصفير. ستظهر بانتظار موافقة الطرف الآخر.',
+              successUnlinked:
+                'تم تصفير الحساب بنجاح.',
+              confirmMessage: 'سيتم إنشاء {n} حركة معاكسة لتصفير الحساب. الحركات السابقة لن تُحذف.',
+            }}
+          />
         </>
       )}
 
