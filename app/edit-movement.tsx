@@ -46,8 +46,6 @@ export default function EditMovementScreen() {
     commission_currency: 'USD' as Currency,
     currency: 'USD' as Currency,
     notes: '',
-    sender_name: '',
-    beneficiary_name: '',
     transfer_number: '',
   });
 
@@ -145,8 +143,6 @@ export default function EditMovementScreen() {
         commission_currency: (data.commission_currency as Currency) || 'YER',
         currency: data.currency as Currency,
         notes: data.notes || '',
-        sender_name: data.sender_name || '',
-        beneficiary_name: data.beneficiary_name || '',
         transfer_number: data.transfer_number || '',
       });
     } catch (error) {
@@ -347,30 +343,6 @@ export default function EditMovementScreen() {
                 textAlign="right"
               />
             </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>اسم المرسل</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.sender_name}
-              onChangeText={(text) => setFormData({ ...formData, sender_name: text })}
-              placeholder="اسم المرسل"
-              placeholderTextColor="#9CA3AF"
-              textAlign="right"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>اسم المستفيد</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.beneficiary_name}
-              onChangeText={(text) => setFormData({ ...formData, beneficiary_name: text })}
-              placeholder="اسم المستفيد (اختياري)"
-              placeholderTextColor="#9CA3AF"
-              textAlign="right"
-            />
           </View>
 
           <View style={styles.inputGroup}>

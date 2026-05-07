@@ -483,37 +483,56 @@ const handleDelete = () => {
           </View>
         </View>
 
-        {(movement.sender_name || movement.beneficiary_name) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>تفاصيل الحوالة</Text>
+        {(() => {
+          const isOutgoing = movement.movement_type === 'outgoing';
+          const myName = currentUser?.fullName || currentUser?.userName || 'أنا';
+          const senderName = isOutgoing ? customerName : myName;
+          const beneficiaryName = isOutgoing ? myName : customerName;
+          const senderIsMe = !isOutgoing;
+          const beneficiaryIsMe = isOutgoing;
 
-            <View style={styles.infoCard}>
-              {movement.sender_name && (
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>تفاصيل الحوالة</Text>
+
+              <View style={styles.infoCard}>
                 <View style={styles.infoRow}>
                   <View style={styles.infoIconContainer}>
                     <User size={20} color="#6B7280" />
                   </View>
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>المرسل</Text>
-                    <Text style={styles.infoValue}>{movement.sender_name}</Text>
+                    <View style={styles.partyRow}>
+                      <Text style={styles.infoValue}>{senderName || '—'}</Text>
+                      {senderIsMe ? (
+                        <View style={styles.meBadge}>
+                          <Text style={styles.meBadgeText}>أنا</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
                 </View>
-              )}
 
-              {movement.beneficiary_name && (
                 <View style={styles.infoRow}>
                   <View style={styles.infoIconContainer}>
                     <User size={20} color="#6B7280" />
                   </View>
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>المستفيد</Text>
-                    <Text style={styles.infoValue}>{movement.beneficiary_name}</Text>
+                    <View style={styles.partyRow}>
+                      <Text style={styles.infoValue}>{beneficiaryName || '—'}</Text>
+                      {beneficiaryIsMe ? (
+                        <View style={styles.meBadge}>
+                          <Text style={styles.meBadgeText}>أنا</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
                 </View>
-              )}
+              </View>
             </View>
-          </View>
-        )}
+          );
+        })()}
 
         {movement.notes && (
           <View style={styles.section}>
@@ -805,6 +824,26 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 2,
     textAlign: 'right',
+  },
+  partyRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  meBadge: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  meBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4338CA',
+    writingDirection: 'rtl',
   },
   notesCard: {
     backgroundColor: '#FFFFFF',

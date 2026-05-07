@@ -48,7 +48,6 @@ function RootLayoutNav() {
       <Stack.Screen name="shop-settings" />
       <Stack.Screen name="exchange-rates" />
       <Stack.Screen name="calculator" />
-      <Stack.Screen name="debts" />
       <Stack.Screen name="statistics" />
       <Stack.Screen name="ai-assistant" />
       <Stack.Screen name="backup" />

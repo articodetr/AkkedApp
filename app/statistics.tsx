@@ -468,7 +468,7 @@ function KPICard({ label, icon, iconBg, primary, primaryColor, secondary, onPres
         {primary}
       </Text>
       <Text style={styles.kpiCardSecondary} numberOfLines={1}>
-        {secondary || '—'}
+        {secondary || ' '}
       </Text>
     </TouchableOpacity>
   );
@@ -517,7 +517,7 @@ function KPIGrid({
           forMeDom
             ? forMeExtra > 0
               ? `+ ${toLatinDigits(forMeExtra)} عملة أخرى`
-              : 'اضغط للتفاصيل'
+              : ''
             : 'لا توجد مستحقات'
         }
         onPress={onForMePress}
@@ -532,7 +532,7 @@ function KPIGrid({
           onMeDom
             ? onMeExtra > 0
               ? `+ ${toLatinDigits(onMeExtra)} عملة أخرى`
-              : 'اضغط للتفاصيل'
+              : ''
             : 'لا توجد ديون'
         }
         onPress={onOnMePress}
@@ -872,7 +872,6 @@ export default function StatisticsScreen() {
   const txCount = useMemo(() => buildTxCount(stats?.periodStats), [stats]);
 
   const goToNotifications = () => router.push('/(tabs)/notifications' as any);
-  const goToDebts = () => router.push('/debts' as any);
   const goToCustomers = () => router.push('/(tabs)/customers' as any);
   const goToCustomer = (id: string) => router.push(`/customer-details?id=${id}` as any);
   const goToTransactions = () => router.push('/(tabs)/transactions' as any);
@@ -919,8 +918,8 @@ export default function StatisticsScreen() {
             pendingOthersCount={Number(stats?.actionableStats?.awaitingOthersApprovalCount || 0)}
             todayCount={txCount.today}
             yesterdayCount={txCount.yesterday}
-            onForMePress={goToDebts}
-            onOnMePress={goToDebts}
+            onForMePress={goToCustomers}
+            onOnMePress={goToCustomers}
             onPendingPress={goToNotifications}
             onTodayPress={goToTransactions}
           />
