@@ -15,11 +15,38 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowRight, Lock, User, Save, ShieldCheck, Phone, Mail, Printer, ChevronLeft, Trash2, AlertTriangle } from 'lucide-react-native';
+import { ArrowRight, Lock, User, Save, ShieldCheck, Phone, Mail, Printer, ChevronDown, ChevronUp, Trash2, AlertTriangle, Scale, Send, IdCard } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { CURRENCIES } from '@/types/database';
+import { LetterheadEditor } from '@/components/LetterheadEditor';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
+
+function getInitials(fullName?: string | null, fallback?: string | null): string {
+  const source = (fullName && fullName.trim()) || fallback || '';
+  const cleaned = source.replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+  if (!cleaned) return '؟';
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  const first = parts[0] || '';
+  return (first.slice(0, 2) || '؟').toUpperCase();
+}
+
+interface UnsettledBalance {
+  customer_id: string;
+  customer_name: string;
+  linked_user_id: string | null;
+  currency: string;
+  balance: number;
+}
+
+function getCurrencySymbol(code: string) {
+  return CURRENCIES.find((c) => c.code === code)?.symbol || code;
+}
 
 async function hashPassword(password: string): Promise<string> {
   const salt = await Crypto.digestStringAsync(
@@ -65,6 +92,15 @@ export default function PinSettings() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showSettlementModal, setShowSettlementModal] = useState(false);
+  const [isCheckingDeletable, setIsCheckingDeletable] = useState(false);
+  const [isAutoSettling, setIsAutoSettling] = useState(false);
+  const [unsettledBalances, setUnsettledBalances] = useState<UnsettledBalance[]>([]);
+  const [pendingMovementsCount, setPendingMovementsCount] = useState(0);
+  const [infoExpanded, setInfoExpanded] = useState(false);
+  const [passwordExpanded, setPasswordExpanded] = useState(false);
+  const [letterheadExpanded, setLetterheadExpanded] = useState(false);
+  const [dangerExpanded, setDangerExpanded] = useState(false);
 
   useEffect(() => {
     if (currentUser?.fullName) setFullName(currentUser.fullName);
@@ -198,22 +234,187 @@ export default function PinSettings() {
     }
   };
 
-  const handleDeleteAccountPress = () => {
-    Alert.alert(
-      'حذف الحساب نهائياً',
-      'سيتم حذف:\n• جميع بياناتك الشخصية\n• كل العملاء المرتبطين بك\n• جميع الحركات\n• كل الإعدادات\n\nهذه العملية لا يمكن التراجع عنها.',
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'متابعة',
-          style: 'destructive',
-          onPress: () => {
-            setDeletePassword('');
-            setShowDeleteModal(true);
-          },
+  const runDeletableCheck = async (): Promise<
+    | { canDelete: true }
+    | {
+        canDelete: false;
+        unsettled: UnsettledBalance[];
+        pendingCount: number;
+        message: string;
+      }
+  > => {
+    if (!currentUser?.userId) {
+      return {
+        canDelete: false,
+        unsettled: [],
+        pendingCount: 0,
+        message: 'لم يتم التعرف على المستخدم الحالي',
+      };
+    }
+
+    const { data, error } = await supabase.rpc('check_user_can_be_deleted', {
+      p_user_id: currentUser.userId,
+    });
+
+    if (error) throw error;
+
+    const result = data as {
+      can_delete: boolean;
+      message: string;
+      unsettled?: UnsettledBalance[];
+      pending_count?: number;
+    };
+
+    if (result?.can_delete) return { canDelete: true };
+
+    return {
+      canDelete: false,
+      unsettled: result?.unsettled || [],
+      pendingCount: result?.pending_count || 0,
+      message: result?.message || 'لا يمكن حذف الحساب',
+    };
+  };
+
+  const handleDeleteAccountPress = async () => {
+    if (!currentUser?.userId) {
+      Alert.alert('خطأ', 'لم يتم التعرف على المستخدم الحالي');
+      return;
+    }
+    setIsCheckingDeletable(true);
+    try {
+      const check = await runDeletableCheck();
+      if (check.canDelete) {
+        Alert.alert(
+          'حذف الحساب',
+          'الحساب مُسوّى مع جميع الأطراف. سيتم حذف الحساب نهائياً ولن تتمكن من تسجيل الدخول مرة أخرى.\n\nالحركات التاريخية ستبقى ظاهرة عند الأطراف الأخرى لكن لن يستطيع أحد إضافة حركات جديدة على حسابك.',
+          [
+            { text: 'إلغاء', style: 'cancel' },
+            {
+              text: 'متابعة',
+              style: 'destructive',
+              onPress: () => {
+                setDeletePassword('');
+                setShowDeleteModal(true);
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      setUnsettledBalances(check.unsettled);
+      setPendingMovementsCount(check.pendingCount);
+      setShowSettlementModal(true);
+    } catch (error: any) {
+      console.error('Error checking deletable:', error);
+      Alert.alert('خطأ', error?.message || 'تعذّر فحص حالة الحساب');
+    } finally {
+      setIsCheckingDeletable(false);
+    }
+  };
+
+  const handleAutoSettle = async () => {
+    if (!currentUser?.userId || !currentUser?.userName) {
+      Alert.alert('خطأ', 'لم يتم التعرف على المستخدم الحالي');
+      return;
+    }
+    if (unsettledBalances.length === 0) return;
+
+    const linkedCount = unsettledBalances.filter((b) => !!b.linked_user_id).length;
+    const unlinkedCount = unsettledBalances.length - linkedCount;
+    const confirmMsg =
+      `سيتم إنشاء ${unsettledBalances.length} حركة تسوية لتصفير الأرصدة.` +
+      (linkedCount > 0
+        ? `\n\n${linkedCount} منها مع حسابات مرتبطة وستكون بانتظار موافقة الطرف الآخر قبل أن تستطيع الحذف.`
+        : '') +
+      (unlinkedCount > 0 ? `\n\n${unlinkedCount} منها ستُصفَّر مباشرةً.` : '');
+
+    Alert.alert('تأكيد التسوية التلقائية', confirmMsg, [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'تسوية',
+        onPress: async () => {
+          setIsAutoSettling(true);
+          let succeeded = 0;
+          const failures: string[] = [];
+          try {
+            for (const item of unsettledBalances) {
+              const balanceValue = Number(item.balance);
+              if (Math.abs(balanceValue) < 0.005) continue;
+
+              const movementType: 'incoming' | 'outgoing' =
+                balanceValue > 0 ? 'outgoing' : 'incoming';
+              const amount = Math.abs(balanceValue);
+
+              const senderName =
+                movementType === 'outgoing'
+                  ? item.customer_name
+                  : currentUser.fullName || currentUser.userName;
+              const beneficiaryName =
+                movementType === 'outgoing'
+                  ? currentUser.fullName || currentUser.userName
+                  : item.customer_name;
+
+              const { error } = await supabase.rpc('insert_movement_with_user', {
+                p_user_name: currentUser.userName,
+                p_customer_id: item.customer_id,
+                p_movement_type: movementType,
+                p_amount: amount,
+                p_currency: item.currency,
+                p_notes: 'تسوية الرصيد قبل حذف الحساب',
+                p_sender_name: senderName,
+                p_beneficiary_name: beneficiaryName,
+                p_commission: null,
+                p_commission_currency: item.currency,
+                p_commission_recipient_id: null,
+              });
+
+              if (error) {
+                failures.push(`${item.customer_name} (${item.currency}): ${error.message}`);
+              } else {
+                succeeded += 1;
+              }
+            }
+
+            // Refresh state from DB
+            const recheck = await runDeletableCheck();
+            if (recheck.canDelete) {
+              setShowSettlementModal(false);
+              Alert.alert(
+                'تمت التسوية',
+                `تم إنشاء ${succeeded} حركة بنجاح. الحساب جاهز للحذف.`,
+                [
+                  {
+                    text: 'متابعة الحذف',
+                    onPress: () => {
+                      setDeletePassword('');
+                      setShowDeleteModal(true);
+                    },
+                  },
+                ],
+              );
+            } else {
+              setUnsettledBalances(recheck.unsettled);
+              setPendingMovementsCount(recheck.pendingCount);
+              const detail = failures.length
+                ? `\n\nأخطاء:\n${failures.join('\n')}`
+                : recheck.pendingCount > 0
+                ? '\n\nبعض الحركات بانتظار موافقة الطرف الآخر — حاول الحذف مجدداً بعد موافقتهم.'
+                : '';
+              Alert.alert(
+                'تسوية جزئية',
+                `تم إنشاء ${succeeded} حركة. ${recheck.message}${detail}`,
+              );
+            }
+          } catch (error: any) {
+            console.error('Error auto-settling:', error);
+            Alert.alert('خطأ', error?.message || 'حدث خطأ أثناء التسوية التلقائية');
+          } finally {
+            setIsAutoSettling(false);
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const handleConfirmDelete = async () => {
@@ -245,13 +446,13 @@ export default function PinSettings() {
         return;
       }
 
-      const { data, error } = await supabase.rpc('delete_user_by_id', {
+      const { data, error } = await supabase.rpc('soft_delete_user_account', {
         p_user_id: currentUser.userId,
       });
 
       if (error) throw error;
 
-      const result = data as { success: boolean; message: string };
+      const result = data as { success: boolean; message: string; code?: string };
       if (!result?.success) {
         Alert.alert('خطأ', result?.message || 'فشل حذف الحساب');
         return;
@@ -269,23 +470,53 @@ export default function PinSettings() {
     }
   };
 
+  const initials = getInitials(currentUser?.fullName, currentUser?.userName);
+  const roleLabel = currentUser?.role === 'admin' ? 'مدير' : 'مستخدم';
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <ArrowRight size={22} color="#111827" />
-        </TouchableOpacity>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>الحساب</Text>
-          <Text style={styles.headerSubtitle}>
-            الاسم وكلمة المرور
-          </Text>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#4F46E5', '#7C3AED']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.profileBanner, { paddingTop: insets.top + 8 }]}
+      >
+        <View style={styles.bannerTopRow}>
+          <TouchableOpacity
+            style={styles.backButtonLight}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+          >
+            <ArrowRight size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.bannerTopTitle}>الحساب</Text>
+          <View style={styles.backButtonPlaceholder} />
         </View>
-      </View>
+
+        <View style={styles.profileBlock}>
+          <View style={styles.avatarCircle}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          <Text style={styles.profileName} numberOfLines={1}>
+            {currentUser?.fullName || currentUser?.userName || 'مستخدم'}
+          </Text>
+          <Text style={styles.profileUsername} numberOfLines={1}>
+            @{currentUser?.userName ?? ''}
+          </Text>
+          <View style={styles.profileMetaRow}>
+            {currentUser?.accountNumber ? (
+              <View style={styles.profileChip}>
+                <IdCard size={12} color="#FFFFFF" />
+                <Text style={styles.profileChipText}>{currentUser.accountNumber}</Text>
+              </View>
+            ) : null}
+            <View style={styles.profileChip}>
+              <ShieldCheck size={12} color="#FFFFFF" />
+              <Text style={styles.profileChipText}>{roleLabel}</Text>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -301,237 +532,332 @@ export default function PinSettings() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.card}>
-            <View style={styles.cardTitleRow}>
-              <User size={20} color="#4F46E5" />
-              <Text style={styles.cardTitle}>معلومات الحساب</Text>
-            </View>
-
-            <Text style={styles.label}>اسم المستخدم</Text>
-            <View style={[styles.inputWrap, styles.inputDisabledWrap]}>
-              <TextInput
-                style={[styles.input, styles.inputDisabled]}
-                value={currentUser?.userName ?? ''}
-                editable={false}
-                textAlign="right"
-              />
-            </View>
-            <Text style={styles.helper}>اسم المستخدم لا يمكن تغييره</Text>
-
-            <Text style={[styles.label, styles.labelSpaced]}>الاسم</Text>
-            <View style={styles.inputWrap}>
-              <User size={18} color="#6B7280" />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="أدخل اسمك"
-                placeholderTextColor="#9CA3AF"
-                textAlign="right"
-                autoCapitalize="words"
-                autoCorrect={false}
-                returnKeyType="next"
-                maxLength={60}
-              />
-            </View>
-
-            <Text style={[styles.label, styles.labelSpaced]}>الرقم</Text>
-            <View style={styles.inputWrap}>
-              <Phone size={18} color="#6B7280" />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="مثال: 967xxxxxxxx+"
-                placeholderTextColor="#9CA3AF"
-                textAlign="right"
-                keyboardType="phone-pad"
-                autoCorrect={false}
-                returnKeyType="next"
-                maxLength={20}
-              />
-            </View>
-
-            <Text style={[styles.label, styles.labelSpaced]}>الإيميل</Text>
-            <View style={styles.inputWrap}>
-              <Mail size={18} color="#6B7280" />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="example@email.com"
-                placeholderTextColor="#9CA3AF"
-                textAlign="right"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                maxLength={80}
-              />
-            </View>
-
+          <View style={styles.collapsibleCard}>
             <TouchableOpacity
-              style={[
-                styles.saveButton,
-                styles.saveButtonName,
-                (!infoChanged || isSavingInfo) && styles.saveButtonDisabled,
-              ]}
-              onPress={handleSaveInfo}
-              disabled={!infoChanged || isSavingInfo}
-              activeOpacity={0.9}
+              style={styles.collapsibleHeader}
+              onPress={() => setInfoExpanded((v) => !v)}
+              activeOpacity={0.7}
             >
-              {isSavingInfo ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Save size={18} color="#FFFFFF" />
-                  <Text style={styles.saveButtonText}>حفظ المعلومات</Text>
-                </>
-              )}
+              <View style={styles.collapsibleHeaderLeft}>
+                {infoExpanded ? (
+                  <ChevronUp size={18} color="#9CA3AF" />
+                ) : (
+                  <ChevronDown size={18} color="#9CA3AF" />
+                )}
+              </View>
+              <View style={styles.collapsibleHeaderRight}>
+                <View style={styles.collapsibleTitleWrap}>
+                  <Text style={styles.collapsibleTitle}>البيانات الشخصية</Text>
+                  <Text style={styles.collapsibleSubtitle}>الاسم والجوال والإيميل</Text>
+                </View>
+                <View style={[styles.collapsibleIconCircle, { backgroundColor: '#EEF2FF' }]}>
+                  <User size={18} color="#4F46E5" />
+                </View>
+              </View>
             </TouchableOpacity>
+
+            {infoExpanded ? (
+              <View style={styles.collapsibleBody}>
+                <Text style={styles.label}>اسم المستخدم</Text>
+                <View style={[styles.inputWrap, styles.inputDisabledWrap]}>
+                  <TextInput
+                    style={[styles.input, styles.inputDisabled]}
+                    value={currentUser?.userName ?? ''}
+                    editable={false}
+                    textAlign="right"
+                  />
+                </View>
+                <Text style={styles.helper}>اسم المستخدم لا يمكن تغييره</Text>
+
+                <Text style={[styles.label, styles.labelSpaced]}>الاسم</Text>
+                <View style={styles.inputWrap}>
+                  <User size={18} color="#6B7280" />
+                  <TextInput
+                    style={styles.inputWithIcon}
+                    value={fullName}
+                    onChangeText={setFullName}
+                    placeholder="أدخل اسمك"
+                    placeholderTextColor="#9CA3AF"
+                    textAlign="right"
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    returnKeyType="next"
+                    maxLength={60}
+                  />
+                </View>
+
+                <Text style={[styles.label, styles.labelSpaced]}>الرقم</Text>
+                <View style={styles.inputWrap}>
+                  <Phone size={18} color="#6B7280" />
+                  <TextInput
+                    style={styles.inputWithIcon}
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="مثال: 967xxxxxxxx+"
+                    placeholderTextColor="#9CA3AF"
+                    textAlign="right"
+                    keyboardType="phone-pad"
+                    autoCorrect={false}
+                    returnKeyType="next"
+                    maxLength={20}
+                  />
+                </View>
+
+                <Text style={[styles.label, styles.labelSpaced]}>الإيميل</Text>
+                <View style={styles.inputWrap}>
+                  <Mail size={18} color="#6B7280" />
+                  <TextInput
+                    style={styles.inputWithIcon}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="example@email.com"
+                    placeholderTextColor="#9CA3AF"
+                    textAlign="right"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    maxLength={80}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.saveButton,
+                    styles.saveButtonName,
+                    (!infoChanged || isSavingInfo) && styles.saveButtonDisabled,
+                  ]}
+                  onPress={handleSaveInfo}
+                  disabled={!infoChanged || isSavingInfo}
+                  activeOpacity={0.9}
+                >
+                  {isSavingInfo ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Save size={18} color="#FFFFFF" />
+                      <Text style={styles.saveButtonText}>حفظ المعلومات</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
 
-          <TouchableOpacity
-            style={styles.linkCard}
-            onPress={() => router.push('/letterhead-settings' as any)}
-            activeOpacity={0.85}
-          >
-            <ChevronLeft size={20} color="#9CA3AF" />
-            <View style={styles.linkCardTextWrap}>
-              <Text style={styles.linkCardTitle}>إعدادات الترويسة والطباعة</Text>
-              <Text style={styles.linkCardSubtitle}>
-                تعديل الشعار والترويسة وتنسيق السندات
-              </Text>
-            </View>
-            <View style={styles.linkCardIcon}>
-              <Printer size={20} color="#0891B2" />
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.card}>
-            <View style={styles.cardTitleRow}>
-              <ShieldCheck size={20} color="#10B981" />
-              <Text style={styles.cardTitle}>تغيير كلمة المرور</Text>
-            </View>
-
-            <Text style={styles.label}>كلمة المرور الحالية</Text>
-            <View style={styles.inputWrap}>
-              <Lock size={18} color="#6B7280" />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                textAlign="right"
-                textContentType="password"
-                autoComplete="current-password"
-                returnKeyType="next"
-                maxLength={16}
-              />
-            </View>
-
-            <Text style={[styles.label, styles.labelSpaced]}>كلمة المرور الجديدة</Text>
-            <View style={styles.inputWrap}>
-              <Lock size={18} color="#6B7280" />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={newPassword}
-                onChangeText={(text) => {
-                  if (text.length <= 16) setNewPassword(text);
-                }}
-                placeholder="8-16 حرف (أرقام أو أحرف)"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                textAlign="right"
-                textContentType="newPassword"
-                autoComplete="password-new"
-                returnKeyType="next"
-                maxLength={16}
-              />
-            </View>
-            {newPassword.length > 0 && (
-              <Text
-                style={[
-                  styles.lengthIndicator,
-                  newPassword.length >= 8
-                    ? styles.lengthIndicatorValid
-                    : styles.lengthIndicatorInvalid,
-                ]}
-              >
-                {newPassword.length} / 16 حرف
-              </Text>
-            )}
-
-            <Text style={[styles.label, styles.labelSpaced]}>تأكيد كلمة المرور</Text>
-            <View style={styles.inputWrap}>
-              <Lock size={18} color="#6B7280" />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={confirmPassword}
-                onChangeText={(text) => {
-                  if (text.length <= 16) setConfirmPassword(text);
-                }}
-                placeholder="أعد إدخال كلمة المرور"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                textAlign="right"
-                textContentType="newPassword"
-                autoComplete="password-new"
-                returnKeyType="done"
-                maxLength={16}
-              />
-            </View>
-            {confirmPassword.length > 0 && newPassword !== confirmPassword && (
-              <Text style={[styles.lengthIndicator, styles.lengthIndicatorInvalid]}>
-                كلمتا المرور غير متطابقتين
-              </Text>
-            )}
-
+          <View style={styles.collapsibleCard}>
             <TouchableOpacity
-              style={[
-                styles.saveButton,
-                styles.saveButtonPassword,
-                isSavingPassword && styles.saveButtonDisabled,
-              ]}
-              onPress={handleSavePassword}
-              disabled={isSavingPassword}
-              activeOpacity={0.9}
+              style={styles.collapsibleHeader}
+              onPress={() => setLetterheadExpanded((v) => !v)}
+              activeOpacity={0.7}
             >
-              {isSavingPassword ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Save size={18} color="#FFFFFF" />
-                  <Text style={styles.saveButtonText}>تغيير كلمة المرور</Text>
-                </>
-              )}
+              <View style={styles.collapsibleHeaderLeft}>
+                {letterheadExpanded ? (
+                  <ChevronUp size={18} color="#9CA3AF" />
+                ) : (
+                  <ChevronDown size={18} color="#9CA3AF" />
+                )}
+              </View>
+              <View style={styles.collapsibleHeaderRight}>
+                <View style={styles.collapsibleTitleWrap}>
+                  <Text style={styles.collapsibleTitle}>إعدادات الترويسة والطباعة</Text>
+                  <Text style={styles.collapsibleSubtitle}>
+                    الشعار والترويسة وتنسيق السندات
+                  </Text>
+                </View>
+                <View style={[styles.collapsibleIconCircle, { backgroundColor: '#ECFEFF' }]}>
+                  <Printer size={18} color="#0891B2" />
+                </View>
+              </View>
             </TouchableOpacity>
+
+            {letterheadExpanded ? (
+              <View style={styles.collapsibleBody}>
+                <LetterheadEditor
+                  userId={currentUser?.userId}
+                  shopName={settings?.shop_name}
+                  shopPhone={settings?.shop_phone}
+                />
+              </View>
+            ) : null}
           </View>
 
-          <View style={styles.dangerCard}>
-            <View style={styles.dangerHeader}>
-              <AlertTriangle size={18} color="#B91C1C" />
-              <Text style={styles.dangerTitle}>حذف الحساب</Text>
-            </View>
-            <Text style={styles.dangerText}>
-              حذف الحساب يحذف جميع بياناتك (العملاء، الحركات، الإعدادات) ولا يمكن التراجع.
-            </Text>
+          <View style={styles.collapsibleCard}>
             <TouchableOpacity
-              style={styles.dangerButton}
-              onPress={handleDeleteAccountPress}
-              activeOpacity={0.85}
+              style={styles.collapsibleHeader}
+              onPress={() => setPasswordExpanded((v) => !v)}
+              activeOpacity={0.7}
             >
-              <Trash2 size={18} color="#FFFFFF" />
-              <Text style={styles.dangerButtonText}>حذف الحساب</Text>
+              <View style={styles.collapsibleHeaderLeft}>
+                {passwordExpanded ? (
+                  <ChevronUp size={18} color="#9CA3AF" />
+                ) : (
+                  <ChevronDown size={18} color="#9CA3AF" />
+                )}
+              </View>
+              <View style={styles.collapsibleHeaderRight}>
+                <View style={styles.collapsibleTitleWrap}>
+                  <Text style={styles.collapsibleTitle}>كلمة المرور</Text>
+                  <Text style={styles.collapsibleSubtitle}>تغيير كلمة المرور الحالية</Text>
+                </View>
+                <View style={[styles.collapsibleIconCircle, { backgroundColor: '#ECFDF5' }]}>
+                  <ShieldCheck size={18} color="#10B981" />
+                </View>
+              </View>
             </TouchableOpacity>
+
+            {passwordExpanded ? (
+              <View style={styles.collapsibleBody}>
+                <Text style={styles.label}>كلمة المرور الحالية</Text>
+                <View style={styles.inputWrap}>
+                  <Lock size={18} color="#6B7280" />
+                  <TextInput
+                    style={styles.inputWithIcon}
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textAlign="right"
+                    textContentType="password"
+                    autoComplete="current-password"
+                    returnKeyType="next"
+                    maxLength={16}
+                  />
+                </View>
+
+                <Text style={[styles.label, styles.labelSpaced]}>كلمة المرور الجديدة</Text>
+                <View style={styles.inputWrap}>
+                  <Lock size={18} color="#6B7280" />
+                  <TextInput
+                    style={styles.inputWithIcon}
+                    value={newPassword}
+                    onChangeText={(text) => {
+                      if (text.length <= 16) setNewPassword(text);
+                    }}
+                    placeholder="8-16 حرف (أرقام أو أحرف)"
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textAlign="right"
+                    textContentType="newPassword"
+                    autoComplete="password-new"
+                    returnKeyType="next"
+                    maxLength={16}
+                  />
+                </View>
+                {newPassword.length > 0 && (
+                  <Text
+                    style={[
+                      styles.lengthIndicator,
+                      newPassword.length >= 8
+                        ? styles.lengthIndicatorValid
+                        : styles.lengthIndicatorInvalid,
+                    ]}
+                  >
+                    {newPassword.length} / 16 حرف
+                  </Text>
+                )}
+
+                <Text style={[styles.label, styles.labelSpaced]}>تأكيد كلمة المرور</Text>
+                <View style={styles.inputWrap}>
+                  <Lock size={18} color="#6B7280" />
+                  <TextInput
+                    style={styles.inputWithIcon}
+                    value={confirmPassword}
+                    onChangeText={(text) => {
+                      if (text.length <= 16) setConfirmPassword(text);
+                    }}
+                    placeholder="أعد إدخال كلمة المرور"
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textAlign="right"
+                    textContentType="newPassword"
+                    autoComplete="password-new"
+                    returnKeyType="done"
+                    maxLength={16}
+                  />
+                </View>
+                {confirmPassword.length > 0 && newPassword !== confirmPassword && (
+                  <Text style={[styles.lengthIndicator, styles.lengthIndicatorInvalid]}>
+                    كلمتا المرور غير متطابقتين
+                  </Text>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.saveButton,
+                    styles.saveButtonPassword,
+                    isSavingPassword && styles.saveButtonDisabled,
+                  ]}
+                  onPress={handleSavePassword}
+                  disabled={isSavingPassword}
+                  activeOpacity={0.9}
+                >
+                  {isSavingPassword ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Save size={18} color="#FFFFFF" />
+                      <Text style={styles.saveButtonText}>تغيير كلمة المرور</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={[styles.collapsibleCard, styles.collapsibleCardDanger]}>
+            <TouchableOpacity
+              style={styles.collapsibleHeader}
+              onPress={() => setDangerExpanded((v) => !v)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.collapsibleHeaderLeft}>
+                {dangerExpanded ? (
+                  <ChevronUp size={18} color="#9CA3AF" />
+                ) : (
+                  <ChevronDown size={18} color="#9CA3AF" />
+                )}
+              </View>
+              <View style={styles.collapsibleHeaderRight}>
+                <View style={styles.collapsibleTitleWrap}>
+                  <Text style={[styles.collapsibleTitle, { color: '#B91C1C' }]}>حذف الحساب</Text>
+                  <Text style={styles.collapsibleSubtitle}>إزالة الحساب نهائياً بعد التسوية</Text>
+                </View>
+                <View style={[styles.collapsibleIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                  <AlertTriangle size={18} color="#B91C1C" />
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            {dangerExpanded ? (
+              <View style={styles.collapsibleBody}>
+                <Text style={styles.dangerText}>
+                  لا يمكن حذف الحساب إلا بعد تصفية جميع الأرصدة مع باقي الحسابات.
+                  بعد الحذف لن تتمكن من تسجيل الدخول، وستبقى الحركات التاريخية ظاهرة عند الأطراف الأخرى دون إمكانية إضافة حركات جديدة على حسابك.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.dangerButton, isCheckingDeletable && styles.saveButtonDisabled]}
+                  onPress={handleDeleteAccountPress}
+                  activeOpacity={0.85}
+                  disabled={isCheckingDeletable}
+                >
+                  {isCheckingDeletable ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Trash2 size={18} color="#FFFFFF" />
+                      <Text style={styles.dangerButtonText}>حذف الحساب</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -608,6 +934,122 @@ export default function PinSettings() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal
+        visible={showSettlementModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isAutoSettling && setShowSettlementModal(false)}
+        statusBarTranslucent
+      >
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableWithoutFeedback
+            onPress={() => !isAutoSettling && setShowSettlementModal(false)}
+          >
+            <View style={styles.modalBackdrop} />
+          </TouchableWithoutFeedback>
+
+          <View
+            style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}
+          >
+            <View style={styles.modalHandle} />
+
+            <View style={[styles.modalIconCircle, { backgroundColor: '#FEF3C7' }]}>
+              <Scale size={26} color="#B45309" />
+            </View>
+
+            <Text style={styles.modalTitle}>تسوية مطلوبة قبل الحذف</Text>
+            <Text style={styles.modalSubtitle}>
+              يجب أن تكون أرصدتك صفر مع جميع الأطراف قبل أن تستطيع حذف حسابك.
+            </Text>
+
+            <ScrollView
+              style={styles.settlementList}
+              contentContainerStyle={styles.settlementListContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {unsettledBalances.map((item, idx) => {
+                const balanceValue = Number(item.balance);
+                const isPositive = balanceValue > 0;
+                const directionLabel = isPositive ? 'له عندك' : 'لك عنده';
+                const chipColor = isPositive ? '#DC2626' : '#16A34A';
+                const chipBg = isPositive ? '#FEE2E2' : '#ECFDF5';
+
+                return (
+                  <View
+                    key={`${item.customer_id}-${item.currency}-${idx}`}
+                    style={styles.settlementRow}
+                  >
+                    <View style={styles.settlementRowLeft}>
+                      <View style={[styles.directionChip, { backgroundColor: chipBg }]}>
+                        <Text style={[styles.directionChipText, { color: chipColor }]}>
+                          {directionLabel}
+                        </Text>
+                      </View>
+                      <Text style={styles.settlementAmount}>
+                        {Math.round(Math.abs(balanceValue))}{' '}
+                        <Text style={styles.settlementCurrency}>
+                          {getCurrencySymbol(item.currency)}
+                        </Text>
+                      </Text>
+                    </View>
+                    <View style={styles.settlementRowRight}>
+                      <Text style={styles.settlementCustomerName} numberOfLines={1}>
+                        {item.customer_name}
+                      </Text>
+                      {item.linked_user_id ? (
+                        <Text style={styles.settlementLinkedTag}>حساب مرتبط</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            {pendingMovementsCount > 0 ? (
+              <View style={styles.settlementWarn}>
+                <AlertTriangle size={14} color="#B45309" />
+                <Text style={styles.settlementWarnText}>
+                  لديك {pendingMovementsCount} حركة معلّقة بانتظار الموافقة
+                </Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={[
+                styles.dangerButton,
+                styles.modalDeleteBtn,
+                { backgroundColor: '#4F46E5' },
+                isAutoSettling && styles.saveButtonDisabled,
+              ]}
+              onPress={handleAutoSettle}
+              disabled={isAutoSettling || unsettledBalances.length === 0}
+              activeOpacity={0.85}
+            >
+              {isAutoSettling ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Send size={18} color="#FFFFFF" />
+                  <Text style={styles.dangerButtonText}>تسوية تلقائية الآن</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => !isAutoSettling && setShowSettlementModal(false)}
+              disabled={isAutoSettling}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCancelText}>سأسوّي يدوياً لاحقاً</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -655,7 +1097,153 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    paddingTop: 16,
     paddingBottom: 24,
+  },
+  profileBanner: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+  },
+  bannerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  backButtonLight: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backButtonPlaceholder: {
+    width: 40,
+    height: 40,
+  },
+  bannerTopTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    writingDirection: 'rtl',
+  },
+  profileBlock: {
+    alignItems: 'center',
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+  avatarCircle: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  avatarText: {
+    fontSize: 30,
+    fontWeight: '900',
+    color: '#4F46E5',
+    letterSpacing: 1,
+  },
+  profileName: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  profileUsername: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 4,
+  },
+  profileMetaRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  profileChip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  profileChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    writingDirection: 'rtl',
+  },
+  collapsibleCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  collapsibleCardDanger: {
+    borderColor: '#FECACA',
+    backgroundColor: '#FFF5F5',
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  collapsibleHeaderRight: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  collapsibleHeaderLeft: {
+    paddingLeft: 6,
+  },
+  collapsibleIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapsibleTitleWrap: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  collapsibleTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+    writingDirection: 'rtl',
+  },
+  collapsibleSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 2,
+    writingDirection: 'rtl',
+  },
+  collapsibleBody: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -902,5 +1490,88 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     fontWeight: '700',
+  },
+  settlementList: {
+    maxHeight: 240,
+    width: '100%',
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
+  },
+  settlementListContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  settlementRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+  settlementRowRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+    paddingLeft: 12,
+  },
+  settlementRowLeft: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+  },
+  settlementCustomerName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  settlementLinkedTag: {
+    fontSize: 11,
+    color: '#4F46E5',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  directionChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  directionChipText: {
+    fontSize: 11,
+    fontWeight: '900',
+    writingDirection: 'rtl',
+  },
+  settlementAmount: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  settlementCurrency: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '700',
+  },
+  settlementWarn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 4,
+    width: '100%',
+  },
+  settlementWarnText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#92400E',
+    fontWeight: '700',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
 });

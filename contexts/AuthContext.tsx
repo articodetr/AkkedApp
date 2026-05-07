@@ -134,6 +134,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (authValue === 'true' && userValue) {
         const user = JSON.parse(userValue);
+
+        // Verify the account still exists and is not soft-deleted
+        if (user?.userId) {
+          try {
+            const { data: row } = await supabase
+              .from('app_security')
+              .select('deleted_at, is_active')
+              .eq('id', user.userId)
+              .maybeSingle();
+
+            if (!row || row.deleted_at || !row.is_active) {
+              await AsyncStorage.removeItem(AUTH_KEY);
+              await AsyncStorage.removeItem(USER_KEY);
+              return;
+            }
+          } catch (error) {
+            console.error('Error validating stored session:', error);
+          }
+        }
+
         setIsAuthenticated(true);
         setCurrentUser(user);
 
@@ -166,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data, error } = await supabase
         .from('app_security')
-        .select('id, pin_hash, is_active, role, user_name, full_name, account_number')
+        .select('id, pin_hash, is_active, role, user_name, full_name, account_number, deleted_at')
         .eq('user_name', userName)
         .maybeSingle();
 
@@ -177,6 +197,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           p_success: false,
         });
         return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
+      }
+
+      if (data.deleted_at) {
+        return { success: false, error: 'هذا الحساب غير موجود' };
       }
 
       if (!data.is_active) {

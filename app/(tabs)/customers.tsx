@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Clock, Link2, Plus, Search, Wallet } from 'lucide-react-native';
+import { Clock, Handshake, Plus, Search, Wallet } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { CURRENCIES, Customer, CustomerBalanceByCurrency } from '@/types/database';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
@@ -87,6 +87,7 @@ export default function CustomersScreen() {
   const [customers, setCustomers] = useState<CustomerWithBalances[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<CustomerWithBalances[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [linkFilter, setLinkFilter] = useState<'all' | 'linked' | 'unlinked'>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -103,7 +104,7 @@ export default function CustomersScreen() {
 
   useEffect(() => {
     filterCustomers();
-  }, [searchQuery, customers]);
+  }, [searchQuery, customers, linkFilter]);
 
   const loadCustomers = async () => {
     try {
@@ -211,20 +212,25 @@ export default function CustomersScreen() {
   };
 
   const filterCustomers = () => {
-    if (!searchQuery.trim()) {
-      setFilteredCustomers(customers);
-      return;
+    let result = customers;
+
+    if (linkFilter === 'linked') {
+      result = result.filter((c) => !!c.linked_user_id && !c.is_profit_loss_account);
+    } else if (linkFilter === 'unlinked') {
+      result = result.filter((c) => !c.linked_user_id);
     }
 
     const normalizedSearch = searchQuery.toLowerCase().trim();
-    const filtered = customers.filter(
-      (customer) =>
-        customer.name.toLowerCase().includes(normalizedSearch) ||
-        customer.phone?.includes(normalizedSearch) ||
-        customer.account_number?.includes(normalizedSearch),
-    );
+    if (normalizedSearch) {
+      result = result.filter(
+        (customer) =>
+          customer.name.toLowerCase().includes(normalizedSearch) ||
+          customer.phone?.includes(normalizedSearch) ||
+          customer.account_number?.includes(normalizedSearch),
+      );
+    }
 
-    setFilteredCustomers(filtered);
+    setFilteredCustomers(result);
   };
 
   const onRefresh = async () => {
@@ -376,8 +382,10 @@ export default function CustomersScreen() {
       <TouchableOpacity
         style={[
           styles.customerCard,
-          isLinkedUser && styles.linkedUserCard,
           isProfitLossAccount && styles.profitLossCard,
+          isLinkedUser && !isProfitLossAccount && styles.linkedFooterCardPadding,
+          isLinkedUser && !isProfitLossAccount && pendingMovementsCount > 0 &&
+            styles.linkedFooterCardPaddingWithPending,
         ]}
         activeOpacity={0.8}
         onPress={() => router.push(`/customer-details?id=${item.id}` as any)}
@@ -392,12 +400,8 @@ export default function CustomersScreen() {
               <View style={styles.profitLossIndicator}>
                 <Wallet size={12} color="#B45309" />
               </View>
-            ) : isLinkedUser ? (
-              <View style={styles.linkIndicator}>
-                <Link2 size={12} color="#6366F1" />
-              </View>
             ) : null}
-            {pendingMovementsCount > 0 && (
+            {!isLinkedUser && pendingMovementsCount > 0 && (
               <View style={styles.pendingMovementIndicator}>
                 <Clock size={11} color="#D97706" />
                 <Text style={styles.pendingMovementIndicatorText}>
@@ -443,6 +447,14 @@ export default function CustomersScreen() {
             </>
           )}
         </View>
+
+        {isLinkedUser && !isProfitLossAccount ? (
+          <View style={styles.linkedFooter} pointerEvents="none">
+            <View style={styles.linkedFooterLine} />
+            <Handshake size={13} color="#10B981" />
+            <View style={styles.linkedFooterLine} />
+          </View>
+        ) : null}
       </TouchableOpacity>
     );
   };
@@ -462,6 +474,30 @@ export default function CustomersScreen() {
           onChangeText={setSearchQuery}
           placeholderTextColor="#9CA3AF"
         />
+      </View>
+
+      <View style={styles.segmentBox}>
+        {(
+          [
+            { key: 'all', label: 'الكل' },
+            { key: 'linked', label: 'المرتبطون' },
+            { key: 'unlinked', label: 'غير المرتبطين' },
+          ] as const
+        ).map((opt) => {
+          const active = linkFilter === opt.key;
+          return (
+            <TouchableOpacity
+              key={opt.key}
+              style={[styles.segmentItem, active && styles.segmentItemActive]}
+              onPress={() => setLinkFilter(opt.key)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <FlatList
@@ -531,6 +567,42 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     writingDirection: 'rtl',
   },
+  segmentBox: {
+    flexDirection: 'row-reverse',
+    backgroundColor: '#F1F5F9',
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 4,
+    padding: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  segmentItem: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  segmentItemActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+    writingDirection: 'rtl',
+  },
+  segmentTextActive: {
+    color: '#111827',
+    fontWeight: '800',
+  },
   listContent: {
     padding: 16,
     paddingBottom: 100,
@@ -554,13 +626,26 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 2,
   },
-  linkedUserCard: {
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
   profitLossCard: {
     borderColor: '#FCD34D',
     backgroundColor: '#FFFBEB',
+  },
+  linkedFooterCardPadding: {
+    paddingBottom: 22,
+  },
+  linkedFooter: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 8,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+  },
+  linkedFooterLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#A7F3D0',
   },
   customerInfo: {
     flex: 1,
@@ -601,16 +686,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'left',
     writingDirection: 'ltr',
-  },
-  linkIndicator: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EEF2FF',
-    borderWidth: 1,
-    borderColor: '#E0E7FF',
   },
   profitLossIndicator: {
     width: 20,

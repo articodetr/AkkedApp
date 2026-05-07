@@ -13,7 +13,6 @@ import {
   Database,
   Info,
   ChevronLeft,
-  Building2,
   User,
   MessageCircle,
   Link as LinkIcon,
@@ -48,16 +47,9 @@ export default function SettingsScreen() {
     {
       icon: User,
       title: 'الحساب',
-      subtitle: 'الاسم وكلمة المرور',
+      subtitle: 'الاسم وكلمة المرور والترويسة',
       color: '#4F46E5',
       onPress: () => router.push('/pin-settings' as any),
-    },
-    {
-      icon: Building2,
-      title: 'إعدادات المحل',
-      subtitle: 'اسم المحل والهاتف والعنوان والترويسة والطباعة',
-      color: '#7C3AED',
-      onPress: () => router.push('/shop-settings' as any),
     },
     {
       icon: LinkIcon,

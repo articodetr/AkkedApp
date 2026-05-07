@@ -220,6 +220,7 @@ export interface UserInfo {
   account_number: string;
   role: 'admin' | 'user';
   is_active: boolean;
+  deleted_at?: string | null;
   created_at: string;
   last_login?: string;
 }
