@@ -114,7 +114,7 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
           background: '#FEF3C7',
           border: '#F59E0B',
           color: '#B45309',
-          note: 'هذه الحركة بانتظار الموافقة ولن تؤثر في الإجماليات قبل القبول.',
+          note: 'هذه الحركة بانتظار التأكيد ولن تؤثر في الإجماليات قبل التأكيد.',
         }
       : approvalStatus === 'rejected'
         ? {
@@ -127,7 +127,7 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
             background: '#DCFCE7',
             border: '#22C55E',
             color: '#15803D',
-            note: 'تم اعتماد هذه الحركة وأصبحت مؤثرة في الإجماليات.',
+            note: 'تم تأكيد هذه الحركة وأصبحت مؤثرة في الإجماليات.',
           };
 
   const isCreator = currentUserId && created_by_user_id && currentUserId === created_by_user_id;

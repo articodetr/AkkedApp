@@ -271,7 +271,7 @@ function formatMovementBalanceLabel(
 ): string {
   if (!shouldIncludeMovementInBalance(movement)) {
     const status = normalizeMovementApprovalStatus(movement);
-    if (status === 'pending') return 'بانتظار الموافقة';
+    if (status === 'pending') return 'بانتظار التأكيد';
     if (status === 'rejected') return 'مرفوضة';
     return 'لا تؤثر في الرصيد';
   }
@@ -286,7 +286,7 @@ function formatMovementAmountBalanceLabel(
 ): string {
   if (isPendingMovement(movement) && !(movement as any).is_commission_movement) {
     const balance = calculateProjectedBalanceIfApproved(movement, allMovements);
-    return formatBalanceAfterLabel(balance, movement.currency, 'الرصيد اذا وافق');
+    return formatBalanceAfterLabel(balance, movement.currency, 'الرصيد اذا أكد');
   }
 
   return formatMovementBalanceLabel(movement, allMovements);

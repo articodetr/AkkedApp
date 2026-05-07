@@ -451,7 +451,7 @@ export default function CustomerNotificationsScreen() {
 
   const openNotification = async (item: MovementNotification) => {
     // تم حذف صفحة تفاصيل الإشعار الخاصة.
-    // القبول والرفض والملاحظة تظهر مباشرة داخل بطاقة الإشعار.
+    // التأكيد والرفض والملاحظة تظهر مباشرة داخل بطاقة الإشعار.
     if (!currentUser?.userId || item.is_read) return;
 
     const nextReadAt = new Date().toISOString();
@@ -486,7 +486,7 @@ export default function CustomerNotificationsScreen() {
     if (isNotificationPending(item)) {
       Alert.alert(
         'لا يمكن حذف الإشعار',
-        'هذه الحركة لا تزال معلّقة. يمكن حذف الإشعار بعد قبول الحركة أو رفضها.',
+        'هذه الحركة لا تزال معلّقة. يمكن حذف الإشعار بعد تأكيد الحركة أو رفضها.',
       );
       return;
     }

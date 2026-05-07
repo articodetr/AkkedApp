@@ -326,10 +326,10 @@ export default function EditMovementSheet({
                             >
                               {formatBalance(projectedBalanceIfApproved)}
                             </Text>
-                            <Text style={styles.previewLabel}>الرصيد اذا وافق:</Text>
+                            <Text style={styles.previewLabel}>الرصيد اذا أكد:</Text>
                           </View>
                           <Text style={styles.previewPendingNote}>
-                            هذه الحركة مرتبطة بحساب آخر؛ قد تبقى معلقة ولا يتغير الرصيد الفعلي إلا بعد الموافقة.
+                            هذه الحركة مرتبطة بحساب آخر؛ قد تبقى معلقة ولا يتغير الرصيد الفعلي إلا بعد التأكيد.
                           </Text>
                         </>
                       )}

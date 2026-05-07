@@ -251,7 +251,7 @@ export default function QuickAddMovementSheet({
 
       await saveLastUsedCurrency(currency);
       const pendingMessage = isPendingMovement(movement)
-        ? 'تم تسجيل الحركة بانتظار موافقة الطرف الآخر، ولن تؤثر في الإجماليات قبل القبول.'
+        ? 'تم تسجيل الحركة بانتظار تأكيد الطرف الآخر، ولن تؤثر في الإجماليات قبل التأكيد.'
         : 'تمت إضافة الحركة بنجاح';
 
       showSuccessAlert(pendingMessage);
@@ -452,11 +452,11 @@ export default function QuickAddMovementSheet({
                           >
                             {formatBalance(projectedBalanceIfApproved)}
                           </Text>
-                          <Text style={styles.previewLabel}>الرصيد اذا وافق:</Text>
+                          <Text style={styles.previewLabel}>الرصيد اذا أكد:</Text>
                         </View>
 
                         <Text style={styles.previewPendingNote}>
-                          بعد الحفظ ستبقى الحركة معلقة، ولا يتغير الرصيد الفعلي إلا بعد الموافقة.
+                          بعد الحفظ ستبقى الحركة معلقة، ولا يتغير الرصيد الفعلي إلا بعد التأكيد.
                         </Text>
                       </>
                     )}
