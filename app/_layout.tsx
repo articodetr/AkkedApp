@@ -8,6 +8,7 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { DataRefreshProvider } from '@/contexts/DataRefreshContext';
 import { setupArabicRTL } from '@/utils/rtl';
+import { DailyStartupAd } from '@/components/DailyStartupAd';
 
 setupArabicRTL();
 
@@ -29,32 +30,35 @@ function RootLayoutNav() {
   }, [isAuthenticated, isLoading, segments]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="pin-entry" />
-      <Stack.Screen name="pin-settings" />
-      <Stack.Screen name="add-customer" />
-      <Stack.Screen name="customer-details" />
-      <Stack.Screen name="customer-notifications" />
-      <Stack.Screen name="new-transaction" />
-      <Stack.Screen name="transaction-details" />
-      <Stack.Screen name="new-movement" />
-      <Stack.Screen name="edit-movement" />
-      <Stack.Screen name="movement-details" />
-      <Stack.Screen name="receipt-preview" />
-      <Stack.Screen name="debt-summary" />
-      <Stack.Screen name="shop-settings" />
-      <Stack.Screen name="exchange-rates" />
-      <Stack.Screen name="calculator" />
-      <Stack.Screen name="statistics" />
-      <Stack.Screen name="ai-assistant" />
-      <Stack.Screen name="backup" />
-      <Stack.Screen name="reports" />
-      <Stack.Screen name="notification-detail" />
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="pin-entry" />
+        <Stack.Screen name="pin-settings" />
+        <Stack.Screen name="add-customer" />
+        <Stack.Screen name="customer-details" />
+        <Stack.Screen name="customer-notifications" />
+        <Stack.Screen name="new-transaction" />
+        <Stack.Screen name="transaction-details" />
+        <Stack.Screen name="new-movement" />
+        <Stack.Screen name="edit-movement" />
+        <Stack.Screen name="movement-details" />
+        <Stack.Screen name="receipt-preview" />
+        <Stack.Screen name="debt-summary" />
+        <Stack.Screen name="shop-settings" />
+        <Stack.Screen name="exchange-rates" />
+        <Stack.Screen name="calculator" />
+        <Stack.Screen name="statistics" />
+        <Stack.Screen name="ai-assistant" />
+        <Stack.Screen name="backup" />
+        <Stack.Screen name="reports" />
+        <Stack.Screen name="notification-detail" />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+      <DailyStartupAd enabled={isAuthenticated && !isLoading} />
+    </>
   );
 }
 
