@@ -75,6 +75,7 @@ export interface AppSettings {
   shop_logo?: string | null;
   shop_phone?: string | null;
   shop_address?: string | null;
+  email?: string | null;
   selected_receipt_logo?: string | null;
   header_layout?: string;
   header_primary_color?: string;

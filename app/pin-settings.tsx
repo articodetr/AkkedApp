@@ -10,10 +10,12 @@ import {
   ActivityIndicator,
   ScrollView,
   KeyboardAvoidingView,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowRight, Lock, User, Save, ShieldCheck } from 'lucide-react-native';
+import { ArrowRight, Lock, User, Save, ShieldCheck, Phone, Mail, Printer, ChevronLeft, Trash2, AlertTriangle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import * as Haptics from 'expo-haptics';
@@ -51,58 +53,81 @@ async function verifyPassword(password: string, hashedPassword: string): Promise
 export default function PinSettings() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentUser, refreshCurrentUser } = useAuth();
+  const { currentUser, refreshCurrentUser, settings, updateSettings, logout } = useAuth();
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [isSavingName, setIsSavingName] = useState(false);
+  const [isSavingInfo, setIsSavingInfo] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    if (currentUser?.fullName) {
-      setFullName(currentUser.fullName);
-    }
+    if (currentUser?.fullName) setFullName(currentUser.fullName);
   }, [currentUser?.fullName]);
+
+  useEffect(() => {
+    setPhone(settings?.shop_phone || '');
+    setEmail(settings?.email || '');
+  }, [settings?.shop_phone, settings?.email]);
 
   const nameChanged =
     fullName.trim().length > 0 && fullName.trim() !== (currentUser?.fullName ?? '');
+  const phoneChanged = phone.trim() !== (settings?.shop_phone ?? '');
+  const emailChanged = email.trim() !== (settings?.email ?? '');
+  const infoChanged = nameChanged || phoneChanged || emailChanged;
 
-  const handleSaveName = async () => {
+  const handleSaveInfo = async () => {
     if (!currentUser?.userId) {
       Alert.alert('خطأ', 'لم يتم التعرف على المستخدم الحالي');
       return;
     }
     if (!fullName.trim() || fullName.trim().length < 2) {
-      Alert.alert('خطأ', 'الاسم الكامل يجب أن يكون حرفين على الأقل');
+      Alert.alert('خطأ', 'الاسم يجب أن يكون حرفين على الأقل');
       return;
     }
-    if (!nameChanged) {
-      Alert.alert('تنبيه', 'لم تقم بتغيير الاسم');
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert('خطأ', 'صيغة الإيميل غير صحيحة');
+      return;
+    }
+    if (!infoChanged) {
+      Alert.alert('تنبيه', 'لا يوجد تغييرات لحفظها');
       return;
     }
 
-    setIsSavingName(true);
+    setIsSavingInfo(true);
     try {
-      const { error } = await supabase
-        .from('app_security')
-        .update({ full_name: fullName.trim() })
-        .eq('id', currentUser.userId);
+      if (nameChanged) {
+        const { error } = await supabase
+          .from('app_security')
+          .update({ full_name: fullName.trim() })
+          .eq('id', currentUser.userId);
+        if (error) throw error;
+        await refreshCurrentUser();
+      }
 
-      if (error) throw error;
-
-      await refreshCurrentUser();
+      if (phoneChanged || emailChanged) {
+        const updates: any = {};
+        if (phoneChanged) updates.shop_phone = phone.trim() || null;
+        if (emailChanged) updates.email = email.trim() || null;
+        const ok = await updateSettings(updates);
+        if (!ok) throw new Error('فشل حفظ معلومات الحساب');
+      }
 
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
 
-      Alert.alert('نجح', 'تم حفظ الاسم بنجاح');
+      Alert.alert('نجح', 'تم حفظ المعلومات');
     } catch (error: any) {
-      console.error('Error saving name:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء حفظ الاسم');
+      console.error('Error saving info:', error);
+      Alert.alert('خطأ', error?.message || 'حدث خطأ أثناء الحفظ');
     } finally {
-      setIsSavingName(false);
+      setIsSavingInfo(false);
     }
   };
 
@@ -173,6 +198,77 @@ export default function PinSettings() {
     }
   };
 
+  const handleDeleteAccountPress = () => {
+    Alert.alert(
+      'حذف الحساب نهائياً',
+      'سيتم حذف:\n• جميع بياناتك الشخصية\n• كل العملاء المرتبطين بك\n• جميع الحركات\n• كل الإعدادات\n\nهذه العملية لا يمكن التراجع عنها.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'متابعة',
+          style: 'destructive',
+          onPress: () => {
+            setDeletePassword('');
+            setShowDeleteModal(true);
+          },
+        },
+      ],
+    );
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!currentUser?.userId) {
+      Alert.alert('خطأ', 'لم يتم التعرف على المستخدم الحالي');
+      return;
+    }
+    if (!deletePassword) {
+      Alert.alert('خطأ', 'الرجاء إدخال كلمة المرور للتأكيد');
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const { data: userRow, error: fetchError } = await supabase
+        .from('app_security')
+        .select('pin_hash')
+        .eq('id', currentUser.userId)
+        .maybeSingle();
+
+      if (fetchError || !userRow) {
+        Alert.alert('خطأ', 'تعذر التحقق من بيانات الحساب');
+        return;
+      }
+
+      const isValid = await verifyPassword(deletePassword, userRow.pin_hash);
+      if (!isValid) {
+        Alert.alert('خطأ', 'كلمة المرور غير صحيحة');
+        return;
+      }
+
+      const { data, error } = await supabase.rpc('delete_user_by_id', {
+        p_user_id: currentUser.userId,
+      });
+
+      if (error) throw error;
+
+      const result = data as { success: boolean; message: string };
+      if (!result?.success) {
+        Alert.alert('خطأ', result?.message || 'فشل حذف الحساب');
+        return;
+      }
+
+      setShowDeleteModal(false);
+      setDeletePassword('');
+      await logout();
+      router.replace('/(auth)/login' as any);
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
+      Alert.alert('خطأ', error?.message || 'حدث خطأ أثناء حذف الحساب');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -184,7 +280,7 @@ export default function PinSettings() {
           <ArrowRight size={22} color="#111827" />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>تعديل بياناتي</Text>
+          <Text style={styles.headerTitle}>الحساب</Text>
           <Text style={styles.headerSubtitle}>
             الاسم وكلمة المرور
           </Text>
@@ -222,19 +318,55 @@ export default function PinSettings() {
             </View>
             <Text style={styles.helper}>اسم المستخدم لا يمكن تغييره</Text>
 
-            <Text style={[styles.label, styles.labelSpaced]}>الاسم الكامل</Text>
+            <Text style={[styles.label, styles.labelSpaced]}>الاسم</Text>
             <View style={styles.inputWrap}>
+              <User size={18} color="#6B7280" />
               <TextInput
-                style={styles.input}
+                style={styles.inputWithIcon}
                 value={fullName}
                 onChangeText={setFullName}
-                placeholder="أدخل اسمك الكامل"
+                placeholder="أدخل اسمك"
                 placeholderTextColor="#9CA3AF"
                 textAlign="right"
                 autoCapitalize="words"
                 autoCorrect={false}
-                returnKeyType="done"
+                returnKeyType="next"
                 maxLength={60}
+              />
+            </View>
+
+            <Text style={[styles.label, styles.labelSpaced]}>الرقم</Text>
+            <View style={styles.inputWrap}>
+              <Phone size={18} color="#6B7280" />
+              <TextInput
+                style={styles.inputWithIcon}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="مثال: 967xxxxxxxx+"
+                placeholderTextColor="#9CA3AF"
+                textAlign="right"
+                keyboardType="phone-pad"
+                autoCorrect={false}
+                returnKeyType="next"
+                maxLength={20}
+              />
+            </View>
+
+            <Text style={[styles.label, styles.labelSpaced]}>الإيميل</Text>
+            <View style={styles.inputWrap}>
+              <Mail size={18} color="#6B7280" />
+              <TextInput
+                style={styles.inputWithIcon}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="example@email.com"
+                placeholderTextColor="#9CA3AF"
+                textAlign="right"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                maxLength={80}
               />
             </View>
 
@@ -242,22 +374,39 @@ export default function PinSettings() {
               style={[
                 styles.saveButton,
                 styles.saveButtonName,
-                (!nameChanged || isSavingName) && styles.saveButtonDisabled,
+                (!infoChanged || isSavingInfo) && styles.saveButtonDisabled,
               ]}
-              onPress={handleSaveName}
-              disabled={!nameChanged || isSavingName}
+              onPress={handleSaveInfo}
+              disabled={!infoChanged || isSavingInfo}
               activeOpacity={0.9}
             >
-              {isSavingName ? (
+              {isSavingInfo ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
                   <Save size={18} color="#FFFFFF" />
-                  <Text style={styles.saveButtonText}>حفظ الاسم</Text>
+                  <Text style={styles.saveButtonText}>حفظ المعلومات</Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.linkCard}
+            onPress={() => router.push('/letterhead-settings' as any)}
+            activeOpacity={0.85}
+          >
+            <ChevronLeft size={20} color="#9CA3AF" />
+            <View style={styles.linkCardTextWrap}>
+              <Text style={styles.linkCardTitle}>إعدادات الترويسة والطباعة</Text>
+              <Text style={styles.linkCardSubtitle}>
+                تعديل الشعار والترويسة وتنسيق السندات
+              </Text>
+            </View>
+            <View style={styles.linkCardIcon}>
+              <Printer size={20} color="#0891B2" />
+            </View>
+          </TouchableOpacity>
 
           <View style={styles.card}>
             <View style={styles.cardTitleRow}>
@@ -366,8 +515,99 @@ export default function PinSettings() {
               )}
             </TouchableOpacity>
           </View>
+
+          <View style={styles.dangerCard}>
+            <View style={styles.dangerHeader}>
+              <AlertTriangle size={18} color="#B91C1C" />
+              <Text style={styles.dangerTitle}>حذف الحساب</Text>
+            </View>
+            <Text style={styles.dangerText}>
+              حذف الحساب يحذف جميع بياناتك (العملاء، الحركات، الإعدادات) ولا يمكن التراجع.
+            </Text>
+            <TouchableOpacity
+              style={styles.dangerButton}
+              onPress={handleDeleteAccountPress}
+              activeOpacity={0.85}
+            >
+              <Trash2 size={18} color="#FFFFFF" />
+              <Text style={styles.dangerButtonText}>حذف الحساب</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isDeleting && setShowDeleteModal(false)}
+        statusBarTranslucent
+      >
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableWithoutFeedback onPress={() => !isDeleting && setShowDeleteModal(false)}>
+            <View style={styles.modalBackdrop} />
+          </TouchableWithoutFeedback>
+
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalIconCircle}>
+              <AlertTriangle size={26} color="#B91C1C" />
+            </View>
+
+            <Text style={styles.modalTitle}>تأكيد حذف الحساب</Text>
+            <Text style={styles.modalSubtitle}>
+              أدخل كلمة المرور الحالية لتأكيد الحذف. هذه العملية نهائية.
+            </Text>
+
+            <View style={styles.inputWrap}>
+              <Lock size={18} color="#6B7280" />
+              <TextInput
+                style={styles.inputWithIcon}
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                placeholder="كلمة المرور"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                textAlign="right"
+                textContentType="password"
+                autoFocus
+                editable={!isDeleting}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.dangerButton, styles.modalDeleteBtn, isDeleting && styles.saveButtonDisabled]}
+              onPress={handleConfirmDelete}
+              disabled={isDeleting}
+              activeOpacity={0.85}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Trash2 size={18} color="#FFFFFF" />
+                  <Text style={styles.dangerButtonText}>حذف الحساب نهائياً</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => !isDeleting && setShowDeleteModal(false)}
+              disabled={isDeleting}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCancelText}>إلغاء</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -515,5 +755,152 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  linkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    gap: 12,
+  },
+  linkCardTextWrap: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  linkCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  linkCardSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  linkCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#CFFAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    marginTop: 4,
+  },
+  dangerHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  dangerTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#B91C1C',
+    writingDirection: 'rtl',
+  },
+  dangerText: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'right',
+    lineHeight: 20,
+    writingDirection: 'rtl',
+    marginBottom: 14,
+  },
+  dangerButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#DC2626',
+    paddingVertical: 13,
+    borderRadius: 12,
+  },
+  dangerButtonText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    writingDirection: 'rtl',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(17, 24, 39, 0.55)',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    marginBottom: 14,
+  },
+  modalIconCircle: {
+    alignSelf: 'center',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#111827',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+    marginBottom: 6,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+    lineHeight: 19,
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  modalDeleteBtn: {
+    marginTop: 12,
+  },
+  modalCancelBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  modalCancelText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '700',
   },
 });
