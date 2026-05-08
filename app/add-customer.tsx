@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingHorizontal: 16,
     paddingBottom: 10,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
   },
 
   typeButtonsRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 10,
     marginTop: 12,
   },
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     backgroundColor: '#F9FAFB',
     paddingHorizontal: 14,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
   },
 
   inlineLoading: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
@@ -815,7 +815,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     backgroundColor: '#F9FAFB',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
@@ -924,7 +924,7 @@ const styles = StyleSheet.create({
   },
 
   additionalHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -944,7 +944,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4F46E5',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 10,
     marginTop: 4,
   },

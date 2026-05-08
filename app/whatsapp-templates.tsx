@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   actionRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     marginTop: 14,
   },
   secondaryButton: {
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
   },
   previewButton: {
     borderColor: '#BFDBFE',
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
   },
   saveButtonDisabled: {
     opacity: 0.7,

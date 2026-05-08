@@ -1164,7 +1164,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   profileMetaRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 12,
@@ -1172,7 +1172,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   profileChip: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(255,255,255,0.18)',
@@ -1199,7 +1199,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF5F5',
   },
   collapsibleHeader: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
@@ -1223,20 +1223,20 @@ const styles = StyleSheet.create({
   },
   collapsibleTitleWrap: {
     flex: 1,
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
   },
   collapsibleTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: '#111827',
-    writingDirection: 'rtl',
+    textAlign: 'right',
   },
   collapsibleSubtitle: {
     fontSize: 12,
     fontWeight: '600',
     color: '#6B7280',
     marginTop: 2,
-    writingDirection: 'rtl',
+    textAlign: 'right',
   },
   collapsibleBody: {
     paddingHorizontal: 16,
@@ -1254,7 +1254,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   cardTitleRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 10,
@@ -1269,6 +1269,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     textAlign: 'right',
+    width: '100%',
+    alignSelf: 'stretch',
+    writingDirection: 'rtl',
     marginBottom: 6,
   },
   labelSpaced: {
@@ -1307,6 +1310,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     textAlign: 'right',
+    width: '100%',
+    alignSelf: 'stretch',
+    writingDirection: 'rtl',
     marginTop: 4,
   },
   lengthIndicator: {
@@ -1322,7 +1328,7 @@ const styles = StyleSheet.create({
     color: '#EF4444',
   },
   saveButton: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
@@ -1390,7 +1396,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   dangerHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 8,
@@ -1410,7 +1416,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   dangerButton: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
@@ -1505,7 +1511,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   settlementRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
@@ -1518,7 +1524,7 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   settlementRowLeft: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
@@ -1556,7 +1562,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   settlementWarn: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#FEF3C7',

@@ -1054,8 +1054,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   greetingTopRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
   },
   greetingIconCircle: {
@@ -1067,25 +1068,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   greetingTextWrap: {
-    flex: 1,
-    alignItems: 'flex-end',
+    flexShrink: 1,
+    alignItems: 'center',
   },
   greetingHello: {
     fontSize: 17,
     fontWeight: '900',
     color: '#FFFFFF',
-    writingDirection: 'rtl',
+    textAlign: 'center',
   },
   greetingDate: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 2,
     fontWeight: '600',
-    writingDirection: 'rtl',
+    textAlign: 'center',
   },
   greetingFooter: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
     marginTop: 14,
     paddingTop: 12,
@@ -1096,9 +1098,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.85)',
     fontWeight: '600',
-    flex: 1,
-    textAlign: 'right',
-    writingDirection: 'rtl',
+    textAlign: 'center',
   },
   greetingRefresh: {
     width: 28,
@@ -1142,12 +1142,12 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   commissionsRest: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
   commissionsChip: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     backgroundColor: C.greenSoft,
@@ -1183,7 +1183,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.border,
   },
   perfIconRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
@@ -1198,7 +1198,7 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   perfBreakdown: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 14,
@@ -1208,7 +1208,7 @@ const styles = StyleSheet.create({
     borderTopColor: C.border,
   },
   perfBreakdownItem: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
@@ -1244,16 +1244,16 @@ const styles = StyleSheet.create({
   kpiCardTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 8,
     marginBottom: 10,
   },
   kpiCardLabel: {
     fontSize: 12,
     color: C.muted,
     fontWeight: '700',
-    writingDirection: 'rtl',
-    flex: 1,
-    textAlign: 'right',
+    flexShrink: 1,
+    textAlign: 'center',
   },
   kpiCardIcon: {
     width: 30,
@@ -1265,16 +1265,14 @@ const styles = StyleSheet.create({
   kpiCardPrimary: {
     fontSize: 18,
     fontWeight: '900',
-    textAlign: 'right',
-    writingDirection: 'rtl',
+    textAlign: 'center',
     marginBottom: 4,
   },
   kpiCardSecondary: {
     fontSize: 11,
     color: C.muted,
     fontWeight: '600',
-    textAlign: 'right',
-    writingDirection: 'rtl',
+    textAlign: 'center',
   },
 
   sectionHeader: {
@@ -1312,7 +1310,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   emptyAction: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: C.purple,
@@ -1426,7 +1424,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   breakdownLine: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 4,

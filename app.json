@@ -1,33 +1,30 @@
 {
   "expo": {
-    "name": "أكِّد",
-    "slug": "akkedapp",
+    "name": "Akked",
+    "slug": "articodeapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
-    "scheme": "myapp",
+    "scheme": "akked",
     "userInterfaceStyle": "automatic",
+    "owner": "arti_codeg",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.altaraf.moneytransfer"
+      "bundleIdentifier": "com.articode.akked"
     },
     "android": {
-      "package": "com.altaraf.moneytransfer",
+      "package": "com.articode.akked",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ],
-      "userInterfaceStyle": "automatic"
+      "permissions": []
+    },
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
     },
     "web": {
       "bundler": "metro",
@@ -61,7 +58,6 @@
       "eas": {
         "projectId": "f6c89bb9-f1ac-4863-91f0-8d02da4f59af"
       }
-    },
-    "owner": "arti_codeg"
+    }
   }
 }

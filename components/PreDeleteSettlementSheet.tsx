@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   headerRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginBottom: 16,
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   balanceRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   warnBox: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#FEF3C7',
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   btn: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,

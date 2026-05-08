@@ -242,8 +242,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4F46E5',
+    borderStartWidth: 4,
+    borderStartColor: '#4F46E5',
   },
   avatar: {
     width: 56,

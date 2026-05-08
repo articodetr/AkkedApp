@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   content: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     paddingVertical: 4,
     paddingHorizontal: 2,
   },

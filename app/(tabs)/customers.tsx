@@ -393,7 +393,11 @@ export default function CustomersScreen() {
       >
         <View style={styles.customerInfo}>
           <View style={styles.customerHeaderRow}>
-            <Text style={styles.customerName} numberOfLines={1}>
+            <Text
+              style={styles.customerName}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {item.name}
             </Text>
             {isProfitLossAccount ? (
@@ -450,9 +454,32 @@ export default function CustomersScreen() {
 
         {isLinkedUser && !isProfitLossAccount ? (
           <View style={styles.linkedFooter} pointerEvents="none">
-            <View style={styles.linkedFooterLine} />
-            <Handshake size={13} color="#10B981" />
-            <View style={styles.linkedFooterLine} />
+            {pendingMovementsCount > 0 ? (
+              <View style={styles.linkedFooterPendingBadge}>
+                <Clock size={11} color="#D97706" />
+                <Text style={styles.linkedFooterPendingText}>
+                  {pendingMovementsCount > 99 ? '99+' : pendingMovementsCount}
+                </Text>
+              </View>
+            ) : null}
+            <View style={styles.linkedFooterLineRow}>
+              <View
+                style={[
+                  styles.linkedFooterLine,
+                  pendingMovementsCount > 0 && styles.linkedFooterLinePending,
+                ]}
+              />
+              <Handshake
+                size={18}
+                color={pendingMovementsCount > 0 ? '#D97706' : '#10B981'}
+              />
+              <View
+                style={[
+                  styles.linkedFooterLine,
+                  pendingMovementsCount > 0 && styles.linkedFooterLinePending,
+                ]}
+              />
+            </View>
           </View>
         ) : null}
       </TouchableOpacity>
@@ -545,7 +572,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   searchContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
@@ -568,7 +595,7 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   segmentBox: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     backgroundColor: '#F1F5F9',
     marginHorizontal: 16,
     marginTop: 4,
@@ -613,7 +640,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
@@ -631,15 +658,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFBEB',
   },
   linkedFooterCardPadding: {
-    paddingBottom: 22,
+    paddingBottom: 26,
+  },
+  linkedFooterCardPaddingWithPending: {
+    paddingBottom: 50,
   },
   linkedFooter: {
     position: 'absolute',
     left: 16,
     right: 16,
     bottom: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'column',
     alignItems: 'center',
+    gap: 4,
+  },
+  linkedFooterLineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
     gap: 8,
   },
   linkedFooterLine: {
@@ -647,37 +683,55 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#A7F3D0',
   },
+  linkedFooterLinePending: {
+    backgroundColor: '#FED7AA',
+  },
+  linkedFooterPendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  linkedFooterPendingText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#92400E',
+    writingDirection: 'rtl',
+  },
   customerInfo: {
     flex: 1,
     minWidth: 0,
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   customerHeaderRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
     gap: 6,
+    maxWidth: '100%',
   },
   customerName: {
-    flex: 1,
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: '800',
     color: '#111827',
     textAlign: 'right',
-    writingDirection: 'rtl',
   },
   customerMetaText: {
     marginTop: 6,
     fontSize: 12,
     color: '#64748B',
     textAlign: 'right',
-    writingDirection: 'rtl',
     lineHeight: 18,
   },
   balanceContainer: {
     width: 110,
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
     justifyContent: 'center',
     gap: 2,
   },

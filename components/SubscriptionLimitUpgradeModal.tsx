@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 14,
     backgroundColor: '#EEF2FF',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 10,
   },
   primaryButtonText: {

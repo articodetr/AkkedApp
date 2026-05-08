@@ -826,7 +826,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   partyRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',

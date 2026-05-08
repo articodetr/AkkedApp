@@ -171,17 +171,21 @@ export default function NotificationCard({
         </View>
 
         {hasUsefulText(noteText) && (
-          <Text style={styles.noteLine} numberOfLines={2}>
-            <Text style={styles.noteLabel}>ملاحظة: </Text>
-            {noteText}
-          </Text>
+          <View style={styles.noteWrap}>
+            <Text style={styles.noteLine} numberOfLines={2}>
+              <Text style={styles.noteLabel}>ملاحظة: </Text>
+              {noteText}
+            </Text>
+          </View>
         )}
 
         {hasUsefulText(rejectReasonText) && (
-          <Text style={styles.reasonLine} numberOfLines={2}>
-            <Text style={styles.reasonLabel}>سبب الرفض: </Text>
-            {rejectReasonText}
-          </Text>
+          <View style={styles.noteWrap}>
+            <Text style={styles.reasonLine} numberOfLines={2}>
+              <Text style={styles.reasonLabel}>سبب الرفض: </Text>
+              {rejectReasonText}
+            </Text>
+          </View>
         )}
 
         <View style={styles.cardFooter}>
@@ -306,19 +310,20 @@ const styles = StyleSheet.create({
     borderWidth: 1.4,
   },
   cardTopRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
   },
   titleWrap: {
     flex: 1,
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   titleRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
     gap: 6,
+    maxWidth: '100%',
   },
   unreadDot: {
     width: 7,
@@ -334,12 +339,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardTitle: {
-    flex: 1,
+    flexShrink: 1,
     color: '#0F172A',
     fontSize: 15,
     fontWeight: '900',
     textAlign: 'right',
-    writingDirection: 'rtl',
     lineHeight: 21,
   },
   cardSubtitle: {
@@ -347,7 +351,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'right',
-    writingDirection: 'rtl',
     marginTop: 3,
     fontWeight: '700',
   },
@@ -359,8 +362,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noteLine: {
+  noteWrap: {
     marginTop: 7,
+    width: '100%',
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
+  },
+  noteLine: {
     color: '#334155',
     fontSize: 12.5,
     fontWeight: '600',
@@ -373,7 +381,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   reasonLine: {
-    marginTop: 6,
     color: '#991B1B',
     fontSize: 12.5,
     fontWeight: '700',
@@ -387,7 +394,7 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     marginTop: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
@@ -401,11 +408,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     textAlign: 'right',
-    writingDirection: 'rtl',
   },
   dateWrap: {
     flex: 1,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: 4,
@@ -415,11 +421,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'right',
-    writingDirection: 'rtl',
   },
   quickActionsRow: {
     marginTop: 10,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   acceptButton: {
@@ -430,7 +435,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 6,
   },
   rejectButton: {
@@ -441,7 +446,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 6,
   },
   acceptButtonText: {
@@ -505,7 +510,7 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     marginTop: 14,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 10,
   },
   modalCancelButton: {

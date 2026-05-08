@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   summaryRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginBottom: 10,
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statusRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   },
   actions: { gap: 10 },
   btn: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,

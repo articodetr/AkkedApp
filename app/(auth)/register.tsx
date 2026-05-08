@@ -199,7 +199,7 @@ export default function RegisterScreen() {
                   <UserPlus size={20} color="#6B7280" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="ادخل الاسم كامل بالانجليزي"
+                    placeholder="أدخل الاسم الكامل (حروف لاتينية)"
                     placeholderTextColor="#9CA3AF"
                     value={fullName}
                     onChangeText={setFullName}
@@ -214,7 +214,7 @@ export default function RegisterScreen() {
                   <User size={20} color="#6B7280" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="ادخل اسم المستخدم بالانجليزي (3 أحرف على الأقل)"
+                    placeholder="أدخل اسم المستخدم (حروف لاتينية، 3 أحرف على الأقل)"
                     placeholderTextColor="#9CA3AF"
                     value={userName}
                     onChangeText={(text) => {

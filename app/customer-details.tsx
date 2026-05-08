@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, ActivityIndicator, Modal, TextInput, I18nManager, } from 'react-native';
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, ActivityIndicator, Modal, TextInput, } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -1912,7 +1912,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   summaryCardHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
@@ -2173,7 +2173,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   movementColumnsHeader: {
-    flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
@@ -2209,7 +2209,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   movementRow: {
-    flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
@@ -2219,13 +2219,13 @@ const styles = StyleSheet.create({
   },
   movementRowPending: {
     backgroundColor: '#FFFBEB',
-    borderLeftWidth: 3,
-    borderLeftColor: '#F59E0B',
+    borderStartWidth: 3,
+    borderStartColor: '#F59E0B',
   },
   movementRowRejected: {
     backgroundColor: '#FEF2F2',
-    borderLeftWidth: 3,
-    borderLeftColor: '#EF4444',
+    borderStartWidth: 3,
+    borderStartColor: '#EF4444',
   },
   movementDate: {
     alignItems: 'center',
@@ -2351,7 +2351,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 24,
-    left: 24,
+    right: 24,
     width: 56,
     height: 56,
     borderRadius: 28,

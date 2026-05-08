@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   topHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   tableHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     backgroundColor: '#F8FAFC',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   tableRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 12,
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
   },
   customerCell: {
     flex: 1.6,
-    alignItems: 'flex-end',
+    alignItems: 'center',
     paddingHorizontal: 4,
   },
   currencyCell: {
@@ -699,20 +699,20 @@ const styles = StyleSheet.create({
   },
   amountCell: {
     flex: 1.2,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     paddingHorizontal: 4,
   },
   customerName: {
     fontSize: 13,
     fontWeight: '800',
     color: '#1E1B4B',
-    textAlign: 'right',
+    textAlign: 'center',
   },
   accountNumber: {
     fontSize: 11,
     color: '#7C84A3',
     marginTop: 3,
-    textAlign: 'right',
+    textAlign: 'center',
   },
   currencyCode: {
     fontSize: 12,
@@ -738,7 +738,7 @@ const styles = StyleSheet.create({
   amountText: {
     fontSize: 13,
     fontWeight: '900',
-    textAlign: 'left',
+    textAlign: 'center',
   },
   emptyBox: {
     padding: 24,

@@ -573,6 +573,15 @@ export default function CustomerNotificationsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <View style={styles.headerIcon}>
+          <Bell size={21} color="#B45309" />
+        </View>
+
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.headerTitle}>إشعارات العميل</Text>
+          <Text style={styles.headerSubtitle}>{customerName}</Text>
+        </View>
+
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
@@ -580,15 +589,6 @@ export default function CustomerNotificationsScreen() {
         >
           <ArrowRight size={21} color="#0F172A" />
         </TouchableOpacity>
-
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>إشعارات العميل</Text>
-          <Text style={styles.headerSubtitle}>{customerName}</Text>
-        </View>
-
-        <View style={styles.headerIcon}>
-          <Bell size={21} color="#B45309" />
-        </View>
       </View>
 
       <View style={styles.searchBox}>
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 12,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     borderBottomWidth: 1,
@@ -739,20 +739,20 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: {
     flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 19,
     color: '#0F172A',
     fontWeight: '900',
     textAlign: 'right',
-    writingDirection: 'rtl',
   },
   headerSubtitle: {
     marginTop: 3,
     fontSize: 13,
     color: '#64748B',
     textAlign: 'right',
-    writingDirection: 'rtl',
     fontWeight: '800',
   },
   searchBox: {
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     minHeight: 44,
     paddingHorizontal: 12,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
@@ -786,7 +786,7 @@ const styles = StyleSheet.create({
   },
   filtersRow: {
     minHeight: 48,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: 8,
@@ -803,7 +803,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 6,
   },
   filterChipActive: {

@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   contentContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
     paddingLeft: 4,
   },

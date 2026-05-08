@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardTitleRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   inputIconWrap: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   extraLinkRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 16,
     backgroundColor: '#4F46E5',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#4F46E5',
