@@ -117,15 +117,16 @@ export default function SettingsScreen() {
                 onPress={item.onPress}
                 activeOpacity={0.85}
               >
-                <ChevronLeft size={20} color="#9CA3AF" />
-                <View style={styles.menuItemContent}>
-                  <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
-                    <IconComponent size={22} color={item.color} />
-                  </View>
-
+                <View style={styles.menuItemLeft}>
+                  <ChevronLeft size={20} color="#9CA3AF" />
+                </View>
+                <View style={styles.menuItemRight}>
                   <View style={styles.menuTextContainer}>
                     <Text style={styles.menuTitle}>{item.title}</Text>
                     <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+                  </View>
+                  <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
+                    <IconComponent size={22} color={item.color} />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -210,7 +211,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   menuItem: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
@@ -220,9 +221,13 @@ const styles = StyleSheet.create({
   lastMenuItem: {
     borderBottomWidth: 0,
   },
-  menuItemContent: {
-    flexDirection: 'row',
+  menuItemLeft: {
+    paddingLeft: 6,
+  },
+  menuItemRight: {
+    flexDirection: 'row-reverse',
     alignItems: 'center',
+    gap: 12,
     flex: 1,
   },
   menuIcon: {
@@ -231,10 +236,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
   },
   menuTextContainer: {
     flex: 1,
+    alignItems: 'flex-start',
   },
   menuTitle: {
     fontSize: 16,
@@ -249,7 +254,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   logoutButton: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FEE2E2',
@@ -262,7 +267,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#EF4444',
-    marginLeft: 8,
+    marginRight: 8,
   },
   footer: {
     padding: 24,

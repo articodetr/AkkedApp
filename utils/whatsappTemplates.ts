@@ -122,8 +122,10 @@ export function replaceTemplateVariables(
 export function formatHumanNumber(value: number): string {
   if (!Number.isFinite(value)) return '0';
 
-  const fixed = Number(value).toFixed(2);
-  return fixed.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+  return Number(value).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 20,
+  });
 }
 
 export function getArabicCurrencyName(currency: string): string {

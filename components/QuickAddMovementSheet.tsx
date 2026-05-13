@@ -22,6 +22,7 @@ import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { supabase } from '@/lib/supabase';
 import { Currency, CURRENCIES } from '@/types/database';
 import { isPendingMovement } from '@/utils/movementApproval';
+import { formatCompactNumber, sanitizeAmountInput, isValidAmount } from '@/utils/arabicFormat';
 
 interface QuickAddMovementSheetProps {
   visible: boolean;
@@ -129,11 +130,11 @@ export default function QuickAddMovementSheet({
     const absBalance = Math.abs(balance);
 
     if (balance > 0) {
-      return `له ${absBalance.toFixed(2)} ${getCurrencySymbol(currency)}`;
+      return `له ${formatCompactNumber(absBalance)} ${getCurrencySymbol(currency)}`;
     }
 
     if (balance < 0) {
-      return `عليه ${absBalance.toFixed(2)} ${getCurrencySymbol(currency)}`;
+      return `عليه ${formatCompactNumber(absBalance)} ${getCurrencySymbol(currency)}`;
     }
 
     return 'متساوي';
@@ -205,15 +206,21 @@ export default function QuickAddMovementSheet({
 
   const handleSave = async () => {
     const trimmedNotes = notes.trim();
-    const parsedAmount = parseFloat(amount);
 
-    if (!movementType || !amount || parsedAmount <= 0) {
+    if (!movementType || !amount) {
       Alert.alert('خطأ', 'الرجاء إدخال نوع الحركة والمبلغ');
       return;
     }
 
-    if (parsedAmount < 0) {
-      Alert.alert('خطأ', 'المبلغ لا يمكن أن يكون سالباً');
+    if (!isValidAmount(amount)) {
+      Alert.alert('خطأ', 'المبلغ غير صالح');
+      return;
+    }
+
+    const parsedAmount = Number(amount);
+
+    if (parsedAmount <= 0) {
+      Alert.alert('خطأ', 'المبلغ يجب أن يكون أكبر من صفر');
       return;
     }
 
@@ -382,10 +389,10 @@ export default function QuickAddMovementSheet({
                     <TextInput
                       style={styles.amountInput}
                       value={amount}
-                      onChangeText={setAmount}
+                      onChangeText={(text) => setAmount(sanitizeAmountInput(text))}
                       placeholder="0.00"
                       placeholderTextColor="#9CA3AF"
-                      keyboardType="numeric"
+                      keyboardType="decimal-pad"
                       textAlign="center"
                     />
                   </View>

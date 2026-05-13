@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { sortCustomersByDisplayPriority } from '@/utils/customerDisplay';
 import { buildOwnedCustomerFilter } from '@/services/userScopeService';
+import { sanitizeAmountInput, isValidAmount } from '@/utils/arabicFormat';
 
 export default function NewTransactionScreen() {
   const router = useRouter();
@@ -107,6 +108,16 @@ export default function NewTransactionScreen() {
       !formData.exchange_rate
     ) {
       Alert.alert('خطأ', 'الرجاء إدخال جميع البيانات المطلوبة');
+      return;
+    }
+
+    if (!isValidAmount(formData.amount_sent)) {
+      Alert.alert('خطأ', 'المبلغ المرسل غير صالح');
+      return;
+    }
+
+    if (!isValidAmount(formData.amount_received)) {
+      Alert.alert('خطأ', 'المبلغ المستلم غير صالح');
       return;
     }
 
@@ -230,7 +241,9 @@ export default function NewTransactionScreen() {
             <TextInput
               style={styles.amountInput}
               value={formData.amount_sent}
-              onChangeText={(text) => setFormData({ ...formData, amount_sent: text })}
+              onChangeText={(text) =>
+                setFormData({ ...formData, amount_sent: sanitizeAmountInput(text) })
+              }
               placeholder="0.00"
               placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad"
@@ -273,7 +286,9 @@ export default function NewTransactionScreen() {
             <TextInput
               style={styles.amountInput}
               value={formData.amount_received}
-              onChangeText={(text) => setFormData({ ...formData, amount_received: text })}
+              onChangeText={(text) =>
+                setFormData({ ...formData, amount_received: sanitizeAmountInput(text) })
+              }
               placeholder="0.00"
               placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad"

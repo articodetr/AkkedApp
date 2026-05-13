@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase';
 import { AccountMovement, Currency, CURRENCIES } from '@/types/database';
 import { isMovementCreator, isPendingMovement } from '@/utils/movementApproval';
 import { syncEditedMovementNotifications } from '@/services/movementNotificationSyncService';
+import { formatCompactNumber, sanitizeAmountInput } from '@/utils/arabicFormat';
 
 interface EditMovementSheetProps {
   visible: boolean;
@@ -121,10 +122,10 @@ export default function EditMovementSheet({
   const formatBalance = (balance: number) => {
     const absBalance = Math.abs(balance);
     if (balance > 0) {
-      return `له ${absBalance.toFixed(2)} ${getCurrencySymbol(currency)}`;
+      return `له ${formatCompactNumber(absBalance)} ${getCurrencySymbol(currency)}`;
     }
     if (balance < 0) {
-      return `عليه ${absBalance.toFixed(2)} ${getCurrencySymbol(currency)}`;
+      return `عليه ${formatCompactNumber(absBalance)} ${getCurrencySymbol(currency)}`;
     }
     return 'متساوي';
   };
@@ -252,7 +253,7 @@ export default function EditMovementSheet({
                       <TextInput
                         style={styles.amountInput}
                         value={amount}
-                        onChangeText={setAmount}
+                        onChangeText={(text) => setAmount(sanitizeAmountInput(text))}
                         keyboardType="decimal-pad"
                         placeholder="0.00"
                         placeholderTextColor="#9CA3AF"

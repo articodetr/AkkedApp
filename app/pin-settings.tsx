@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { CURRENCIES } from '@/types/database';
+import { formatCompactNumber } from '@/utils/arabicFormat';
 import { LetterheadEditor } from '@/components/LetterheadEditor';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
@@ -482,6 +483,7 @@ export default function PinSettings() {
         style={[styles.profileBanner, { paddingTop: insets.top + 8 }]}
       >
         <View style={styles.bannerTopRow}>
+          <Text style={styles.bannerTopTitle}>الحساب</Text>
           <TouchableOpacity
             style={styles.backButtonLight}
             onPress={() => router.back()}
@@ -489,8 +491,6 @@ export default function PinSettings() {
           >
             <ArrowRight size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.bannerTopTitle}>الحساب</Text>
-          <View style={styles.backButtonPlaceholder} />
         </View>
 
         <View style={styles.profileBlock}>
@@ -990,7 +990,7 @@ export default function PinSettings() {
                         </Text>
                       </View>
                       <Text style={styles.settlementAmount}>
-                        {Math.round(Math.abs(balanceValue))}{' '}
+                        {formatCompactNumber(Math.abs(balanceValue))}{' '}
                         <Text style={styles.settlementCurrency}>
                           {getCurrencySymbol(item.currency)}
                         </Text>
@@ -1118,15 +1118,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backButtonPlaceholder: {
-    width: 40,
-    height: 40,
-  },
   bannerTopTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     color: '#FFFFFF',
     writingDirection: 'rtl',
+    textAlign: 'right',
   },
   profileBlock: {
     alignItems: 'center',
@@ -1296,12 +1293,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#111827',
     paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   inputWithIcon: {
     flex: 1,
     fontSize: 15,
     color: '#111827',
     paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   inputDisabled: {
     color: '#6B7280',

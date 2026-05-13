@@ -21,8 +21,57 @@ export function formatSmartNumber(value: number | string | null | undefined) {
 
   return numberValue.toLocaleString('en-US', {
     minimumFractionDigits: 0,
+    maximumFractionDigits: 20,
+  });
+}
+
+export function formatCompactNumber(value: number | string | null | undefined) {
+  const numberValue = Number(value ?? 0);
+
+  if (!Number.isFinite(numberValue)) {
+    return '0';
+  }
+
+  return numberValue.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
+}
+
+const ARABIC_TO_LATIN_DIGITS: Record<string, string> = {
+  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+  '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+  '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+  '٫': '.', '،': '',
+};
+
+export function sanitizeAmountInput(text: string): string {
+  if (!text) return '';
+
+  let normalized = '';
+  for (const ch of text) {
+    normalized += ARABIC_TO_LATIN_DIGITS[ch] ?? ch;
+  }
+
+  normalized = normalized.replace(/[^0-9.]/g, '');
+
+  const firstDot = normalized.indexOf('.');
+  if (firstDot !== -1) {
+    const integerPart = normalized.slice(0, firstDot);
+    const decimalPart = normalized.slice(firstDot + 1).replace(/\./g, '');
+    normalized = `${integerPart}.${decimalPart.slice(0, 2)}`;
+  }
+
+  return normalized;
+}
+
+export function isValidAmount(value: string | number | null | undefined): boolean {
+  if (value === null || value === undefined) return false;
+  const trimmed = String(value).trim();
+  if (trimmed === '' || trimmed === '.') return false;
+  const num = Number(trimmed);
+  return Number.isFinite(num) && num >= 0;
 }
 
 export function getCurrencySymbol(currency?: string | null) {

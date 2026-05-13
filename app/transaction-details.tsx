@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase';
 import { Transaction, Customer } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchAccessibleCustomerById } from '@/services/userScopeService';
+import { formatSmartNumber } from '@/utils/arabicFormat';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
@@ -101,7 +102,7 @@ export default function TransactionDetailsScreen() {
     if (!customer?.phone || !transaction || !settings) return;
 
     const cleanPhone = customer.phone.replace(/[^0-9]/g, '');
-    const message = `مرحباً ${customer.name}،\n\nسند الحوالة رقم: ${transaction.transaction_number}\n\nالمبلغ المرسل: ${Number(transaction.amount_sent).toFixed(2)} ${transaction.currency_sent}\nالمبلغ المستلم: ${Number(transaction.amount_received).toFixed(2)} ${transaction.currency_received}\n\nشكراً لثقتكم بنا\n${settings.shop_name}`;
+    const message = `مرحباً ${customer.name}،\n\nسند الحوالة رقم: ${transaction.transaction_number}\n\nالمبلغ المرسل: ${formatSmartNumber(transaction.amount_sent)} ${transaction.currency_sent}\nالمبلغ المستلم: ${formatSmartNumber(transaction.amount_received)} ${transaction.currency_received}\n\nشكراً لثقتكم بنا\n${settings.shop_name}`;
 
     Linking.openURL(`whatsapp://send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`);
   };
@@ -178,7 +179,7 @@ export default function TransactionDetailsScreen() {
             <View style={styles.amountCard}>
               <Text style={styles.amountLabel}>المبلغ المرسل</Text>
               <Text style={[styles.amountValue, { color: '#EF4444' }]}>
-                {Number(transaction.amount_sent).toFixed(2)} {transaction.currency_sent}
+                {formatSmartNumber(transaction.amount_sent)} {transaction.currency_sent}
               </Text>
             </View>
 
@@ -192,7 +193,7 @@ export default function TransactionDetailsScreen() {
             <View style={styles.amountCard}>
               <Text style={styles.amountLabel}>المبلغ المستلم</Text>
               <Text style={[styles.amountValue, { color: '#10B981' }]}>
-                {Number(transaction.amount_received).toFixed(2)} {transaction.currency_received}
+                {formatSmartNumber(transaction.amount_received)} {transaction.currency_received}
               </Text>
             </View>
           </View>

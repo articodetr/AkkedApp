@@ -23,6 +23,7 @@ import {
   isRejectedMovement,
   normalizeMovementApprovalStatus,
 } from '@/utils/movementApproval';
+import { formatSmartNumber } from '@/utils/arabicFormat';
 
 interface MovementWithCustomer extends AccountMovement {
   customer_name: string;
@@ -203,7 +204,7 @@ const renderMovement = ({ item }: { item: MovementWithCustomer }) => (
             {item.transfer_direction
               ? ''
               : item.movement_type === 'incoming' ? '+' : '-'}
-            {Number(item.amount).toFixed(2)} {item.currency}
+            {formatSmartNumber(item.amount)} {item.currency}
           </Text>
         </View>
         <Text style={styles.movementType}>

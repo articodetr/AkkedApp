@@ -211,7 +211,7 @@ const CURRENCY_ARABIC_NAMES: Record<string, string> = {
 function formatSmartNumber(amount: number) {
   return Number(amount).toLocaleString('en-US', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 20,
   });
 }
 
