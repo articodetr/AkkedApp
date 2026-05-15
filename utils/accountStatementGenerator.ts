@@ -8,6 +8,19 @@ interface MovementWithBalance extends AccountMovement {
   runningBalance: number;
 }
 
+interface OpeningRow {
+  isOpening: true;
+  currency: string;
+  openingBalance: number;
+  runningBalance: number;
+}
+
+type StatementRow = MovementWithBalance | OpeningRow;
+
+function isOpeningRow(row: StatementRow): row is OpeningRow {
+  return (row as OpeningRow).isOpening === true;
+}
+
 function getCurrencySymbol(code: string): string {
   const currency = CURRENCIES.find((c) => c.code === code);
   return currency?.symbol || code;
@@ -18,11 +31,19 @@ function getCurrencyName(code: string): string {
   return currency?.name || code;
 }
 
+function formatAmount(value: number): string {
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 20,
+  });
+}
+
 export function generateAccountStatementHTML(
   customerName: string,
   movements: AccountMovement[],
   logoDataUrl?: string,
-  isProfitLossAccount?: boolean
+  isProfitLossAccount?: boolean,
+  previousMovements?: AccountMovement[]
 ): string {
   const allMovements = movements.filter((movement) => isPostedMovement(movement));
 
@@ -35,10 +56,24 @@ export function generateAccountStatementHTML(
     })
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
+  const allPreviousMovements = (previousMovements || []).filter((movement) =>
+    isPostedMovement(movement),
+  );
+
+  const filteredPreviousMovements = allPreviousMovements.filter((m) => {
+    if (isProfitLossAccount) {
+      return true;
+    }
+    return !(m as any).is_commission_movement;
+  });
+
   // Helper function to get combined amount including related commission
-  const getCombinedAmount = (movement: AccountMovement): number => {
+  const getCombinedAmountFromPool = (
+    movement: AccountMovement,
+    pool: AccountMovement[],
+  ): number => {
     const baseAmount = Number(movement.amount);
-    const relatedCommissions = allMovements.filter(
+    const relatedCommissions = pool.filter(
       (m) =>
         (m as any).is_commission_movement === true &&
         (m as any).related_commission_movement_id === movement.id &&
@@ -53,6 +88,12 @@ export function generateAccountStatementHTML(
     return baseAmount + commissionTotal;
   };
 
+  const getCombinedAmount = (movement: AccountMovement): number =>
+    getCombinedAmountFromPool(movement, allMovements);
+
+  const getPreviousCombinedAmount = (movement: AccountMovement): number =>
+    getCombinedAmountFromPool(movement, allPreviousMovements);
+
   // Group movements by currency
   const groupedByCurrency = filteredMovements.reduce((acc, movement) => {
     if (!acc[movement.currency]) {
@@ -63,22 +104,37 @@ export function generateAccountStatementHTML(
     return acc;
   }, {} as Record<string, AccountMovement[]>);
 
+  // Compute opening balance per currency from previous movements (before the selected range)
+  const openingBalanceByCurrency: Record<string, number> = {};
+  filteredPreviousMovements.forEach((movement) => {
+    const combinedAmount = getPreviousCombinedAmount(movement);
+    const delta = movement.movement_type === 'incoming' ? combinedAmount : -combinedAmount;
+    openingBalanceByCurrency[movement.currency] =
+      (openingBalanceByCurrency[movement.currency] || 0) + delta;
+  });
+
+  // Build the union of currencies appearing in the period and currencies with non-zero opening balance
+  const currencyKeys = new Set<string>(Object.keys(groupedByCurrency));
+  Object.entries(openingBalanceByCurrency).forEach(([curr, bal]) => {
+    if (bal !== 0) currencyKeys.add(curr);
+  });
+
   const reportDate = format(new Date(), 'EEEE، dd MMMM yyyy', { locale: ar });
 
-  // Helper function to split movements into pages
-  const splitIntoPages = (movements: MovementWithBalance[], firstPageRows: number, subsequentPageRows: number) => {
-    if (movements.length === 0) return [];
+  // Helper function to split rows into pages
+  const splitIntoPages = (rows: StatementRow[], firstPageRows: number, subsequentPageRows: number) => {
+    if (rows.length === 0) return [];
 
-    const pages: MovementWithBalance[][] = [];
+    const pages: StatementRow[][] = [];
     let currentIndex = 0;
 
     // First page
-    pages.push(movements.slice(0, Math.min(firstPageRows, movements.length)));
+    pages.push(rows.slice(0, Math.min(firstPageRows, rows.length)));
     currentIndex = firstPageRows;
 
     // Subsequent pages
-    while (currentIndex < movements.length) {
-      pages.push(movements.slice(currentIndex, currentIndex + subsequentPageRows));
+    while (currentIndex < rows.length) {
+      pages.push(rows.slice(currentIndex, currentIndex + subsequentPageRows));
       currentIndex += subsequentPageRows;
     }
 
@@ -86,9 +142,21 @@ export function generateAccountStatementHTML(
   };
 
   // Generate sections for each currency
-  const currencySections = Object.entries(groupedByCurrency).map(([curr, currMovements]) => {
-    const movementsWithBalance: MovementWithBalance[] = [];
-    let runningBalance = 0;
+  const currencySections = Array.from(currencyKeys).map((curr) => {
+    const currMovements = groupedByCurrency[curr] || [];
+    const openingBalance = openingBalanceByCurrency[curr] || 0;
+
+    const rows: StatementRow[] = [];
+    let runningBalance = openingBalance;
+
+    if (openingBalance !== 0) {
+      rows.push({
+        isOpening: true,
+        currency: curr,
+        openingBalance,
+        runningBalance: openingBalance,
+      });
+    }
 
     currMovements.forEach((movement) => {
       const combinedAmount = getCombinedAmount(movement);
@@ -99,7 +167,7 @@ export function generateAccountStatementHTML(
         runningBalance -= combinedAmount;
       }
 
-      movementsWithBalance.push({
+      rows.push({
         ...movement,
         runningBalance,
       });
@@ -113,32 +181,52 @@ export function generateAccountStatementHTML(
       .filter(m => m.movement_type === 'incoming')
       .reduce((sum, m) => sum + getCombinedAmount(m), 0);
 
-    const finalBalance = totalIncoming - totalOutgoing;
+    const finalBalance = openingBalance + totalIncoming - totalOutgoing;
     const currencyName = getCurrencyName(curr);
 
-    // Split movements into pages: 9 rows for first page, 13 rows for subsequent pages
-    const pages = splitIntoPages(movementsWithBalance, 9, 13);
+    // Split rows into pages: 9 rows for first page, 13 rows for subsequent pages
+    const pages = splitIntoPages(rows, 9, 13);
 
     // Generate HTML for each page
-    const pageHTMLs = pages.map((pageMovements, pageIndex) => {
+    const pageHTMLs = pages.map((pageRows, pageIndex) => {
       const isFirstPage = pageIndex === 0;
       const isLastPage = pageIndex === pages.length - 1;
 
-      const movementRows = pageMovements
-        .map((movement) => {
-          const balanceDisplay = movement.runningBalance > 0
-            ? `${Math.round(movement.runningBalance).toLocaleString('en-US')} ${currencyName} (له)`
-            : movement.runningBalance < 0
-            ? `${Math.round(Math.abs(movement.runningBalance)).toLocaleString('en-US')} ${currencyName} (عليه)`
+      const movementRows = pageRows
+        .map((row) => {
+          const balanceDisplay = row.runningBalance > 0
+            ? `${formatAmount(row.runningBalance)} ${currencyName} (له)`
+            : row.runningBalance < 0
+            ? `${formatAmount(Math.abs(row.runningBalance))} ${currencyName} (عليه)`
             : '-';
 
+          if (isOpeningRow(row)) {
+            const incomingDisplay = row.openingBalance > 0
+              ? formatAmount(row.openingBalance)
+              : '-';
+            const outgoingDisplay = row.openingBalance < 0
+              ? formatAmount(Math.abs(row.openingBalance))
+              : '-';
+
+            return `
+            <tr class="opening-row">
+              <td class="cell text-center">-</td>
+              <td class="cell" style="text-align: right; padding-right: 12px;"><strong>ملخص السابقات</strong></td>
+              <td class="cell text-center"><strong>${incomingDisplay}</strong></td>
+              <td class="cell text-center"><strong>${outgoingDisplay}</strong></td>
+              <td class="cell text-center"><strong>${balanceDisplay}</strong></td>
+            </tr>
+            `;
+          }
+
+          const movement = row;
           const dateStr = format(new Date(movement.created_at), 'dd/MM/yyyy');
           const combinedAmount = getCombinedAmount(movement);
           const incomingAmount = movement.movement_type === 'incoming'
-            ? Math.round(combinedAmount).toLocaleString('en-US')
+            ? formatAmount(combinedAmount)
             : '-';
           const outgoingAmount = movement.movement_type === 'outgoing'
-            ? Math.round(combinedAmount).toLocaleString('en-US')
+            ? formatAmount(combinedAmount)
             : '-';
 
           return `
@@ -154,13 +242,13 @@ export function generateAccountStatementHTML(
         .join('');
 
       const finalBalanceDisplay = finalBalance > 0
-        ? `${Math.round(finalBalance).toLocaleString('en-US')} ${currencyName} (له)`
+        ? `${formatAmount(finalBalance)} ${currencyName} (له)`
         : finalBalance < 0
-        ? `${Math.round(Math.abs(finalBalance)).toLocaleString('en-US')} ${currencyName} (عليه)`
+        ? `${formatAmount(Math.abs(finalBalance))} ${currencyName} (عليه)`
         : '-';
 
-      const totalIncomingStr = totalIncoming > 0 ? Math.round(totalIncoming).toLocaleString('en-US') : '-';
-      const totalOutgoingStr = totalOutgoing > 0 ? Math.round(totalOutgoing).toLocaleString('en-US') : '-';
+      const totalIncomingStr = totalIncoming > 0 ? formatAmount(totalIncoming) : '-';
+      const totalOutgoingStr = totalOutgoing > 0 ? formatAmount(totalOutgoing) : '-';
 
       // Add summary rows only on the last page
       const summaryRows = isLastPage ? `
@@ -324,6 +412,12 @@ export function generateAccountStatementHTML(
       min-height: 30px;
     }
 
+    .opening-row {
+      background-color: #fef3c7;
+      font-weight: bold;
+      font-size: 13px;
+    }
+
     .total-row {
       background-color: #f3f4f6;
       font-weight: bold;
@@ -383,6 +477,11 @@ export function generateAccountStatementHTML(
 
       th {
         background-color: #e5e7eb !important;
+        -webkit-print-color-adjust: exact !important;
+      }
+
+      .opening-row {
+        background-color: #fef3c7 !important;
         -webkit-print-color-adjust: exact !important;
       }
 

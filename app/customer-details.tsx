@@ -16,6 +16,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { generateAccountStatementHTML } from '@/utils/accountStatementGenerator';
+import { formatSmartNumber, formatCompactNumber } from '@/utils/arabicFormat';
 import { getLogoBase64 } from '@/utils/logoHelper';
 import QuickAddMovementSheet from '@/components/QuickAddMovementSheet';
 import EditMovementSheet from '@/components/EditMovementSheet';
@@ -260,7 +261,7 @@ function formatBalanceAfterLabel(
   label: string,
 ): string {
   const symbol = getCurrencySymbol(currency);
-  const amount = Math.round(Math.abs(balance));
+  const amount = formatCompactNumber(Math.abs(balance));
 
   if (balance > 0) return `${label}: ${amount} ${symbol} له`;
   if (balance < 0) return `${label}: ${amount} ${symbol} عليه`;
@@ -613,12 +614,15 @@ export default function CustomerDetailsScreen() {
     setShowDateRangeModal(true);
   };
 
-  const executePrint = async (movementsToPrint: AccountMovement[]) => {
+  const executePrint = async (
+    movementsToPrint: AccountMovement[],
+    previousMovements: AccountMovement[] = [],
+  ) => {
     if (!customer) {
       return;
     }
 
-    if (movementsToPrint.length === 0) {
+    if (movementsToPrint.length === 0 && previousMovements.length === 0) {
       Alert.alert('تنبيه', 'لا توجد حركات في الفترة المحددة');
       return;
     }
@@ -652,6 +656,7 @@ export default function CustomerDetailsScreen() {
         movementsToPrint,
         logoDataUrl,
         customer.is_profit_loss_account,
+        previousMovements,
       );
 
       console.log('[CustomerDetails] Creating PDF file...');
@@ -682,19 +687,26 @@ export default function CustomerDetailsScreen() {
     setEndDate(selectedEndDate);
     setShowDateRangeModal(false);
 
-    const filtered = movements.filter((movement) => {
+    const rangeStart = startOfDay(selectedStartDate);
+    const rangeEnd = endOfDay(selectedEndDate);
+
+    const filtered: AccountMovement[] = [];
+    const previous: AccountMovement[] = [];
+
+    movements.forEach((movement) => {
       if (!shouldIncludeMovementInBalance(movement)) {
-        return false;
+        return;
       }
 
       const movementDate = new Date(movement.created_at);
-      return (
-        movementDate >= startOfDay(selectedStartDate) &&
-        movementDate <= endOfDay(selectedEndDate)
-      );
+      if (movementDate < rangeStart) {
+        previous.push(movement);
+      } else if (movementDate <= rangeEnd) {
+        filtered.push(movement);
+      }
     });
 
-    executePrint(filtered);
+    executePrint(filtered, previous);
   };
 
   const handlePrintAll = () => {
@@ -1118,7 +1130,7 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
                     <View style={styles.summaryCardAmountList}>
                       <View style={styles.summaryCardAmountItem}>
                         <Text style={[styles.summaryCardBigAmount, styles.summaryCardAmountNegative]}>
-                          {Math.round(Math.abs(balancesOwedFromCustomer[0].balance))}
+                          {formatCompactNumber(Math.abs(balancesOwedFromCustomer[0].balance))}
                         </Text>
                         <Text style={[styles.summaryCardCurrencyCode, styles.summaryCardCurrencyNegative]}>
                           {getCurrencySymbol(balancesOwedFromCustomer[0].currency)} {balancesOwedFromCustomer[0].currency}
@@ -1130,7 +1142,7 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
                       {balancesOwedFromCustomer.map((currBalance) => (
                         <View key={`negative-${currBalance.currency}`} style={styles.summaryCardMultiRow}>
                           <Text style={[styles.summaryCardMultiAmount, styles.summaryCardAmountNegative]}>
-                            {Math.round(Math.abs(currBalance.balance))}
+                            {formatCompactNumber(Math.abs(currBalance.balance))}
                           </Text>
                           <Text style={[styles.summaryCardMultiCode, styles.summaryCardCurrencyNegative]}>
                             {currBalance.currency}
@@ -1186,7 +1198,7 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
                     <View style={styles.summaryCardAmountList}>
                       <View style={styles.summaryCardAmountItem}>
                         <Text style={[styles.summaryCardBigAmount, styles.summaryCardAmountPositive]}>
-                          {Math.round(balancesOwedToCustomer[0].balance)}
+                          {formatCompactNumber(balancesOwedToCustomer[0].balance)}
                         </Text>
                         <Text style={[styles.summaryCardCurrencyCode, styles.summaryCardCurrencyPositive]}>
                           {getCurrencySymbol(balancesOwedToCustomer[0].currency)} {balancesOwedToCustomer[0].currency}
@@ -1198,7 +1210,7 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
                       {balancesOwedToCustomer.map((currBalance) => (
                         <View key={`positive-${currBalance.currency}`} style={styles.summaryCardMultiRow}>
                           <Text style={[styles.summaryCardMultiAmount, styles.summaryCardAmountPositive]}>
-                            {Math.round(currBalance.balance)}
+                            {formatCompactNumber(currBalance.balance)}
                           </Text>
                           <Text style={[styles.summaryCardMultiCode, styles.summaryCardCurrencyPositive]}>
                             {currBalance.currency}
@@ -1245,7 +1257,7 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
                     </Text>
                     <View style={styles.currencyDetailsRow}>
                       <Text style={styles.currencyDetailsValueGreen}>
-                        {total.incoming.toFixed(2)}{' '}
+                        {formatCompactNumber(total.incoming)}{' '}
                         {getCurrencySymbol(total.currency)}
                       </Text>
                       <Text style={styles.currencyDetailsLabelGreen}>
@@ -1254,7 +1266,7 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
                     </View>
                     <View style={styles.currencyDetailsRow}>
                       <Text style={styles.currencyDetailsValueRed}>
-                        {total.outgoing.toFixed(2)}{' '}
+                        {formatCompactNumber(total.outgoing)}{' '}
                         {getCurrencySymbol(total.currency)}
                       </Text>
                       <Text style={styles.currencyDetailsLabelRed}>عليه:</Text>
@@ -1484,11 +1496,11 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
 	                            },
 	                          ]}
 	                        >
-	                          {Math.round(getCombinedAmount(movement, movements))}
+	                          {formatSmartNumber(getCombinedAmount(movement, movements))}
 	                        </Text>
 	                        {getRelatedCommission(movement, movements) > 0 && (
 	                          <Text style={styles.commissionBadge}>
-	                            شامل {Math.round(getRelatedCommission(movement, movements))} عمولة
+	                            شامل {formatSmartNumber(getRelatedCommission(movement, movements))} عمولة
 	                          </Text>
 	                        )}
 	                        <Text style={styles.movementLabel}>
