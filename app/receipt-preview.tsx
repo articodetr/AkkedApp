@@ -8,7 +8,6 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowRight, Share2, Download, RefreshCw } from 'lucide-react-native';
@@ -16,7 +15,6 @@ import { WebView } from 'react-native-webview';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system/legacy';
-import { captureRef } from 'react-native-view-shot';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '@/lib/supabase';
 import { AccountMovement } from '@/types/database';
@@ -255,13 +253,7 @@ export default function ReceiptPreviewScreen() {
       const pdfName = buildReceiptPdfName(receiptData.customerName, movementData.receipt_number || movementData.movement_number);
       const pdfPath = await prepareNamedReceiptPdf(uri, pdfName);
 
-      console.log('[ReceiptPreview] Moving PDF to:', pdfPath);
-      await FileSystem.moveAsync({
-        from: uri,
-        to: pdfPath,
-      });
-
-      console.log('[ReceiptPreview] PDF ready!');
+      console.log('[ReceiptPreview] PDF ready at:', pdfPath);
       setPdfUri(pdfPath);
       setIsPdfReady(true);
     } catch (error: any) {
@@ -468,21 +460,13 @@ export default function ReceiptPreviewScreen() {
       </View>
 
       <View style={styles.content}>
-        {pdfUri ? (
-          <WebView
-            style={styles.webView}
-            source={{ uri: Platform.OS === 'android' ? `file://${pdfUri}` : pdfUri }}
-            originWhitelist={['*']}
-            scalesPageToFit={true}
-            showsVerticalScrollIndicator={false}
-            showsHorizontalScrollIndicator={false}
-          />
-        ) : htmlContent ? (
+        {htmlContent ? (
           <WebView
             style={styles.webView}
             source={{ html: htmlContent }}
             originWhitelist={['*']}
             scalesPageToFit={true}
+            setSupportMultipleWindows={false}
             showsVerticalScrollIndicator={false}
             showsHorizontalScrollIndicator={false}
           />

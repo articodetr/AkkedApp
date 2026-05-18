@@ -16,6 +16,7 @@ import {
   isWithinInterval,
   addMonths,
   subMonths,
+  subDays,
   getDay,
   isBefore,
   isAfter,
@@ -50,6 +51,15 @@ export default function CalendarRangePicker({
   const [selectingStart, setSelectingStart] = useState(true);
 
   const weekDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const quickRanges = [
+    { label: 'آخر يوم', getStart: () => maxDate },
+    { label: 'آخر يومين', getStart: () => subDays(maxDate, 1) },
+    { label: 'آخر أسبوع', getStart: () => subDays(maxDate, 6) },
+    { label: 'آخر 15 يوم', getStart: () => subDays(maxDate, 14) },
+    { label: 'آخر شهر', getStart: () => subMonths(maxDate, 1) },
+    { label: 'آخر 3 أشهر', getStart: () => subMonths(maxDate, 3) },
+    { label: 'آخر 6 أشهر', getStart: () => subMonths(maxDate, 6) },
+  ];
 
   const handleDatePress = (date: Date) => {
     if (selectingStart) {
@@ -76,6 +86,13 @@ export default function CalendarRangePicker({
     setStartDate(null);
     setEndDate(null);
     setSelectingStart(true);
+  };
+
+  const handleQuickRange = (getStart: () => Date) => {
+    setStartDate(getStart());
+    setEndDate(maxDate);
+    setSelectingStart(false);
+    setCurrentMonth(maxDate);
   };
 
   const renderMonth = (monthDate: Date) => {
@@ -237,6 +254,22 @@ export default function CalendarRangePicker({
             </TouchableOpacity>
           </View>
 
+          <View style={styles.quickRangeSection}>
+            <Text style={styles.quickRangeTitle}>فترات سريعة</Text>
+            <View style={styles.quickRangeGrid}>
+              {quickRanges.map((range) => (
+                <TouchableOpacity
+                  key={range.label}
+                  style={styles.quickRangeChip}
+                  activeOpacity={0.8}
+                  onPress={() => handleQuickRange(range.getStart)}
+                >
+                  <Text style={styles.quickRangeChipText}>{range.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
@@ -384,6 +417,40 @@ const styles = StyleSheet.create({
   hintText: {
     fontSize: 14,
     color: '#9CA3AF',
+  },
+  quickRangeSection: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  quickRangeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#374151',
+    textAlign: 'right',
+    marginBottom: 10,
+  },
+  quickRangeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  quickRangeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  quickRangeChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
   },
   scrollView: {
     flex: 1,

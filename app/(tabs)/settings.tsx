@@ -218,12 +218,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   menuItem: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+    direction: 'rtl',
   },
   lastMenuItem: {
     borderBottomWidth: 0,
@@ -232,6 +233,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    direction: 'rtl',
   },
   menuIcon: {
     width: 48,
@@ -243,6 +245,8 @@ const styles = StyleSheet.create({
   },
   menuTextContainer: {
     flex: 1,
+    alignItems: 'flex-end',
+    direction: 'rtl',
   },
   menuTitle: {
     fontSize: 16,
@@ -250,11 +254,13 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 4,
     textAlign: 'right',
+    writingDirection: 'rtl',
   },
   menuSubtitle: {
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'right',
+    writingDirection: 'rtl',
   },
   logoutButton: {
     flexDirection: 'row',

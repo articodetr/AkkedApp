@@ -302,7 +302,7 @@ export function generateAccountStatementHTML(
     logoDataUrl,
     primaryColor: '#382de3',
     darkColor: '#2821b8',
-    height: 150,
+    height: 105,
     showPhones: true,
   });
 
@@ -315,7 +315,7 @@ export function generateAccountStatementHTML(
   <title>كشف الحساب - ${customerName}</title>
   <style>
     @page {
-      margin: 1.5cm 1cm;
+      margin: 0.8cm 1cm 1.2cm;
     }
 
     * {
@@ -329,13 +329,13 @@ export function generateAccountStatementHTML(
       background: #fff;
       color: #000;
       direction: rtl;
-      padding: 15px;
+      padding: 8px 15px 15px;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
 
     .header-wrapper {
-      margin-bottom: 25px;
+      margin-bottom: 16px;
       page-break-inside: avoid;
       page-break-after: avoid;
     }
@@ -455,7 +455,7 @@ export function generateAccountStatementHTML(
       }
 
       @page {
-        margin: 1.5cm 1cm;
+        margin: 0.8cm 1cm 1.2cm;
       }
 
       .header-wrapper {

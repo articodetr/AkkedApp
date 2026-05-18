@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, ActivityIndicator, Modal, TextInput, } from 'react-native';
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Keyboard, Platform, Dimensions, } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowRight, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon, TrendingUp, TrendingDown } from 'lucide-react-native';
+import { ArrowRight, MessageCircle, Settings, Plus, Receipt, ChartBar as BarChart3, Calculator, FileText, FileSpreadsheet, ChevronDown, ChevronUp, Search, X, Calendar, Link as LinkIcon, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { buildReadableCustomerFilter } from '@/services/userScopeService';
 import { Customer, AccountMovement, CURRENCIES } from '@/types/database';
@@ -16,6 +16,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { generateAccountStatementHTML } from '@/utils/accountStatementGenerator';
+import { generateAccountStatementXlsxBase64 } from '@/utils/accountStatementXlsxGenerator';
 import { formatSmartNumber, formatCompactNumber } from '@/utils/arabicFormat';
 import { getLogoBase64 } from '@/utils/logoHelper';
 import QuickAddMovementSheet from '@/components/QuickAddMovementSheet';
@@ -57,6 +58,12 @@ function buildAccountStatementPdfName(customerName: string | null | undefined): 
   return `كشف_حساب_${safeCustomerName}_${date}.pdf`;
 }
 
+function buildAccountStatementExcelName(customerName: string | null | undefined): string {
+  const safeCustomerName = sanitizeStatementPdfFileName(customerName);
+  const date = new Date().toISOString().slice(0, 10);
+  return `كشف_حساب_${safeCustomerName}_${date}.xlsx`;
+}
+
 async function prepareNamedStatementPdf(sourceUri: string, fileName: string): Promise<string> {
   const baseDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory;
 
@@ -82,6 +89,32 @@ async function prepareNamedStatementPdf(sourceUri: string, fileName: string): Pr
   await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
   return targetUri;
 }
+
+async function writeStatementExcelFile(fileName: string, base64: string): Promise<string> {
+  const baseDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+
+  if (!baseDirectory) {
+    throw new Error('تعذر الوصول إلى مجلد الملفات المؤقتة');
+  }
+
+  const targetUri = `${baseDirectory}${fileName}`;
+
+  try {
+    const existing = await FileSystem.getInfoAsync(targetUri);
+    if (existing.exists) {
+      await FileSystem.deleteAsync(targetUri, { idempotent: true });
+    }
+  } catch {
+    // تجاهل خطأ فحص الملف القديم.
+  }
+
+  await FileSystem.writeAsStringAsync(targetUri, base64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return targetUri;
+}
+
+type StatementPrintFormat = 'pdf' | 'excel';
 
 interface GroupedMovements {
   [key: string]: AccountMovement[];
@@ -442,14 +475,68 @@ export default function CustomerDetailsScreen() {
   const [showSettlementSheet, setShowSettlementSheet] = useState(false);
   const [showResetSheet, setShowResetSheet] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showPrintFormatModal, setShowPrintFormatModal] = useState(false);
+  const [selectedPrintFormat, setSelectedPrintFormat] = useState<StatementPrintFormat>('pdf');
   const [searchQuery, setSearchQuery] = useState('');
   const searchScrollRef = useRef<ScrollView>(null);
+  const searchSectionRef = useRef<View>(null);
+  const scrollOffsetRef = useRef(0);
+  const keyboardHeightRef = useRef(0);
+  const searchFocusedRef = useRef(false);
+  const searchFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scrollSearchIntoView = () => {
+    if (searchFocusTimerRef.current) {
+      clearTimeout(searchFocusTimerRef.current);
+    }
+
+    searchFocusTimerRef.current = setTimeout(() => {
+      searchSectionRef.current?.measureInWindow((_x, y, _width, height) => {
+        const windowHeight = Dimensions.get('window').height;
+        const keyboardHeight = keyboardHeightRef.current;
+        const keyboardTop = keyboardHeight > 0 ? windowHeight - keyboardHeight : windowHeight * 0.62;
+        const safeGap = 22;
+        const overlap = y + height + safeGap - keyboardTop;
+
+        if (overlap > 0) {
+          searchScrollRef.current?.scrollTo({
+            y: Math.max(0, scrollOffsetRef.current + overlap),
+            animated: true,
+          });
+        }
+      });
+    }, Platform.OS === 'ios' ? 90 : 180);
+  };
 
   const focusSearchInput = () => {
-    setTimeout(() => {
-      searchScrollRef.current?.scrollTo({ y: 230, animated: true });
-    }, 220);
+    searchFocusedRef.current = true;
+    scrollSearchIntoView();
   };
+
+  useEffect(() => {
+    const keyboardShowEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const keyboardHideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(keyboardShowEvent, (event) => {
+      keyboardHeightRef.current = event.endCoordinates?.height ?? 0;
+      if (searchFocusedRef.current) {
+        scrollSearchIntoView();
+      }
+    });
+
+    const hideSub = Keyboard.addListener(keyboardHideEvent, () => {
+      keyboardHeightRef.current = 0;
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      if (searchFocusTimerRef.current) {
+        clearTimeout(searchFocusTimerRef.current);
+      }
+    };
+  }, []);
+
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null); const loadCustomerData = useCallback(async () => {
@@ -602,6 +689,12 @@ export default function CustomerDetailsScreen() {
     }
   };
 
+  const openPrintRangePicker = (formatType: StatementPrintFormat) => {
+    setSelectedPrintFormat(formatType);
+    setShowPrintFormatModal(false);
+    setShowDateRangeModal(true);
+  };
+
   const handlePrint = () => {
     if (!customer) {
       return;
@@ -614,12 +707,13 @@ export default function CustomerDetailsScreen() {
       return;
     }
 
-    setShowDateRangeModal(true);
+    setShowPrintFormatModal(true);
   };
 
   const executePrint = async (
     movementsToPrint: AccountMovement[],
     previousMovements: AccountMovement[] = [],
+    formatType: StatementPrintFormat = selectedPrintFormat,
   ) => {
     if (!customer) {
       return;
@@ -636,7 +730,7 @@ export default function CustomerDetailsScreen() {
     try {
       let logoDataUrl: string | undefined;
       try {
-        console.log('[CustomerDetails] Loading logo for PDF...');
+        console.log('[CustomerDetails] Loading logo for statement...');
         logoDataUrl = await getLogoBase64(false, null, { userId: currentUser?.userId });
 
         if (logoDataUrl && logoDataUrl.length > 0) {
@@ -651,6 +745,33 @@ export default function CustomerDetailsScreen() {
           logoError,
         );
         logoDataUrl = undefined;
+      }
+
+      if (formatType === 'excel') {
+        console.log('[CustomerDetails] Generating Excel statement...');
+        const excelBase64 = await generateAccountStatementXlsxBase64({
+          customerName: customer.name,
+          movements: movementsToPrint,
+          logoDataUrl,
+          isProfitLossAccount: customer.is_profit_loss_account,
+          previousMovements,
+          currentUser,
+        });
+        const statementExcelName = buildAccountStatementExcelName(customer.name);
+        const excelUri = await writeStatementExcelFile(statementExcelName, excelBase64);
+        console.log('[CustomerDetails] Excel file created at:', excelUri);
+
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(excelUri, {
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            dialogTitle: `كشف حساب ${customer.name}`,
+            UTI: 'org.openxmlformats.spreadsheetml.sheet',
+          });
+        } else {
+          Alert.alert('نجح', 'تم إنشاء ملف Excel بنجاح');
+        }
+        return;
       }
 
       console.log('[CustomerDetails] Generating HTML for PDF...');
@@ -1085,12 +1206,23 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
         </View>
       </LinearGradient>
 
-      <ScrollView
-        ref={searchScrollRef}
-        style={styles.content}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.contentScrollContainer}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingBody}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
       >
+        <ScrollView
+          ref={searchScrollRef}
+          style={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          scrollEventThrottle={16}
+          onScroll={(event) => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          contentContainerStyle={styles.contentScrollContainer}
+        >
         <View style={styles.summarySection}>
           <View style={styles.summaryPanel}>
             <View style={styles.summarySectionHeader}>
@@ -1308,7 +1440,7 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
             ) : (
               <FileText size={16} color="#6B7280" />
             )}
-            <Text style={styles.tabButtonText}>طباعة PDF</Text>
+            <Text style={styles.tabButtonText}>{isPrinting ? 'جاري...' : 'طباعة'}</Text>
           </TouchableOpacity>
 
           
@@ -1327,7 +1459,7 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.searchSection}>
+        <View ref={searchSectionRef} style={styles.searchSection}>
           <View style={styles.searchContainer}>
             <Search size={20} color="#9CA3AF" style={styles.searchIcon} />
             <TextInput
@@ -1337,8 +1469,11 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
               value={searchQuery}
               onChangeText={setSearchQuery}
               textAlign="right"
-          onFocus={focusSearchInput}
-        />
+              onFocus={focusSearchInput}
+              onBlur={() => {
+                searchFocusedRef.current = false;
+              }}
+            />
             {searchQuery !== '' && (
               <TouchableOpacity
                 onPress={() => setSearchQuery('')}
@@ -1540,7 +1675,8 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
             </TouchableOpacity>
           )}
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <TouchableOpacity style={styles.fab} onPress={handleAddMovement}>
         <Plus size={28} color="#FFFFFF" />
@@ -1644,6 +1780,67 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
         </>
       )}
 
+      <Modal
+        visible={showPrintFormatModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPrintFormatModal(false)}
+      >
+        <View style={styles.printFormatOverlay}>
+          <TouchableOpacity
+            style={styles.printFormatBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowPrintFormatModal(false)}
+          />
+
+          <View style={styles.printFormatSheet}>
+            <View style={styles.printFormatHandle} />
+            <Text style={styles.printFormatTitle}>اختيار نوع الطباعة</Text>
+            <Text style={styles.printFormatSubtitle}>
+              اختر الصيغة المناسبة لكشف حساب {customer.name}
+            </Text>
+
+            <View style={styles.printFormatOptions}>
+              <TouchableOpacity
+                style={[styles.printFormatCard, styles.printFormatCardPdf]}
+                activeOpacity={0.85}
+                onPress={() => openPrintRangePicker('pdf')}
+              >
+                <View style={[styles.printFormatIconBox, styles.printFormatIconBoxPdf]}>
+                  <FileText size={28} color="#DC2626" />
+                </View>
+                <View style={styles.printFormatTextWrap}>
+                  <Text style={styles.printFormatLabel}>PDF</Text>
+                  <Text style={styles.printFormatDescription}>ملف جاهز للطباعة والمشاركة</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.printFormatCard, styles.printFormatCardExcel]}
+                activeOpacity={0.85}
+                onPress={() => openPrintRangePicker('excel')}
+              >
+                <View style={[styles.printFormatIconBox, styles.printFormatIconBoxExcel]}>
+                  <FileSpreadsheet size={28} color="#16A34A" />
+                </View>
+                <View style={styles.printFormatTextWrap}>
+                  <Text style={styles.printFormatLabel}>Excel</Text>
+                  <Text style={styles.printFormatDescription}>جدول قابل للفتح في Excel</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.printFormatCancelButton}
+              activeOpacity={0.8}
+              onPress={() => setShowPrintFormatModal(false)}
+            >
+              <Text style={styles.printFormatCancelText}>إلغاء</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       
       {/* Akked safe customer settings menu */}
       <Modal
@@ -1735,6 +1932,112 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
 }
 
 const styles = StyleSheet.create({
+
+  printFormatOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  printFormatBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  printFormatSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
+  },
+  printFormatHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 18,
+  },
+  printFormatTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  printFormatSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 18,
+    lineHeight: 20,
+  },
+  printFormatOptions: {
+    gap: 12,
+  },
+  printFormatCard: {
+    minHeight: 82,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  printFormatCardPdf: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  printFormatCardExcel: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  printFormatIconBox: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  printFormatIconBoxPdf: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  printFormatIconBoxExcel: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  printFormatTextWrap: {
+    flex: 1,
+  },
+  printFormatLabel: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  printFormatDescription: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    textAlign: 'right',
+  },
+  printFormatCancelButton: {
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  printFormatCancelText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#334155',
+  },
 
   settingsOverlay: {
     flex: 1,
@@ -1857,6 +2160,9 @@ const styles = StyleSheet.create({
   },
   linkedUserBadge: {
     backgroundColor: 'rgba(79, 70, 229, 0.5)',
+  },
+  keyboardAvoidingBody: {
+    flex: 1,
   },
   pendingHeaderBadge: {
     backgroundColor: 'rgba(245, 158, 11, 0.45)',

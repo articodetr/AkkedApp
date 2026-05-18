@@ -13,10 +13,7 @@ export function generatePDFHeaderHTML(options: PDFHeaderOptions): string {
   const {
     title,
     logoDataUrl,
-    primaryColor = '#382de3',
-    darkColor = '#2821b8',
-    height = 150,
-    showPhones = true,
+    height = 110,
   } = options;
 
   // استخدام صورة البانر الكاملة
@@ -25,7 +22,7 @@ export function generatePDFHeaderHTML(options: PDFHeaderOptions): string {
     : `<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Default Banner" class="header-banner-image" />`;
 
   return `
-    <div class="pdf-header-banner">
+    <div class="pdf-header-banner" style="height: ${height}px;">
       ${headerImageHTML}
     </div>
 
@@ -38,31 +35,36 @@ export function generatePDFHeaderStyles(): string {
     .pdf-header-banner {
       position: relative;
       width: 100%;
-      height: auto;
-      margin-bottom: 20px;
+      max-width: 720px;
+      height: 110px;
+      margin: 0 auto 12px;
       overflow: hidden;
       flex-shrink: 0;
       box-sizing: border-box;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
 
     .header-banner-image {
       width: 100%;
-      height: auto;
+      height: 100%;
       display: block;
       object-fit: contain;
+      object-position: top center;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
 
     .document-title {
       text-align: center;
-      font-size: 22px;
+      font-size: 20px;
       font-weight: bold;
       color: #111827;
-      margin: 18px 0 25px;
-      padding: 8px;
+      margin: 8px 0 18px;
+      padding: 4px;
     }
 
     .header-wrapper {

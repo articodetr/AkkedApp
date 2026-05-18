@@ -194,6 +194,9 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
       margin: 0;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
 
     .receipt-page {
@@ -518,6 +521,10 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
       width: 100px;
       height: 100px;
       flex-shrink: 0;
+      pointer-events: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
 
     .qr-placeholder {
@@ -541,6 +548,10 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
       object-fit: cover;
       display: block;
       border-radius: 14px;
+      pointer-events: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
 
     .transfer-details {

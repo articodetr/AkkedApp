@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   KeyboardAvoidingView,
   Modal,
   TouchableWithoutFeedback,
+  Keyboard,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -71,6 +73,77 @@ export default function PinSettings() {
   const [passwordExpanded, setPasswordExpanded] = useState(false);
   const [letterheadExpanded, setLetterheadExpanded] = useState(false);
   const [dangerExpanded, setDangerExpanded] = useState(false);
+  const [keyboardBottomInset, setKeyboardBottomInset] = useState(0);
+
+  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
+  const keyboardHeightRef = useRef(0);
+  const focusedInputRef = useRef<TextInput | null>(null);
+  const focusScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fullNameInputRef = useRef<TextInput>(null);
+  const phoneInputRef = useRef<TextInput>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const currentPasswordInputRef = useRef<TextInput>(null);
+  const newPasswordInputRef = useRef<TextInput>(null);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
+
+  const scrollFocusedInputIntoView = () => {
+    if (focusScrollTimerRef.current) {
+      clearTimeout(focusScrollTimerRef.current);
+    }
+
+    focusScrollTimerRef.current = setTimeout(() => {
+      const focusedInput = focusedInputRef.current;
+      const keyboardHeight = keyboardHeightRef.current;
+
+      if (!focusedInput || keyboardHeight <= 0) return;
+
+      focusedInput.measureInWindow((_x, y, _width, height) => {
+        const windowHeight = Dimensions.get('window').height;
+        const keyboardTop = windowHeight - keyboardHeight;
+        const inputBottom = y + height;
+        const safeGap = 24;
+        const overlap = inputBottom + safeGap - keyboardTop;
+
+        if (overlap > 0) {
+          scrollViewRef.current?.scrollTo({
+            y: Math.max(0, scrollOffsetRef.current + overlap),
+            animated: true,
+          });
+        }
+      });
+    }, Platform.OS === 'ios' ? 90 : 180);
+  };
+
+  const handleInputFocus = (input: TextInput | null) => {
+    focusedInputRef.current = input;
+    scrollFocusedInputIntoView();
+  };
+
+  useEffect(() => {
+    const keyboardShowEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const keyboardHideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(keyboardShowEvent, (event) => {
+      const height = event.endCoordinates?.height ?? 0;
+      keyboardHeightRef.current = height;
+      setKeyboardBottomInset(height);
+      scrollFocusedInputIntoView();
+    });
+
+    const hideSub = Keyboard.addListener(keyboardHideEvent, () => {
+      keyboardHeightRef.current = 0;
+      setKeyboardBottomInset(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      if (focusScrollTimerRef.current) {
+        clearTimeout(focusScrollTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (currentUser?.fullName) setFullName(currentUser.fullName);
@@ -485,17 +558,23 @@ export default function PinSettings() {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 8 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={insets.top + 8}
       >
         <ScrollView
+          ref={scrollViewRef}
           style={styles.flex}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: Math.max(insets.bottom, 16) + 16 },
+            { paddingBottom: Math.max(insets.bottom, 16) + 16 + keyboardBottomInset },
           ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           showsVerticalScrollIndicator={false}
+          onScroll={(event) => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
         >
           <View style={styles.collapsibleCard}>
             <TouchableOpacity
@@ -538,9 +617,11 @@ export default function PinSettings() {
                 <View style={styles.inputWrap}>
                   <User size={18} color="#6B7280" />
                   <TextInput
+                    ref={fullNameInputRef}
                     style={styles.inputWithIcon}
                     value={fullName}
                     onChangeText={setFullName}
+                    onFocus={() => handleInputFocus(fullNameInputRef.current)}
                     placeholder="أدخل اسمك"
                     placeholderTextColor="#9CA3AF"
                     textAlign="right"
@@ -555,9 +636,11 @@ export default function PinSettings() {
                 <View style={styles.inputWrap}>
                   <Phone size={18} color="#6B7280" />
                   <TextInput
+                    ref={phoneInputRef}
                     style={styles.inputWithIcon}
                     value={phone}
                     onChangeText={setPhone}
+                    onFocus={() => handleInputFocus(phoneInputRef.current)}
                     placeholder="مثال: 967xxxxxxxx+"
                     placeholderTextColor="#9CA3AF"
                     textAlign="right"
@@ -572,9 +655,11 @@ export default function PinSettings() {
                 <View style={styles.inputWrap}>
                   <Mail size={18} color="#6B7280" />
                   <TextInput
+                    ref={emailInputRef}
                     style={styles.inputWithIcon}
                     value={email}
                     onChangeText={setEmail}
+                    onFocus={() => handleInputFocus(emailInputRef.current)}
                     placeholder="example@email.com"
                     placeholderTextColor="#9CA3AF"
                     textAlign="right"
@@ -676,9 +761,11 @@ export default function PinSettings() {
                 <View style={styles.inputWrap}>
                   <Lock size={18} color="#6B7280" />
                   <TextInput
+                    ref={currentPasswordInputRef}
                     style={styles.inputWithIcon}
                     value={currentPassword}
                     onChangeText={setCurrentPassword}
+                    onFocus={() => handleInputFocus(currentPasswordInputRef.current)}
                     placeholder="••••••••"
                     placeholderTextColor="#9CA3AF"
                     secureTextEntry
@@ -696,11 +783,13 @@ export default function PinSettings() {
                 <View style={styles.inputWrap}>
                   <Lock size={18} color="#6B7280" />
                   <TextInput
+                    ref={newPasswordInputRef}
                     style={styles.inputWithIcon}
                     value={newPassword}
                     onChangeText={(text) => {
                       if (text.length <= 16) setNewPassword(text);
                     }}
+                    onFocus={() => handleInputFocus(newPasswordInputRef.current)}
                     placeholder="8-16 حرف (أرقام أو أحرف)"
                     placeholderTextColor="#9CA3AF"
                     secureTextEntry
@@ -730,11 +819,13 @@ export default function PinSettings() {
                 <View style={styles.inputWrap}>
                   <Lock size={18} color="#6B7280" />
                   <TextInput
+                    ref={confirmPasswordInputRef}
                     style={styles.inputWithIcon}
                     value={confirmPassword}
                     onChangeText={(text) => {
                       if (text.length <= 16) setConfirmPassword(text);
                     }}
+                    onFocus={() => handleInputFocus(confirmPasswordInputRef.current)}
                     placeholder="أعد إدخال كلمة المرور"
                     placeholderTextColor="#9CA3AF"
                     secureTextEntry
@@ -836,7 +927,8 @@ export default function PinSettings() {
       >
         <KeyboardAvoidingView
           style={styles.modalContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={insets.top + 8}
         >
           <TouchableWithoutFeedback onPress={() => !isDeleting && setShowDeleteModal(false)}>
             <View style={styles.modalBackdrop} />
@@ -909,7 +1001,8 @@ export default function PinSettings() {
       >
         <KeyboardAvoidingView
           style={styles.modalContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={insets.top + 8}
         >
           <TouchableWithoutFeedback
             onPress={() => !isAutoSettling && setShowSettlementModal(false)}
@@ -1064,6 +1157,8 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 16,
     paddingBottom: 24,
+    alignItems: 'stretch',
+    direction: 'rtl',
   },
   profileBanner: {
     paddingHorizontal: 16,
@@ -1188,7 +1283,8 @@ const styles = StyleSheet.create({
   },
   collapsibleTitleWrap: {
     flex: 1,
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
+    direction: 'rtl',
   },
   collapsibleTitle: {
     fontSize: 15,
@@ -1209,6 +1305,8 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
+    alignItems: 'stretch',
+    direction: 'rtl',
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -1243,7 +1341,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   inputWrap: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#F9FAFB',
@@ -1252,6 +1350,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     minHeight: 48,
+    direction: 'rtl',
   },
   inputDisabledWrap: {
     backgroundColor: '#F3F4F6',
@@ -1260,12 +1359,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: '#111827',
+    textAlign: 'right',
+    writingDirection: 'rtl',
     paddingVertical: Platform.OS === 'ios' ? 12 : 8,
   },
   inputWithIcon: {
     flex: 1,
     fontSize: 15,
     color: '#111827',
+    textAlign: 'right',
+    writingDirection: 'rtl',
     paddingVertical: Platform.OS === 'ios' ? 12 : 8,
   },
   inputDisabled: {
