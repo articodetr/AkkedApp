@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,54 +8,67 @@ import {
   Alert,
   Image,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Lock, User } from 'lucide-react-native';
+import { Lock, Mail, Eye, EyeOff } from 'lucide-react-native';
+
+const ENABLE_GOOGLE_AUTH = false;
 
 export default function LoginScreen() {
-  const [userName, setUserName] = useState('');
-  const [pin, setPin] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const { login, signInWithGoogle } = useAuth();
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
 
-  const handlePinChange = (text: string) => {
-    const numbersOnly = text.replace(/[^0-9]/g, '').slice(0, 20);
-    setPin(numbersOnly);
-  };
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
   const handleLogin = async () => {
-    if (!userName.trim()) {
-      Alert.alert('خطأ', 'الرجاء إدخال اسم المستخدم');
+    if (!isValidEmail(email)) {
+      Alert.alert('خطأ', 'الرجاء إدخال بريد إلكتروني صحيح');
       return;
     }
 
-    if (pin.length < 6) {
-      Alert.alert('خطأ', 'كلمة المرور يجب أن تكون 6 أرقام على الأقل');
-      return;
-    }
-
-    if (pin.length > 20) {
-      Alert.alert('خطأ', 'كلمة المرور يجب أن لا تزيد عن 20 رقم');
+    if (password.length < 6) {
+      Alert.alert('خطأ', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
 
     setIsLoading(true);
-    const result = await login(userName.trim(), pin);
+    const result = await login(email, password);
     setIsLoading(false);
 
     if (result.success) {
       router.replace('/(tabs)');
     } else {
-      Alert.alert('خطأ', result.error || 'اسم المستخدم أو كلمة المرور غير صحيحة');
-      setPin('');
+      Alert.alert('خطأ', result.error || 'البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      setPassword('');
     }
   };
+
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    const result = await signInWithGoogle();
+    setIsGoogleLoading(false);
+
+    if (result.success) {
+      router.replace('/(tabs)');
+    } else if (result.error && result.error !== 'تم إلغاء تسجيل الدخول') {
+      Alert.alert('خطأ', result.error);
+    }
+  };
+
+  const busy = isLoading || isGoogleLoading;
 
   return (
     <View style={styles.container}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -69,19 +82,49 @@ export default function LoginScreen() {
         </View>
 
         <Text style={styles.title}>Akked</Text>
-        <Text style={styles.subtitle}>أدخل بياناتك للدخول</Text>
+        <Text style={styles.subtitle}>أهلاً بك 👋 سجّل الدخول للمتابعة</Text>
+
+        {ENABLE_GOOGLE_AUTH && (
+          <>
+            <TouchableOpacity
+              style={[styles.googleButton, busy && styles.buttonDisabled]}
+              onPress={handleGoogleLogin}
+              disabled={busy}
+              activeOpacity={0.8}
+            >
+              {isGoogleLoading ? (
+                <ActivityIndicator color="#4F46E5" />
+              ) : (
+                <>
+                  <View style={styles.googleIcon}>
+                    <Text style={styles.googleIconText}>G</Text>
+                  </View>
+                  <Text style={styles.googleButtonText}>الدخول عبر Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>أو</Text>
+              <View style={styles.dividerLine} />
+            </View>
+          </>
+        )}
 
         <View style={styles.inputContainer}>
-          <User size={20} color="#6B7280" style={styles.inputIcon} />
+          <Mail size={20} color="#6B7280" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            value={userName}
-            onChangeText={setUserName}
-            placeholder="اسم المستخدم"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="البريد الإلكتروني"
             placeholderTextColor="#9CA3AF"
             textAlign="right"
             autoCapitalize="none"
             autoCorrect={false}
+            keyboardType="email-address"
+            editable={!busy}
           />
         </View>
 
@@ -89,49 +132,58 @@ export default function LoginScreen() {
           <Lock size={20} color="#6B7280" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            value={pin}
-            onChangeText={handlePinChange}
-            placeholder="كلمة المرور (6 أرقام على الأقل)"
+            value={password}
+            onChangeText={setPassword}
+            onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            placeholder="كلمة المرور"
             placeholderTextColor="#9CA3AF"
-            secureTextEntry
-            maxLength={20}
-            keyboardType="number-pad"
+            secureTextEntry={!showPassword}
             textAlign="right"
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!busy}
           />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+            {showPassword ? (
+              <EyeOff size={20} color="#6B7280" />
+            ) : (
+              <Eye size={20} color="#6B7280" />
+            )}
+          </TouchableOpacity>
         </View>
 
-        {pin.length > 0 && (
-          <View style={styles.lengthIndicator}>
-            <Text
-              style={[
-                styles.lengthText,
-                pin.length >= 6 && pin.length <= 20
-                  ? styles.lengthTextValid
-                  : styles.lengthTextInvalid,
-              ]}
-            >
-              {pin.length} / 20 رقم
-            </Text>
-          </View>
-        )}
+        <TouchableOpacity
+          style={styles.forgotButton}
+          onPress={() => router.push('/(auth)/forgot-password')}
+          disabled={busy}
+        >
+          <Text style={styles.forgotButtonText}>نسيت كلمة المرور؟</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.button, isLoading && styles.buttonDisabled]}
+          style={[styles.button, busy && styles.buttonDisabled]}
           onPress={handleLogin}
-          disabled={isLoading}
+          disabled={busy}
+          activeOpacity={0.85}
         >
-          <Text style={styles.buttonText}>{isLoading ? 'جاري التحقق...' : 'دخول'}</Text>
+          {isLoading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.buttonText}>دخول</Text>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.registerButton}
-          onPress={() => router.push('/(auth)/register')}
-          disabled={isLoading}
-        >
-          <Text style={styles.registerButtonText}>ليس لديك حساب؟ إنشاء حساب جديد</Text>
-        </TouchableOpacity>
+        <View style={styles.footerDivider} />
+
+        <View style={styles.registerRow}>
+          <Text style={styles.registerText}>ليس لديك حساب؟</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/(auth)/register')}
+            disabled={busy}
+          >
+            <Text style={styles.registerLink}>إنشاء حساب جديد</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
@@ -146,45 +198,99 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 64,
-    paddingBottom: 24,
+    paddingTop: 56,
+    paddingBottom: 32,
     backgroundColor: '#F9FAFB',
   },
   logoContainer: {
-    width: 150,
-    height: 150,
+    width: 110,
+    height: 110,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   logoImage: {
     width: '100%',
     height: '100%',
   },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#6B7280',
-    marginBottom: 32,
+    marginBottom: 28,
     textAlign: 'center',
+  },
+  googleButton: {
+    width: '100%',
+    height: 58,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  googleIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIconText: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#4285F4',
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  dividerRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '600',
   },
   inputContainer: {
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: '#E5E7EB',
     paddingHorizontal: 16,
-    height: 64,
+    height: 60,
   },
   inputIcon: {
     marginLeft: 12,
@@ -194,14 +300,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
   },
+  eyeIcon: {
+    padding: 4,
+  },
+  forgotButton: {
+    width: '100%',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  forgotButtonText: {
+    fontSize: 14,
+    color: '#4F46E5',
+    fontWeight: '600',
+  },
   button: {
     width: '100%',
-    height: 56,
+    height: 58,
     backgroundColor: '#4F46E5',
-    borderRadius: 12,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -211,35 +334,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  lengthIndicator: {
+  footerDivider: {
     width: '100%',
-    marginTop: 8,
-    marginBottom: 16,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 24,
   },
-  lengthText: {
-    fontSize: 14,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  lengthTextValid: {
-    color: '#10B981',
-  },
-  lengthTextInvalid: {
-    color: '#F59E0B',
-  },
-  registerButton: {
-    width: '100%',
-    height: 56,
-    backgroundColor: 'transparent',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#4F46E5',
-    justifyContent: 'center',
+  registerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
-  registerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  registerText: {
+    fontSize: 15,
+    color: '#6B7280',
+  },
+  registerLink: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#4F46E5',
   },
 });

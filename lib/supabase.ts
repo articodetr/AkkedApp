@@ -49,6 +49,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // على الويب نسمح باكتشاف الجلسة من رابط العودة، وعلى الموبايل
+    // نتعامل مع رابط العودة يدوياً عبر expo-linking في AuthContext.
+    detectSessionInUrl: Platform.OS === 'web',
+    // PKCE مطلوب لتدفّق OAuth (Google) وتأكيد الإيميل على الموبايل.
+    flowType: 'pkce',
   },
 });

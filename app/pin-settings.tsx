@@ -22,7 +22,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CURRENCIES } from '@/types/database';
 import { LetterheadEditor } from '@/components/LetterheadEditor';
 import * as Haptics from 'expo-haptics';
-import * as Crypto from 'expo-crypto';
 
 function getInitials(fullName?: string | null, fallback?: string | null): string {
   const source = (fullName && fullName.trim()) || fallback || '';
@@ -46,35 +45,6 @@ interface UnsettledBalance {
 
 function getCurrencySymbol(code: string) {
   return CURRENCIES.find((c) => c.code === code)?.symbol || code;
-}
-
-async function hashPassword(password: string): Promise<string> {
-  const salt = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    Math.random().toString(36) + Date.now().toString()
-  );
-  const hash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    password + salt.substring(0, 16)
-  );
-  return salt.substring(0, 16) + ':' + hash;
-}
-
-async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-  if (hashedPassword.includes(':')) {
-    const [salt, storedHash] = hashedPassword.split(':');
-    if (!salt || !storedHash) return false;
-    const hash = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      password + salt
-    );
-    return hash === storedHash;
-  }
-  const legacyHash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    password
-  );
-  return hashedPassword === legacyHash;
 }
 
 export default function PinSettings() {
@@ -191,29 +161,25 @@ export default function PinSettings() {
 
     setIsSavingPassword(true);
     try {
-      const { data: userRow, error: fetchError } = await supabase
-        .from('app_security')
-        .select('pin_hash')
-        .eq('id', currentUser.userId)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-      if (!userRow) {
-        Alert.alert('خطأ', 'تعذر العثور على بيانات المستخدم');
+      const userEmail = currentUser.email || currentUser.userName;
+      if (!userEmail) {
+        Alert.alert('خطأ', 'تعذر العثور على بريد المستخدم');
         return;
       }
 
-      const isCurrentValid = await verifyPassword(currentPassword, userRow.pin_hash);
-      if (!isCurrentValid) {
+      // التحقق من كلمة المرور الحالية بإعادة تسجيل الدخول
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: currentPassword,
+      });
+      if (verifyError) {
         Alert.alert('خطأ', 'كلمة المرور الحالية غير صحيحة');
         return;
       }
 
-      const newHash = await hashPassword(newPassword);
-      const { error: updateError } = await supabase
-        .from('app_security')
-        .update({ pin_hash: newHash })
-        .eq('id', currentUser.userId);
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
 
       if (updateError) throw updateError;
 
@@ -429,19 +395,18 @@ export default function PinSettings() {
 
     setIsDeleting(true);
     try {
-      const { data: userRow, error: fetchError } = await supabase
-        .from('app_security')
-        .select('pin_hash')
-        .eq('id', currentUser.userId)
-        .maybeSingle();
-
-      if (fetchError || !userRow) {
+      const userEmail = currentUser.email || currentUser.userName;
+      if (!userEmail) {
         Alert.alert('خطأ', 'تعذر التحقق من بيانات الحساب');
         return;
       }
 
-      const isValid = await verifyPassword(deletePassword, userRow.pin_hash);
-      if (!isValid) {
+      // التحقق من كلمة المرور بإعادة تسجيل الدخول
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: deletePassword,
+      });
+      if (verifyError) {
         Alert.alert('خطأ', 'كلمة المرور غير صحيحة');
         return;
       }
@@ -501,7 +466,7 @@ export default function PinSettings() {
             {currentUser?.fullName || currentUser?.userName || 'مستخدم'}
           </Text>
           <Text style={styles.profileUsername} numberOfLines={1}>
-            @{currentUser?.userName ?? ''}
+            {currentUser?.email ?? ''}
           </Text>
           <View style={styles.profileMetaRow}>
             {currentUser?.accountNumber ? (
@@ -558,16 +523,16 @@ export default function PinSettings() {
 
             {infoExpanded ? (
               <View style={styles.collapsibleBody}>
-                <Text style={styles.label}>اسم المستخدم</Text>
+                <Text style={styles.label}>البريد الإلكتروني</Text>
                 <View style={[styles.inputWrap, styles.inputDisabledWrap]}>
                   <TextInput
                     style={[styles.input, styles.inputDisabled]}
-                    value={currentUser?.userName ?? ''}
+                    value={currentUser?.email ?? ''}
                     editable={false}
                     textAlign="right"
                   />
                 </View>
-                <Text style={styles.helper}>اسم المستخدم لا يمكن تغييره</Text>
+                <Text style={styles.helper}>البريد الإلكتروني لا يمكن تغييره من هنا</Text>
 
                 <Text style={[styles.label, styles.labelSpaced]}>الاسم</Text>
                 <View style={styles.inputWrap}>

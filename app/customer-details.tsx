@@ -431,6 +431,8 @@ export default function CustomerDetailsScreen() {
   const [totalIncoming, setTotalIncoming] = useState(0);
   const [totalOutgoing, setTotalOutgoing] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const PAGE_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [isPrinting, setIsPrinting] = useState(false);
   const [showCurrencyDetails, setShowCurrencyDetails] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -500,6 +502,7 @@ export default function CustomerDetailsScreen() {
 
       setCustomer(customerResult.data);
       setMovements(movementsData);
+      setVisibleCount(PAGE_SIZE);
 
       const approvedOnlyMovements = movementsData.filter((m) =>
         shouldIncludeMovementInBalance(m as AccountMovement)
@@ -990,7 +993,15 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
       !(movement as any).is_commission_movement &&
       isPendingMovement(movement) &&
       !(movement as any).is_voided
-  ); const groupedMovements = groupMovementsByMonth(filteredMovements);
+  );
+
+  const isSearching = searchQuery.trim().length > 0;
+  const displayedMovements = isSearching
+    ? filteredMovements
+    : filteredMovements.slice(0, visibleCount);
+  const hasMore = !isSearching && filteredMovements.length > visibleCount;
+  const remainingCount = filteredMovements.length - visibleCount;
+  const groupedMovements = groupMovementsByMonth(displayedMovements);
   const currencyBalances = calculateBalanceByCurrency(approvedMovements);
   const currencyTotals = calculateCurrencyTotals(approvedMovements);
   const balancesOwedToCustomer = currencyBalances.filter((currBalance) => currBalance.balance > 0);
@@ -1516,6 +1527,18 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
 	              ),
 	            )
 	          )}
+          {hasMore && (
+            <TouchableOpacity
+              style={styles.loadMoreButton}
+              activeOpacity={0.85}
+              onPress={() => setVisibleCount((c) => c + PAGE_SIZE)}
+            >
+              <ChevronDown size={18} color="#4F46E5" />
+              <Text style={styles.loadMoreText}>
+                عرض المزيد ({remainingCount} حركة متبقية)
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
 
@@ -2359,6 +2382,25 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     color: '#9CA3AF',
+  },
+  loadMoreButton: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadMoreText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#4F46E5',
   },
   fab: {
     position: 'absolute',

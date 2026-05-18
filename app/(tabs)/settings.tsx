@@ -16,6 +16,7 @@ import {
   User,
   MessageCircle,
   Link as LinkIcon,
+  FolderInput,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -71,6 +72,13 @@ export default function SettingsScreen() {
       subtitle: 'نسخ واستعادة البيانات',
       color: '#10B981',
       onPress: () => router.push('/backup' as any),
+    },
+    {
+      icon: FolderInput,
+      title: 'ربط البيانات القديمة',
+      subtitle: 'نقل بيانات حساب قديم إلى حسابك',
+      color: '#F59E0B',
+      onPress: () => router.push('/link-legacy-data' as any),
     },
     {
       icon: Info,

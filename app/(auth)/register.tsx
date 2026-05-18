@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,117 +9,46 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Modal,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { UserPlus, User, Lock, Eye, EyeOff, CheckCircle } from 'lucide-react-native';
+import { UserPlus, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 
-interface PasswordStrength {
-  score: number;
-  label: string;
-  color: string;
-}
+const ENABLE_GOOGLE_AUTH = false;
 
 export default function RegisterScreen() {
-  const { register, checkUsernameAvailability } = useAuth();
+  const { register, signInWithGoogle } = useAuth();
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
   const [fullName, setFullName] = useState('');
-  const [userName, setUserName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
-  const [usernameError, setUsernameError] = useState('');
-  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [newAccountNumber, setNewAccountNumber] = useState('');
 
-  const onlyNumbers = (text: string) => text.replace(/[^0-9]/g, '').slice(0, 20);
-
-  const getPasswordStrength = (pwd: string): PasswordStrength => {
-    if (pwd.length === 0) {
-      return { score: 0, label: '', color: '#E5E7EB' };
-    }
-
-    const score = Math.min(4, Math.max(1, Math.ceil((pwd.length / 20) * 4)));
-    const isValidLength = pwd.length >= 6 && pwd.length <= 20;
-
-    return {
-      score,
-      label: `${pwd.length} / 20 رقم`,
-      color: isValidLength ? '#10B981' : '#EF4444',
-    };
-  };
-
-  const passwordStrength = getPasswordStrength(password);
-
-  const checkUsername = async (username: string) => {
-    if (username.length < 3) {
-      setUsernameError('اسم المستخدم يجب أن يكون 3 أحرف على الأقل');
-      return;
-    }
-
-    setIsCheckingUsername(true);
-    setUsernameError('');
-
-    try {
-      const isAvailable = await checkUsernameAvailability(username);
-      if (!isAvailable) {
-        setUsernameError('اسم المستخدم مستخدم بالفعل');
-      }
-    } catch (error) {
-      console.error('Error checking username:', error);
-    } finally {
-      setIsCheckingUsername(false);
-    }
-  };
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
   const handleRegister = async () => {
     setError('');
-    setUsernameError('');
 
-    if (!fullName.trim()) {
-      setError('يرجى إدخال الاسم الكامل');
-      return;
-    }
-
-    if (fullName.trim().length < 2) {
+    if (!fullName.trim() || fullName.trim().length < 2) {
       setError('الاسم الكامل يجب أن يكون حرفين على الأقل');
       return;
     }
 
-    if (!userName.trim()) {
-      setError('يرجى إدخال اسم المستخدم');
-      return;
-    }
-
-    if (userName.trim().length < 3) {
-      setError('اسم المستخدم يجب أن يكون 3 أحرف على الأقل');
-      return;
-    }
-
-    if (!password) {
-      setError('يرجى إدخال كلمة المرور');
+    if (!isValidEmail(email)) {
+      setError('يرجى إدخال بريد إلكتروني صحيح');
       return;
     }
 
     if (password.length < 6) {
-      setError('كلمة المرور يجب أن تكون 6 أرقام على الأقل');
-      return;
-    }
-
-    if (password.length > 20) {
-      setError('كلمة المرور يجب ألا تتجاوز 20 رقم');
-      return;
-    }
-
-    if (!/^\d+$/.test(password)) {
-      setError('كلمة المرور يجب أن تحتوي على أرقام فقط');
+      setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
 
@@ -129,49 +58,52 @@ export default function RegisterScreen() {
     }
 
     setIsLoading(true);
-
     try {
-      console.log('[Register] Starting registration for:', userName.trim());
-      const result = await register(fullName.trim(), userName.trim(), password);
-      console.log('[Register] Registration result:', result);
+      const result = await register(fullName.trim(), email.trim(), password);
 
       if (result.success) {
-        const accountNum = 'accountNumber' in result ? result.accountNumber : undefined;
-        if (accountNum) {
-          setNewAccountNumber(accountNum);
-          setShowSuccessModal(true);
+        if (result.needsEmailConfirmation) {
+          router.replace({
+            pathname: '/(auth)/check-email',
+            params: { email: email.trim().toLowerCase() },
+          });
         } else {
-          setError('حدث خطأ: لم يتم إنشاء رقم الحساب');
+          router.replace('/(tabs)');
         }
       } else {
-        console.error('[Register] Registration failed:', result.error);
         setError(result.error || 'حدث خطأ أثناء إنشاء الحساب');
       }
     } catch (err) {
-      console.error('[Register] Registration exception:', err);
-      if (err instanceof Error) {
-        console.error('[Register] Error details:', err.message, err.stack);
-        setError(`خطأ: ${err.message}`);
-      } else {
-        setError('حدث خطأ أثناء إنشاء الحساب');
-      }
+      console.error('[Register] exception:', err);
+      setError('حدث خطأ أثناء إنشاء الحساب');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSuccessModalClose = () => {
-    setShowSuccessModal(false);
-    router.replace('/(auth)/login');
+  const handleGoogleRegister = async () => {
+    setError('');
+    setIsGoogleLoading(true);
+    const result = await signInWithGoogle();
+    setIsGoogleLoading(false);
+
+    if (result.success) {
+      router.replace('/(tabs)');
+    } else if (result.error && result.error !== 'تم إلغاء تسجيل الدخول') {
+      setError(result.error);
+    }
   };
 
+  const busy = isLoading || isGoogleLoading;
+
   return (
-    <LinearGradient colors={['#4F46E5', '#7C3AED']} style={styles.container}>
+    <View style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[
             styles.scrollContent,
             { paddingBottom: Math.max(insets.bottom + 32, 40) },
@@ -181,374 +113,336 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.content}>
-            <View style={styles.header}>
-              <Text style={styles.title}>إنشاء حساب جديد</Text>
-              <Text style={styles.subtitle}>أدخل بياناتك لإنشاء حساب</Text>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../../assets/images/icon.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+
+          <Text style={styles.title}>إنشاء حساب جديد</Text>
+          <Text style={styles.subtitle}>
+            {ENABLE_GOOGLE_AUTH
+              ? 'سجّل بسرعة عبر Google أو ببريدك الإلكتروني'
+              : 'سجّل حساباً جديداً ببريدك الإلكتروني'}
+          </Text>
+
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
+          ) : null}
 
-            <View style={styles.form}>
-              {error ? (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.inputContainer}>
-                <View style={styles.inputWrapper}>
-                  <UserPlus size={20} color="#6B7280" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="أدخل الاسم الكامل (حروف لاتينية)"
-                    placeholderTextColor="#9CA3AF"
-                    value={fullName}
-                    onChangeText={setFullName}
-                    autoCapitalize="words"
-                    editable={!isLoading}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <View style={styles.inputWrapper}>
-                  <User size={20} color="#6B7280" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="أدخل اسم المستخدم (حروف لاتينية، 3 أحرف على الأقل)"
-                    placeholderTextColor="#9CA3AF"
-                    value={userName}
-                    onChangeText={(text) => {
-                      setUserName(text);
-                      if (text.length >= 3) {
-                        checkUsername(text);
-                      } else {
-                        setUsernameError('');
-                      }
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!isLoading}
-                  />
-                  {isCheckingUsername && (
-                    <ActivityIndicator size="small" color="#6B7280" style={styles.checkingIcon} />
-                  )}
-                </View>
-                {usernameError ? <Text style={styles.fieldError}>{usernameError}</Text> : null}
-              </View>
-
-              <View style={styles.inputContainer}>
-                <View style={styles.inputWrapper}>
-                  <Lock size={20} color="#6B7280" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="كلمة المرور (6-20 رقم)"
-                    placeholderTextColor="#9CA3AF"
-                    value={password}
-                    onChangeText={(text) => setPassword(onlyNumbers(text))}
-                    secureTextEntry={!showPassword}
-                    keyboardType="number-pad"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!isLoading}
-                    maxLength={20}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                    style={styles.eyeIcon}
-                  >
-                    {showPassword ? (
-                      <EyeOff size={20} color="#6B7280" />
-                    ) : (
-                      <Eye size={20} color="#6B7280" />
-                    )}
-                  </TouchableOpacity>
-                </View>
-
-                {password.length > 0 && (
-                  <View style={styles.strengthContainer}>
-                    <View style={styles.strengthBarBackground}>
-                      <View
-                        style={[
-                          styles.strengthBarFill,
-                          {
-                            width: `${(passwordStrength.score / 4) * 100}%`,
-                            backgroundColor: passwordStrength.color,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.strengthLabel, { color: passwordStrength.color }]}>
-                      {passwordStrength.label}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.inputContainer}>
-                <View style={styles.inputWrapper}>
-                  <Lock size={20} color="#6B7280" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="تأكيد كلمة المرور"
-                    placeholderTextColor="#9CA3AF"
-                    value={confirmPassword}
-                    onChangeText={(text) => setConfirmPassword(onlyNumbers(text))}
-                    secureTextEntry={!showConfirmPassword}
-                    keyboardType="number-pad"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!isLoading}
-                    maxLength={20}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                    style={styles.eyeIcon}
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff size={20} color="#6B7280" />
-                    ) : (
-                      <Eye size={20} color="#6B7280" />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-
+          {ENABLE_GOOGLE_AUTH && (
+            <>
               <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
-                onPress={handleRegister}
-                disabled={isLoading}
+                style={[styles.googleButton, busy && styles.buttonDisabled]}
+                onPress={handleGoogleRegister}
+                disabled={busy}
+                activeOpacity={0.8}
               >
-                {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                {isGoogleLoading ? (
+                  <ActivityIndicator color="#4F46E5" />
                 ) : (
-                  <Text style={styles.buttonText}>إنشاء حساب</Text>
+                  <>
+                    <View style={styles.googleIcon}>
+                      <Text style={styles.googleIconText}>G</Text>
+                    </View>
+                    <Text style={styles.googleButtonText}>التسجيل عبر Google</Text>
+                  </>
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.back()}
-                disabled={isLoading}
-              >
-                <Text style={styles.backButtonText}>العودة إلى تسجيل الدخول</Text>
-              </TouchableOpacity>
-            </View>
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>أو</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            </>
+          )}
+
+          <View style={styles.inputContainer}>
+            <UserPlus size={20} color="#6B7280" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="الاسم الكامل"
+              placeholderTextColor="#9CA3AF"
+              value={fullName}
+              onChangeText={setFullName}
+              textAlign="right"
+              autoCapitalize="words"
+              editable={!busy}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Mail size={20} color="#6B7280" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="البريد الإلكتروني"
+              placeholderTextColor="#9CA3AF"
+              value={email}
+              onChangeText={setEmail}
+              textAlign="right"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              editable={!busy}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Lock size={20} color="#6B7280" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="كلمة المرور (6 أحرف على الأقل)"
+              placeholderTextColor="#9CA3AF"
+              value={password}
+              onChangeText={setPassword}
+              onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })}
+              secureTextEntry={!showPassword}
+              textAlign="right"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!busy}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.eyeIcon}
+            >
+              {showPassword ? (
+                <EyeOff size={20} color="#6B7280" />
+              ) : (
+                <Eye size={20} color="#6B7280" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Lock size={20} color="#6B7280" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="تأكيد كلمة المرور"
+              placeholderTextColor="#9CA3AF"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })}
+              secureTextEntry={!showConfirmPassword}
+              textAlign="right"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!busy}
+            />
+            <TouchableOpacity
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={styles.eyeIcon}
+            >
+              {showConfirmPassword ? (
+                <EyeOff size={20} color="#6B7280" />
+              ) : (
+                <Eye size={20} color="#6B7280" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, busy && styles.buttonDisabled]}
+            onPress={handleRegister}
+            disabled={busy}
+            activeOpacity={0.85}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.buttonText}>إنشاء حساب</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.footerDivider} />
+
+          <View style={styles.loginRow}>
+            <Text style={styles.loginText}>لديك حساب بالفعل؟</Text>
+            <TouchableOpacity onPress={() => router.back()} disabled={busy}>
+              <Text style={styles.loginLink}>تسجيل الدخول</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <Modal
-        visible={showSuccessModal}
-        transparent
-        animationType="fade"
-        onRequestClose={handleSuccessModalClose}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.successIconContainer}>
-              <CheckCircle size={64} color="#10B981" />
-            </View>
-            <Text style={styles.modalTitle}>تم إنشاء الحساب بنجاح!</Text>
-            <Text style={styles.modalSubtitle}>رقم حسابك الجديد:</Text>
-            <View style={styles.accountNumberContainer}>
-              <Text style={styles.accountNumber}>{newAccountNumber}</Text>
-            </View>
-            <Text style={styles.modalNote}>احفظ رقم الحساب هذا للدخول مستقبلاً</Text>
-            <TouchableOpacity style={styles.modalButton} onPress={handleSuccessModalClose}>
-              <Text style={styles.modalButtonText}>متابعة</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingTop: 40,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  header: {
     alignItems: 'center',
-    marginBottom: 40,
+    paddingHorizontal: 24,
+    paddingTop: 48,
+  },
+  logoContainer: {
+    width: 90,
+    height: 90,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   title: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    color: '#111827',
+    marginBottom: 6,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#E0E7FF',
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 24,
     textAlign: 'center',
   },
-  form: {
-    width: '100%',
-  },
   errorContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    width: '100%',
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#EF4444',
-    borderRadius: 8,
+    borderColor: '#FECACA',
+    borderRadius: 10,
     padding: 12,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   errorText: {
-    color: '#FFFFFF',
+    color: '#DC2626',
     fontSize: 14,
     textAlign: 'center',
   },
-  inputContainer: {
-    marginBottom: 16,
+  googleButton: {
+    width: '100%',
+    height: 58,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  inputWrapper: {
+  googleIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIconText: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#4285F4',
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  dividerRow: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 12,
+    marginVertical: 18,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '600',
+  },
+  inputContainer: {
+    width: '100%',
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
     paddingHorizontal: 16,
-    height: 56,
+    height: 60,
   },
   inputIcon: {
-    marginRight: 12,
+    marginLeft: 12,
   },
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#1F2937',
-    textAlign: 'right',
+    color: '#111827',
   },
   eyeIcon: {
     padding: 4,
   },
-  checkingIcon: {
-    marginLeft: 8,
-  },
-  fieldError: {
-    color: '#FEE2E2',
-    fontSize: 12,
-    marginTop: 4,
-    marginRight: 16,
-    textAlign: 'right',
-  },
-  strengthContainer: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-  },
-  strengthBarBackground: {
-    height: 4,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  strengthBarFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  strengthLabel: {
-    fontSize: 12,
-    marginTop: 4,
-    textAlign: 'right',
-    fontWeight: '600',
-  },
   button: {
-    backgroundColor: '#1F2937',
-    borderRadius: 12,
-    height: 56,
+    width: '100%',
+    height: 58,
+    backgroundColor: '#4F46E5',
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
-  backButton: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  backButtonText: {
-    color: '#E0E7FF',
-    fontSize: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 32,
+  footerDivider: {
     width: '100%',
-    maxWidth: 400,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 22,
+  },
+  loginRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  successIconContainer: {
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    gap: 6,
     marginBottom: 8,
-    textAlign: 'center',
   },
-  modalSubtitle: {
-    fontSize: 16,
+  loginText: {
+    fontSize: 15,
     color: '#6B7280',
-    marginBottom: 16,
-    textAlign: 'center',
   },
-  accountNumberContainer: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    marginBottom: 16,
-  },
-  accountNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
+  loginLink: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#4F46E5',
-    textAlign: 'center',
-  },
-  modalNote: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  modalButton: {
-    backgroundColor: '#4F46E5',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-  },
-  modalButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
   },
 });

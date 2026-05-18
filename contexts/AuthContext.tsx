@@ -1,18 +1,37 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Crypto from 'expo-crypto';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { AppSettings } from '@/types/database';
+
+// مطلوب لإكمال جلسة المصادقة على الويب بعد العودة من المتصفح
+WebBrowser.maybeCompleteAuthSession();
+
+export interface CurrentUser {
+  userName: string;
+  email: string;
+  role: string;
+  userId: string;
+  fullName: string;
+  accountNumber: string;
+}
+
+type AuthResult = { success: boolean; error?: string };
+type RegisterResult = { success: boolean; needsEmailConfirmation?: boolean; error?: string };
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
-  currentUser: { userName: string; role: string; userId: string; fullName: string; accountNumber: string } | null;
-  login: (userName: string, pin: string) => Promise<{ success: boolean; error?: string }>;
-  register: (fullName: string, userName: string, password: string) => Promise<{ success: boolean; accountNumber?: string; error?: string }>;
+  currentUser: CurrentUser | null;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  register: (fullName: string, email: string, password: string) => Promise<RegisterResult>;
+  signInWithGoogle: () => Promise<AuthResult>;
+  verifyEmailOtp: (email: string, token: string) => Promise<AuthResult>;
+  resendEmailOtp: (email: string) => Promise<AuthResult>;
+  resetPassword: (email: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   refreshCurrentUser: () => Promise<void>;
-  checkUsernameAvailability: (userName: string) => Promise<boolean>;
   settings: AppSettings | null;
   refreshSettings: () => Promise<void>;
   updateSettings: (settings: Partial<AppSettings>) => Promise<boolean>;
@@ -20,61 +39,41 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_KEY = '@money_transfer_auth';
-const USER_KEY = '@money_transfer_current_user';
+// رابط العودة الموحّد لتأكيد الإيميل وتسجيل الدخول عبر Google
+const getRedirectUrl = () => Linking.createURL('auth-callback');
 
-// Helper functions for password hashing using expo-crypto
-async function hashPassword(password: string): Promise<string> {
-  try {
-    // Generate a random salt
-    const salt = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      Math.random().toString(36) + Date.now().toString()
-    );
-
-    // Hash password with salt
-    const hash = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      password + salt.substring(0, 16)
-    );
-
-    // Combine salt and hash (salt:hash format)
-    return salt.substring(0, 16) + ':' + hash;
-  } catch (error) {
-    console.error('[hashPassword] Error:', error);
-    throw new Error('فشل في تشفير كلمة المرور');
+// ترجمة رسائل أخطاء Supabase Auth إلى العربية
+function translateAuthError(message?: string): string {
+  const msg = (message || '').toLowerCase();
+  if (msg.includes('invalid login credentials')) {
+    return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
   }
-}
-
-async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-  try {
-    // Split stored hash into salt and hash
-    const [salt, storedHash] = hashedPassword.split(':');
-
-    if (!salt || !storedHash) {
-      console.error('[verifyPassword] Invalid hash format');
-      return false;
-    }
-
-    // Hash the provided password with the same salt
-    const hash = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      password + salt
-    );
-
-    // Compare hashes
-    return hash === storedHash;
-  } catch (error) {
-    console.error('[verifyPassword] Error:', error);
-    return false;
+  if (msg.includes('email not confirmed')) {
+    return 'يجب تأكيد بريدك الإلكتروني أولاً. تحقّق من صندوق الوارد';
   }
+  if (msg.includes('user already registered') || msg.includes('already been registered')) {
+    return 'هذا البريد الإلكتروني مسجّل بالفعل';
+  }
+  if (msg.includes('password should be at least')) {
+    return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
+  }
+  if (msg.includes('unable to validate email') || msg.includes('invalid email')) {
+    return 'صيغة البريد الإلكتروني غير صحيحة';
+  }
+  if (msg.includes('rate limit') || msg.includes('too many requests')) {
+    return 'محاولات كثيرة جداً. يرجى المحاولة بعد قليل';
+  }
+  if (msg.includes('network')) {
+    return 'تعذّر الاتصال بالخادم. تحقّق من اتصالك بالإنترنت';
+  }
+  return message || 'حدث خطأ غير متوقّع';
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ userName: string; role: string; userId: string; fullName: string; accountNumber: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
   const buildDefaultSettings = (): AppSettings => ({
     id: '',
@@ -115,10 +114,165 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // تحميل ملف تعريف المستخدم من app_security (يُنشأ تلقائياً عبر trigger)
+  const loadProfile = async (authUser: User): Promise<CurrentUser | null> => {
+    try {
+      const { data } = await supabase
+        .from('app_security')
+        .select('id, user_name, role, full_name, account_number, email')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      const meta = authUser.user_metadata || {};
+      const fallbackName =
+        (meta.full_name as string) ||
+        (meta.name as string) ||
+        (authUser.email ? authUser.email.split('@')[0] : '') ||
+        'مستخدم';
+
+      if (data) {
+        return {
+          userId: data.id,
+          email: data.email || authUser.email || '',
+          userName: data.email || data.user_name || authUser.email || '',
+          role: data.role || 'user',
+          fullName: data.full_name || fallbackName,
+          accountNumber: data.account_number || '',
+        };
+      }
+
+      // احتياط: إنشاء الملف إذا لم يُنشئه الـ trigger لأي سبب.
+      // user_name إلزامي لأن دوال RPC القديمة تبحث عن المستخدم عبره (نستخدم البريد).
+      const { data: created } = await supabase
+        .from('app_security')
+        .upsert(
+          {
+            id: authUser.id,
+            email: authUser.email,
+            user_name: authUser.email,
+            full_name: fallbackName,
+            role: 'user',
+            is_active: true,
+            auth_provider: (authUser.app_metadata?.provider as string) || 'email',
+          },
+          { onConflict: 'id' }
+        )
+        .select('id, user_name, role, full_name, account_number, email')
+        .maybeSingle();
+
+      if (created) {
+        return {
+          userId: created.id,
+          email: created.email || authUser.email || '',
+          userName: created.email || created.user_name || authUser.email || '',
+          role: created.role || 'user',
+          fullName: created.full_name || fallbackName,
+          accountNumber: created.account_number || '',
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('[Auth] loadProfile error:', error);
+      return null;
+    }
+  };
+
+  // معالجة روابط العودة (تأكيد الإيميل / Google / استعادة كلمة المرور)
+  const handleDeepLink = async (url: string) => {
+    try {
+      if (!url) return;
+
+      const params: Record<string, string> = {};
+      const parsed = Linking.parse(url);
+      Object.entries(parsed.queryParams || {}).forEach(([k, v]) => {
+        if (typeof v === 'string') params[k] = v;
+      });
+
+      // بعض المزوّدين يضعون القيم في جزء الـ fragment (#...)
+      const hashIndex = url.indexOf('#');
+      if (hashIndex !== -1) {
+        url
+          .substring(hashIndex + 1)
+          .split('&')
+          .forEach((kv) => {
+            const [k, v] = kv.split('=');
+            if (k && v) params[k] = decodeURIComponent(v);
+          });
+      }
+
+      if (params.error) {
+        console.warn('[Auth] deep link error:', params.error_description || params.error);
+        return;
+      }
+
+      if (params.access_token && params.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: params.access_token,
+          refresh_token: params.refresh_token,
+        });
+        return;
+      }
+
+      if (params.code) {
+        await supabase.auth.exchangeCodeForSession(params.code);
+        return;
+      }
+
+      if (params.token_hash && params.type) {
+        await supabase.auth.verifyOtp({
+          token_hash: params.token_hash,
+          type: params.type as any,
+        });
+      }
+    } catch (error) {
+      console.error('[Auth] handleDeepLink error:', error);
+    }
+  };
+
   useEffect(() => {
-    checkAuth();
+    let mounted = true;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // تأجيل أي استدعاء آخر لـ supabase خارج هذا الـ callback (توصية رسمية)
+      setTimeout(async () => {
+        if (!mounted) return;
+
+        if (session?.user) {
+          const profile = await loadProfile(session.user);
+          if (!mounted) return;
+          if (profile) {
+            setCurrentUser(profile);
+            setIsAuthenticated(true);
+          } else {
+            setCurrentUser(null);
+            setIsAuthenticated(false);
+          }
+        } else {
+          setCurrentUser(null);
+          setIsAuthenticated(false);
+        }
+
+        if (mounted) setIsLoading(false);
+      }, 0);
+    });
+
+    // التقاط رابط العودة (التطبيق مفتوح أو يُفتح من رابط)
+    const linkSub = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink(url);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      linkSub.remove();
+    };
   }, []);
 
+  // تحميل/تفريغ الإعدادات حسب المستخدم الحالي
   useEffect(() => {
     if (currentUser?.userId) {
       loadSettings(currentUser.userId);
@@ -127,189 +281,200 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser?.userId]);
 
-  const checkAuth = async () => {
+  const login = async (email: string, password: string): Promise<AuthResult> => {
     try {
-      const authValue = await AsyncStorage.getItem(AUTH_KEY);
-      const userValue = await AsyncStorage.getItem(USER_KEY);
-
-      if (authValue === 'true' && userValue) {
-        const user = JSON.parse(userValue);
-
-        // Verify the account still exists and is not soft-deleted
-        if (user?.userId) {
-          try {
-            const { data: row } = await supabase
-              .from('app_security')
-              .select('deleted_at, is_active')
-              .eq('id', user.userId)
-              .maybeSingle();
-
-            if (!row || row.deleted_at || !row.is_active) {
-              await AsyncStorage.removeItem(AUTH_KEY);
-              await AsyncStorage.removeItem(USER_KEY);
-              return;
-            }
-          } catch (error) {
-            console.error('Error validating stored session:', error);
-          }
-        }
-
-        setIsAuthenticated(true);
-        setCurrentUser(user);
-
-        // Set current_user in Supabase for RLS
-        try {
-          await supabase.rpc('set_current_user', { user_name: user.userName });
-        } catch (error) {
-          console.error('Error setting current user in Supabase:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Error checking auth:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const login = async (userName: string, pin: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      if (!settings && currentUser?.userId) {
-        await loadSettings(currentUser.userId);
-      }
-
-      // Check if account is locked due to too many failed attempts
-      const { data: isLocked } = await supabase.rpc('check_login_attempts', { p_user_name: userName });
-
-      if (isLocked === true) {
-        return { success: false, error: 'تم قفل حسابك مؤقتاً بعد 5 محاولات فاشلة. حاول بعد 15 دقيقة' };
-      }
-
-      const { data, error } = await supabase
-        .from('app_security')
-        .select('id, pin_hash, is_active, role, user_name, full_name, account_number, deleted_at')
-        .eq('user_name', userName)
-        .maybeSingle();
-
-      if (error || !data) {
-        // Record failed attempt
-        await supabase.rpc('record_login_attempt', {
-          p_user_name: userName,
-          p_success: false,
-        });
-        return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
-      }
-
-      if (data.deleted_at) {
-        return { success: false, error: 'هذا الحساب غير موجود' };
-      }
-
-      if (!data.is_active) {
-        return { success: false, error: 'حسابك غير نشط. يرجى التواصل مع المدير' };
-      }
-
-      // Check password - support multiple hash formats for backward compatibility
-      let isPasswordValid = false;
-
-      // Check if hash contains ':' (new expo-crypto format: salt:hash)
-      if (data.pin_hash.includes(':')) {
-        // New expo-crypto format
-        isPasswordValid = await verifyPassword(pin, data.pin_hash);
-      } else {
-        // Legacy SHA256 format (no salt)
-        const hashHex = await Crypto.digestStringAsync(
-          Crypto.CryptoDigestAlgorithm.SHA256,
-          pin
-        );
-        isPasswordValid = data.pin_hash === hashHex;
-
-        // If valid and using old hash, upgrade to new format
-        if (isPasswordValid) {
-          const newHash = await hashPassword(pin);
-          await supabase
-            .from('app_security')
-            .update({ pin_hash: newHash })
-            .eq('id', data.id);
-        }
-      }
-
-      if (isPasswordValid) {
-        // Record successful login
-        await supabase.rpc('record_login_attempt', {
-          p_user_name: userName,
-          p_success: true,
-        });
-
-        // Update last login
-        await supabase
-          .from('app_security')
-          .update({ last_login: new Date().toISOString() })
-          .eq('id', data.id);
-
-        // Set current_user in Supabase for RLS
-        await supabase.rpc('set_current_user', { user_name: userName });
-
-        const user = {
-          userName: data.user_name,
-          role: data.role,
-          userId: data.id,
-          fullName: data.full_name,
-          accountNumber: data.account_number,
-        };
-
-        await AsyncStorage.setItem(AUTH_KEY, 'true');
-        await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
-        setCurrentUser(user);
-        setIsAuthenticated(true);
-        return { success: true };
-      }
-
-      // Record failed attempt
-      await supabase.rpc('record_login_attempt', {
-        p_user_name: userName,
-        p_success: false,
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
       });
 
-      return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
+      if (error) {
+        return { success: false, error: translateAuthError(error.message) };
+      }
+
+      // onAuthStateChange سيتكفّل بتعيين currentUser
+      return { success: true };
     } catch (error) {
-      console.error('Error during login:', error);
+      console.error('[Auth] login error:', error);
       return { success: false, error: 'حدث خطأ أثناء تسجيل الدخول' };
     }
   };
 
-  const refreshCurrentUser = async () => {
-    if (!currentUser?.userId) return;
+  const register = async (
+    fullName: string,
+    email: string,
+    password: string
+  ): Promise<RegisterResult> => {
     try {
-      const { data, error } = await supabase
-        .from('app_security')
-        .select('id, user_name, role, full_name, account_number')
-        .eq('id', currentUser.userId)
-        .maybeSingle();
+      if (!fullName || fullName.trim().length < 2) {
+        return { success: false, error: 'الاسم الكامل يجب أن يكون حرفين على الأقل' };
+      }
+      if (!email || !email.includes('@')) {
+        return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
+      }
+      if (!password || password.length < 6) {
+        return { success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' };
+      }
 
-      if (error || !data) return;
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: { full_name: fullName.trim() },
+          emailRedirectTo: getRedirectUrl(),
+        },
+      });
 
-      const updated = {
-        userName: data.user_name,
-        role: data.role,
-        userId: data.id,
-        fullName: data.full_name,
-        accountNumber: data.account_number,
-      };
+      if (error) {
+        return { success: false, error: translateAuthError(error.message) };
+      }
 
-      setCurrentUser(updated);
-      await AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
+      // عند تفعيل تأكيد الإيميل: إذا كان البريد مسجّلاً مسبقاً يرجع Supabase
+      // مستخدماً بدون identities لأسباب أمنية.
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        return { success: false, error: 'هذا البريد الإلكتروني مسجّل بالفعل' };
+      }
+
+      // تأكيد الإيميل مُفعّل: لا توجد جلسة حتى يؤكّد المستخدم بريده
+      if (data.user && !data.session) {
+        return { success: true, needsEmailConfirmation: true };
+      }
+
+      return { success: true, needsEmailConfirmation: false };
     } catch (error) {
-      console.error('Error refreshing current user:', error);
+      console.error('[Auth] register error:', error);
+      return { success: false, error: 'حدث خطأ أثناء إنشاء الحساب' };
+    }
+  };
+
+  const signInWithGoogle = async (): Promise<AuthResult> => {
+    try {
+      const redirectTo = getRedirectUrl();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+
+      if (error || !data?.url) {
+        return { success: false, error: 'تعذّر بدء تسجيل الدخول عبر Google' };
+      }
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+      if (result.type === 'success' && result.url) {
+        await handleDeepLink(result.url);
+        return { success: true };
+      }
+
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        return { success: false, error: 'تم إلغاء تسجيل الدخول' };
+      }
+
+      return { success: false, error: 'تعذّر إكمال تسجيل الدخول عبر Google' };
+    } catch (error) {
+      console.error('[Auth] Google sign-in error:', error);
+      return { success: false, error: 'حدث خطأ أثناء تسجيل الدخول عبر Google' };
+    }
+  };
+
+  const verifyEmailOtp = async (email: string, token: string): Promise<AuthResult> => {
+    try {
+      const code = token.replace(/\D/g, '').trim();
+      if (code.length !== 6) {
+        return { success: false, error: 'رمز التأكيد يجب أن يكون 6 أرقام' };
+      }
+
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: code,
+        type: 'signup',
+      });
+
+      if (error) {
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('expired')) {
+          return { success: false, error: 'انتهت صلاحية الرمز. اطلب رمزاً جديداً' };
+        }
+        if (msg.includes('invalid') || msg.includes('token')) {
+          return { success: false, error: 'رمز التأكيد غير صحيح' };
+        }
+        return { success: false, error: translateAuthError(error.message) };
+      }
+
+      // onAuthStateChange سيتكفّل بتعيين currentUser بعد نجاح التحقق
+      return { success: true };
+    } catch (error) {
+      console.error('[Auth] verifyEmailOtp error:', error);
+      return { success: false, error: 'حدث خطأ أثناء التحقق من الرمز' };
+    }
+  };
+
+  const resendEmailOtp = async (email: string): Promise<AuthResult> => {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim().toLowerCase(),
+        options: { emailRedirectTo: getRedirectUrl() },
+      });
+
+      if (error) {
+        return { success: false, error: translateAuthError(error.message) };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[Auth] resendEmailOtp error:', error);
+      return { success: false, error: 'تعذّر إعادة إرسال الرمز' };
+    }
+  };
+
+  const resetPassword = async (email: string): Promise<AuthResult> => {
+    try {
+      if (!email || !email.includes('@')) {
+        return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        email.trim().toLowerCase(),
+        { redirectTo: getRedirectUrl() }
+      );
+
+      if (error) {
+        return { success: false, error: translateAuthError(error.message) };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[Auth] resetPassword error:', error);
+      return { success: false, error: 'حدث خطأ أثناء إرسال رابط الاستعادة' };
+    }
+  };
+
+  const refreshCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        return;
+      }
+      const profile = await loadProfile(user);
+      if (profile) {
+        setCurrentUser(profile);
+        setIsAuthenticated(true);
+      }
+    } catch (error) {
+      console.error('[Auth] refreshCurrentUser error:', error);
     }
   };
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem(AUTH_KEY);
-      await AsyncStorage.removeItem(USER_KEY);
+      await supabase.auth.signOut();
       setIsAuthenticated(false);
       setCurrentUser(null);
     } catch (error) {
-      console.error('Error during logout:', error);
+      console.error('[Auth] logout error:', error);
     }
   };
 
@@ -317,180 +482,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await loadSettings(currentUser?.userId);
   };
 
-  const register = async (fullName: string, userName: string, password: string): Promise<{ success: boolean; accountNumber?: string; error?: string }> => {
-    try {
-      console.log('[AuthContext] Starting registration:', { fullName, userName });
-
-      // Validate inputs
-      if (!fullName || fullName.trim().length < 2) {
-        console.log('[AuthContext] Validation failed: fullName too short');
-        return { success: false, error: 'الاسم الكامل يجب أن يكون حرفين على الأقل' };
-      }
-
-      if (!userName || userName.trim().length < 3) {
-        console.log('[AuthContext] Validation failed: userName too short');
-        return { success: false, error: 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل' };
-      }
-
-      if (!password || password.length < 6) {
-        console.log('[AuthContext] Validation failed: password too short');
-        return { success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' };
-      }
-
-      // Check for weak passwords
-      const weakPasswords = [
-        '123456', '123456789', 'password', 'admin', 'qwerty', '12345678',
-        '111111', '123123', '1234567890', '1234567', 'abc123', '000000',
-        '654321', '666666', '88888888', '999999', 'asdfghjkl', 'qwertyuiop'
-      ];
-
-      if (weakPasswords.includes(password.toLowerCase())) {
-        console.log('[AuthContext] Validation failed: weak password');
-        return { success: false, error: 'كلمة المرور ضعيفة جداً. اختر كلمة مرور أقوى' };
-      }
-
-      // Check if username already exists
-      console.log('[AuthContext] Checking username availability...');
-      const { data: existingUser, error: checkError } = await supabase
-        .from('app_security')
-        .select('user_name')
-        .eq('user_name', userName.trim())
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('[AuthContext] Error checking username:', checkError);
-        return { success: false, error: 'خطأ في التحقق من اسم المستخدم' };
-      }
-
-      if (existingUser) {
-        console.log('[AuthContext] Username already exists');
-        return { success: false, error: 'اسم المستخدم مستخدم بالفعل. اختر اسم آخر' };
-      }
-
-      // Hash password with expo-crypto
-      console.log('[AuthContext] Hashing password...');
-      let hashedPassword: string;
-      try {
-        hashedPassword = await hashPassword(password);
-        console.log('[AuthContext] Password hashed successfully');
-      } catch (hashError) {
-        console.error('[AuthContext] Hashing failed:', hashError);
-        return { success: false, error: 'فشل تشفير كلمة المرور' };
-      }
-
-      // Insert new user (account_number will be auto-generated by trigger)
-      console.log('[AuthContext] Inserting new user into database...');
-      const { data: newUser, error } = await supabase
-        .from('app_security')
-        .insert({
-          user_name: userName.trim(),
-          full_name: fullName.trim(),
-          pin_hash: hashedPassword,
-          role: 'user',
-          is_active: true,
-        })
-        .select('account_number, user_name, full_name')
-        .single();
-
-      if (error) {
-        console.error('[AuthContext] Insert error:', error);
-        console.error('[AuthContext] Error code:', error.code);
-        console.error('[AuthContext] Error message:', error.message);
-        console.error('[AuthContext] Error details:', error.details);
-        return { success: false, error: `خطأ في قاعدة البيانات: ${error.message}` };
-      }
-
-      if (!newUser) {
-        console.error('[AuthContext] No user data returned');
-        return { success: false, error: 'حدث خطأ أثناء إنشاء الحساب. حاول مرة أخرى' };
-      }
-
-      console.log('[AuthContext] User created successfully:', newUser);
-      return {
-        success: true,
-        accountNumber: newUser.account_number,
-      };
-    } catch (error) {
-      console.error('[AuthContext] Exception during registration:', error);
-      if (error instanceof Error) {
-        console.error('[AuthContext] Error message:', error.message);
-        console.error('[AuthContext] Error stack:', error.stack);
-        return { success: false, error: `خطأ: ${error.message}` };
-      }
-      return { success: false, error: 'حدث خطأ أثناء إنشاء الحساب' };
-    }
-  };
-
-  const checkUsernameAvailability = async (userName: string): Promise<boolean> => {
-    try {
-      if (!userName || userName.trim().length < 3) {
-        return false;
-      }
-
-      const { data } = await supabase
-        .from('app_security')
-        .select('user_name')
-        .eq('user_name', userName.trim())
-        .maybeSingle();
-
-      // Return true if username is available (data is null)
-      return data === null;
-    } catch (error) {
-      console.error('Error checking username:', error);
-      return false;
-    }
-  };
-
   const updateSettings = async (newSettings: Partial<AppSettings>): Promise<boolean> => {
     try {
-      console.log('[AuthContext] updateSettings called with:', JSON.stringify(newSettings, null, 2));
-
       if (newSettings.shop_logo !== undefined && currentUser?.role !== 'admin') {
         console.error('[AuthContext] Non-admin user attempted to update shop logo');
         return false;
       }
 
       const activeUserId = currentUser?.userId;
-      const fixedId = '00000000-0000-0000-0000-000000000000';
-      const settingsToUpsert: Record<string, any> = activeUserId
-        ? { user_id: activeUserId, ...newSettings }
-        : { id: fixedId, ...newSettings };
+      if (!activeUserId) {
+        console.error('[AuthContext] updateSettings called without an active user');
+        return false;
+      }
 
-      console.log('[AuthContext] Performing upsert with data:', JSON.stringify(settingsToUpsert, null, 2));
-
-      const { data, error: upsertError } = await supabase
+      const { error: upsertError } = await supabase
         .from('app_settings')
-        .upsert(settingsToUpsert, {
-          onConflict: activeUserId ? 'user_id' : 'id',
-          ignoreDuplicates: false,
-        })
+        .upsert(
+          { user_id: activeUserId, ...newSettings },
+          { onConflict: 'user_id', ignoreDuplicates: false }
+        )
         .select();
 
       if (upsertError) {
         console.error('[AuthContext] Upsert error:', upsertError);
-        console.error('[AuthContext] Error code:', upsertError.code);
-        console.error('[AuthContext] Error message:', upsertError.message);
-        console.error('[AuthContext] Error details:', JSON.stringify(upsertError, null, 2));
         throw upsertError;
       }
 
-      console.log('[AuthContext] Settings upserted successfully:', data);
-
-      if (activeUserId) {
-        await loadSettings(activeUserId);
-      } else {
-        await loadSettings();
-      }
-
-      console.log('[AuthContext] Settings reloaded');
+      await loadSettings(activeUserId);
       return true;
     } catch (error) {
       console.error('[AuthContext] Error updating settings:', error);
-      if (error instanceof Error) {
-        console.error('[AuthContext] Error name:', error.name);
-        console.error('[AuthContext] Error message:', error.message);
-        console.error('[AuthContext] Error stack:', error.stack);
-      }
       return false;
     }
   };
@@ -503,9 +524,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         login,
         register,
+        signInWithGoogle,
+        verifyEmailOtp,
+        resendEmailOtp,
+        resetPassword,
         logout,
         refreshCurrentUser,
-        checkUsernameAvailability,
         settings,
         refreshSettings,
         updateSettings,
@@ -519,20 +543,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    // Return default values during initialization
+    // قيم افتراضية أثناء التهيئة
     return {
       isAuthenticated: false,
       isLoading: true,
       currentUser: null,
-      login: async (_userName: string, _pin: string) => ({ success: false, error: 'Initializing...' }),
-      register: async (_fullName: string, _userName: string, _password: string) => ({ success: false, error: 'Initializing...' }),
+      login: async (_email: string, _password: string) => ({
+        success: false,
+        error: 'Initializing...',
+      }),
+      register: async (_fullName: string, _email: string, _password: string) => ({
+        success: false,
+        error: 'Initializing...',
+      }),
+      signInWithGoogle: async () => ({ success: false, error: 'Initializing...' }),
+      verifyEmailOtp: async (_email: string, _token: string) => ({
+        success: false,
+        error: 'Initializing...',
+      }),
+      resendEmailOtp: async (_email: string) => ({ success: false, error: 'Initializing...' }),
+      resetPassword: async (_email: string) => ({ success: false, error: 'Initializing...' }),
       logout: async () => {},
       refreshCurrentUser: async () => {},
-      checkUsernameAvailability: async (_userName: string) => false,
       settings: null,
       refreshSettings: async () => {},
       updateSettings: async () => false,
-    };
+    } as AuthContextType;
   }
   return context;
 }

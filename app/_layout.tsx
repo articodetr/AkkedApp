@@ -35,7 +35,6 @@ function RootLayoutNav() {
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="pin-entry" />
         <Stack.Screen name="pin-settings" />
         <Stack.Screen name="add-customer" />
         <Stack.Screen name="customer-details" />
@@ -53,6 +52,7 @@ function RootLayoutNav() {
         <Stack.Screen name="statistics" />
         <Stack.Screen name="ai-assistant" />
         <Stack.Screen name="backup" />
+        <Stack.Screen name="link-legacy-data" />
         <Stack.Screen name="reports" />
         <Stack.Screen name="notification-detail" />
         <Stack.Screen name="+not-found" />
