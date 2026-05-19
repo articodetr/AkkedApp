@@ -18,9 +18,25 @@ interface SheetRow {
 }
 
 interface EmbeddedImage {
-  extension: 'png' | 'jpg' | 'jpeg';
+  extension: 'png' | 'jpg' | 'jpeg' | 'svg' | 'webp';
   contentType: string;
-  base64: string;
+  data: string;
+  encoding: 'base64' | 'text';
+  dimensions?: ImageDimensions;
+}
+
+interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
+interface CompanyHeaderInfo {
+  nameAr?: string | null;
+  nameEn?: string | null;
+  phoneAr?: string | null;
+  phoneEn?: string | null;
+  addressAr?: string | null;
+  addressEn?: string | null;
 }
 
 interface AccountStatementXlsxOptions {
@@ -28,6 +44,7 @@ interface AccountStatementXlsxOptions {
   movements: AccountMovement[];
   previousMovements?: AccountMovement[];
   logoDataUrl?: string;
+  companyHeader?: CompanyHeaderInfo;
   isProfitLossAccount?: boolean;
   currentUser?: {
     userId?: string | null;
@@ -75,20 +92,333 @@ function columnName(index: number): string {
   return name;
 }
 
-function parseImageDataUrl(dataUrl?: string): EmbeddedImage | null {
-  if (!dataUrl) return null;
+const WORKSHEET_COLUMN_WIDTHS = [8, 14, 18, 16, 16, 16, 14, 18, 14, 24, 22, 22, 34];
+const WORKSHEET_LAST_COLUMN = columnName(WORKSHEET_COLUMN_WIDTHS.length);
+const HEADER_IMAGE_MAX_WIDTH = 560;
+const HEADER_IMAGE_MAX_HEIGHT = 126;
+const HEADER_IMAGE_TOP_PADDING = 4;
 
-  const match = dataUrl.match(/^data:image\/(png|jpe?g);base64,(.+)$/i);
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function getImageContentType(extension: EmbeddedImage['extension']): string {
+  if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
+  if (extension === 'svg') return 'image/svg+xml';
+  if (extension === 'webp') return 'image/webp';
+  return 'image/png';
+}
+
+function base64ToBytes(base64: string): Uint8Array | null {
+  try {
+    if (typeof globalThis.atob !== 'function') return null;
+
+    const binary = globalThis.atob(base64.replace(/\s/g, ''));
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function readUint16BE(bytes: Uint8Array, offset: number): number {
+  return (bytes[offset] << 8) + bytes[offset + 1];
+}
+
+function readUint16LE(bytes: Uint8Array, offset: number): number {
+  return bytes[offset] + (bytes[offset + 1] << 8);
+}
+
+function readUint24LE(bytes: Uint8Array, offset: number): number {
+  return bytes[offset] + (bytes[offset + 1] << 8) + (bytes[offset + 2] << 16);
+}
+
+function readUint32BE(bytes: Uint8Array, offset: number): number {
+  return (
+    bytes[offset] * 0x1000000 +
+    (bytes[offset + 1] << 16) +
+    (bytes[offset + 2] << 8) +
+    bytes[offset + 3]
+  );
+}
+
+function parsePngDimensions(bytes: Uint8Array): ImageDimensions | undefined {
+  if (
+    bytes.length < 24 ||
+    bytes[0] !== 0x89 ||
+    bytes[1] !== 0x50 ||
+    bytes[2] !== 0x4e ||
+    bytes[3] !== 0x47
+  ) {
+    return undefined;
+  }
+
+  return {
+    width: readUint32BE(bytes, 16),
+    height: readUint32BE(bytes, 20),
+  };
+}
+
+function parseJpegDimensions(bytes: Uint8Array): ImageDimensions | undefined {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+    return undefined;
+  }
+
+  let offset = 2;
+
+  while (offset + 9 < bytes.length) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+
+    const marker = bytes[offset + 1];
+
+    if (marker === 0xd9 || marker === 0xda) {
+      break;
+    }
+
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      offset += 2;
+      continue;
+    }
+
+    const segmentLength = readUint16BE(bytes, offset + 2);
+    const isStartOfFrame =
+      marker >= 0xc0 &&
+      marker <= 0xcf &&
+      marker !== 0xc4 &&
+      marker !== 0xc8 &&
+      marker !== 0xcc;
+
+    if (isStartOfFrame && offset + 8 < bytes.length) {
+      return {
+        width: readUint16BE(bytes, offset + 7),
+        height: readUint16BE(bytes, offset + 5),
+      };
+    }
+
+    offset += 2 + segmentLength;
+  }
+
+  return undefined;
+}
+
+function parseWebpDimensions(bytes: Uint8Array): ImageDimensions | undefined {
+  if (
+    bytes.length < 30 ||
+    String.fromCharCode(...bytes.slice(0, 4)) !== 'RIFF' ||
+    String.fromCharCode(...bytes.slice(8, 12)) !== 'WEBP'
+  ) {
+    return undefined;
+  }
+
+  const chunkType = String.fromCharCode(...bytes.slice(12, 16));
+
+  if (chunkType === 'VP8X' && bytes.length >= 30) {
+    return {
+      width: readUint24LE(bytes, 24) + 1,
+      height: readUint24LE(bytes, 27) + 1,
+    };
+  }
+
+  if (chunkType === 'VP8 ' && bytes.length >= 30) {
+    return {
+      width: readUint16LE(bytes, 26) & 0x3fff,
+      height: readUint16LE(bytes, 28) & 0x3fff,
+    };
+  }
+
+  if (chunkType === 'VP8L' && bytes.length >= 25) {
+    return {
+      width: 1 + bytes[21] + ((bytes[22] & 0x3f) << 8),
+      height: 1 + ((bytes[22] & 0xc0) >> 6) + (bytes[23] << 2) + ((bytes[24] & 0x0f) << 10),
+    };
+  }
+
+  return undefined;
+}
+
+function parseSvgDimensions(svgText: string): ImageDimensions | undefined {
+  const svgTag = svgText.match(/<svg\b[^>]*>/i)?.[0] || '';
+  const widthValue = svgTag.match(/\bwidth=["']([\d.]+)/i)?.[1];
+  const heightValue = svgTag.match(/\bheight=["']([\d.]+)/i)?.[1];
+  const width = widthValue ? Number(widthValue) : 0;
+  const height = heightValue ? Number(heightValue) : 0;
+
+  if (width > 0 && height > 0) {
+    return { width, height };
+  }
+
+  const viewBox = svgTag.match(/\bviewBox=["']\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)/i);
+  const viewBoxWidth = viewBox ? Number(viewBox[1]) : 0;
+  const viewBoxHeight = viewBox ? Number(viewBox[2]) : 0;
+
+  if (viewBoxWidth > 0 && viewBoxHeight > 0) {
+    return { width: viewBoxWidth, height: viewBoxHeight };
+  }
+
+  return undefined;
+}
+
+function getRasterImageDimensions(
+  extension: EmbeddedImage['extension'],
+  base64: string,
+): ImageDimensions | undefined {
+  const bytes = base64ToBytes(base64);
+  if (!bytes) return undefined;
+
+  if (extension === 'png') return parsePngDimensions(bytes);
+  if (extension === 'jpg' || extension === 'jpeg') return parseJpegDimensions(bytes);
+  if (extension === 'webp') return parseWebpDimensions(bytes);
+
+  return undefined;
+}
+
+function parseRasterImageDataUrl(dataUrl: string): EmbeddedImage | null {
+  const match = dataUrl.match(/^data:image\/(png|jpe?g|webp);base64,(.+)$/i);
   if (!match) return null;
 
   const extension = match[1].toLowerCase() as EmbeddedImage['extension'];
-  const normalizedExtension = extension === 'jpg' ? 'jpeg' : extension;
+  const data = match[2].replace(/\s/g, '');
 
   return {
     extension,
-    contentType: `image/${normalizedExtension}`,
-    base64: match[2].replace(/\s/g, ''),
+    contentType: getImageContentType(extension),
+    data,
+    encoding: 'base64',
+    dimensions: getRasterImageDimensions(extension, data),
   };
+}
+
+function parseSvgImageDataUrl(dataUrl: string): EmbeddedImage | null {
+  const svgMatch = dataUrl.match(/^data:image\/svg\+xml(?:;charset=[^;,]+)?(;base64)?,([\s\S]+)$/i);
+  if (!svgMatch) return null;
+
+  const isBase64 = Boolean(svgMatch[1]);
+  const rawSvg = svgMatch[2];
+  const svgText = isBase64
+    ? globalThis.atob?.(rawSvg.replace(/\s/g, '')) || ''
+    : safeDecodeURIComponent(rawSvg);
+
+  // Letterhead SVGs carry both the center logo and the company text.
+  // Keep the SVG intact so Excel does not lose the surrounding details.
+  return {
+    extension: 'svg',
+    contentType: 'image/svg+xml',
+    data: isBase64 ? rawSvg.replace(/\s/g, '') : svgText,
+    encoding: isBase64 ? 'base64' : 'text',
+    dimensions: parseSvgDimensions(svgText),
+  };
+}
+
+function parseImageDataUrl(dataUrl?: string): EmbeddedImage | null {
+  if (!dataUrl) return null;
+
+  return parseRasterImageDataUrl(dataUrl) || parseSvgImageDataUrl(dataUrl);
+}
+
+function trimHeaderText(value?: string | null): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function hasCompanyHeaderInfo(companyHeader?: CompanyHeaderInfo): boolean {
+  if (!companyHeader) return false;
+
+  return Boolean(
+    trimHeaderText(companyHeader.nameAr) ||
+      trimHeaderText(companyHeader.nameEn) ||
+      trimHeaderText(companyHeader.phoneAr) ||
+      trimHeaderText(companyHeader.phoneEn) ||
+      trimHeaderText(companyHeader.addressAr) ||
+      trimHeaderText(companyHeader.addressEn),
+  );
+}
+
+function getSvgTextFromDataUrl(dataUrl?: string): string {
+  const svgMatch = dataUrl?.match(/^data:image\/svg\+xml(?:;charset=[^;,]+)?(;base64)?,([\s\S]+)$/i);
+  if (!svgMatch) return '';
+
+  const rawSvg = svgMatch[2];
+  return svgMatch[1]
+    ? globalThis.atob?.(rawSvg.replace(/\s/g, '')) || ''
+    : safeDecodeURIComponent(rawSvg);
+}
+
+function isCompleteHeaderImage(dataUrl: string | undefined, image: EmbeddedImage | null): boolean {
+  if (!dataUrl || !image) return false;
+
+  if (image.extension === 'svg' && /<text\b/i.test(getSvgTextFromDataUrl(dataUrl))) {
+    return true;
+  }
+
+  if (!image.dimensions?.width || !image.dimensions?.height) {
+    return false;
+  }
+
+  return image.dimensions.width / image.dimensions.height >= 2.2;
+}
+
+function buildCompanyHeaderDataUrl(
+  companyHeader: CompanyHeaderInfo,
+  logoDataUrl?: string,
+): string {
+  const nameAr = trimHeaderText(companyHeader.nameAr) || trimHeaderText(companyHeader.nameEn) || 'Akked';
+  const nameEn = trimHeaderText(companyHeader.nameEn) || trimHeaderText(companyHeader.nameAr) || 'Akked';
+  const phoneAr = trimHeaderText(companyHeader.phoneAr) || trimHeaderText(companyHeader.phoneEn);
+  const phoneEn = trimHeaderText(companyHeader.phoneEn) || trimHeaderText(companyHeader.phoneAr);
+  const addressAr = trimHeaderText(companyHeader.addressAr);
+  const addressEn = trimHeaderText(companyHeader.addressEn);
+  const initials = escapeXml((nameEn || nameAr || 'A').charAt(0).toUpperCase());
+  const logoHref = logoDataUrl?.startsWith('data:image/') ? escapeXml(logoDataUrl) : '';
+
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="620" viewBox="0 0 2048 620">
+    <rect width="2048" height="620" fill="#ffffff" />
+    <rect x="24" y="24" width="2000" height="572" rx="24" fill="#ffffff" stroke="#D4D4D4" stroke-width="2.5" />
+
+    <text x="170" y="188" font-size="62" font-weight="800" fill="#111111">${escapeXml(nameEn)}</text>
+    ${phoneEn ? `<text x="170" y="282" font-size="36" font-weight="500" fill="#4B5563">${escapeXml(phoneEn)}</text>` : ``}
+    ${addressEn ? `<text x="170" y="366" font-size="34" font-weight="500" fill="#6B7280">${escapeXml(addressEn)}</text>` : ``}
+
+    <text x="1878" y="150" text-anchor="end" font-size="62" font-weight="800" fill="#111111">${escapeXml(nameAr)}</text>
+    ${phoneAr ? `<text x="1878" y="222" text-anchor="end" font-size="36" font-weight="500" fill="#4B5563">${escapeXml(phoneAr)}</text>` : ``}
+    ${addressAr ? `<text x="1878" y="286" text-anchor="end" font-size="34" font-weight="500" fill="#6B7280">${escapeXml(addressAr)}</text>` : ``}
+
+    ${
+      logoHref
+        ? `<image href="${logoHref}" x="884" y="74" width="280" height="280" preserveAspectRatio="xMidYMid meet" />`
+        : `<circle cx="1024" cy="218" r="132" fill="#ffffff" stroke="#111111" stroke-width="6" /><text x="1024" y="240" text-anchor="middle" font-size="110" font-weight="700" fill="#111111">${initials}</text>`
+    }
+
+    <line x1="150" y1="548" x2="1898" y2="548" stroke="#BDBDBD" stroke-width="3.5" />
+  </svg>
+  `;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function buildHeaderImageDataUrl(options: AccountStatementXlsxOptions): string | undefined {
+  const originalImage = parseImageDataUrl(options.logoDataUrl);
+
+  if (isCompleteHeaderImage(options.logoDataUrl, originalImage)) {
+    return options.logoDataUrl;
+  }
+
+  if (hasCompanyHeaderInfo(options.companyHeader)) {
+    return buildCompanyHeaderDataUrl(options.companyHeader!, options.logoDataUrl);
+  }
+
+  return options.logoDataUrl;
 }
 
 function getCombinedAmountFromPool(
@@ -143,7 +473,7 @@ function getMovementCreatorLabel(
 function buildWorksheetRows(options: AccountStatementXlsxOptions) {
   const rows: SheetRow[] = [];
   const merges: string[] = [];
-  const totalColumns = 13;
+  const totalColumns = WORKSHEET_COLUMN_WIDTHS.length;
   const lastColumn = columnName(totalColumns);
 
   const addRow = (cells: Array<Omit<SheetCell, 'ref'>>, height?: number) => {
@@ -310,6 +640,9 @@ function renderWorksheet(
   hasImage: boolean,
 ): string {
   const maxRow = Math.max(rows.length, 1);
+  const columnsXml = WORKSHEET_COLUMN_WIDTHS.map(
+    (width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`,
+  ).join('\n    ');
   const renderedRows = rows
     .map((row) => {
       const heightAttrs = row.height ? ` ht="${row.height}" customHeight="1"` : '';
@@ -323,23 +656,11 @@ function renderWorksheet(
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <dimension ref="A1:M${maxRow}"/>
+  <dimension ref="A1:${WORKSHEET_LAST_COLUMN}${maxRow}"/>
   <sheetViews><sheetView rightToLeft="1" workbookViewId="0"/></sheetViews>
   <sheetFormatPr defaultRowHeight="22"/>
   <cols>
-    <col min="1" max="1" width="8" customWidth="1"/>
-    <col min="2" max="2" width="14" customWidth="1"/>
-    <col min="3" max="3" width="18" customWidth="1"/>
-    <col min="4" max="4" width="16" customWidth="1"/>
-    <col min="5" max="5" width="16" customWidth="1"/>
-    <col min="6" max="6" width="16" customWidth="1"/>
-    <col min="7" max="7" width="14" customWidth="1"/>
-    <col min="8" max="8" width="18" customWidth="1"/>
-    <col min="9" max="9" width="14" customWidth="1"/>
-    <col min="10" max="10" width="24" customWidth="1"/>
-    <col min="11" max="11" width="22" customWidth="1"/>
-    <col min="12" max="12" width="22" customWidth="1"/>
-    <col min="13" max="13" width="34" customWidth="1"/>
+    ${columnsXml}
   </cols>
   <sheetData>${renderedRows}</sheetData>
   ${mergeXml}
@@ -393,12 +714,70 @@ function renderStyles(): string {
 </styleSheet>`;
 }
 
-function renderDrawing(): string {
+function getContainedImageSize(dimensions?: ImageDimensions): ImageDimensions {
+  if (!dimensions?.width || !dimensions?.height) {
+    return { width: HEADER_IMAGE_MAX_WIDTH, height: 112 };
+  }
+
+  const aspectRatio = dimensions.width / dimensions.height;
+  let width = HEADER_IMAGE_MAX_WIDTH;
+  let height = width / aspectRatio;
+
+  if (height > HEADER_IMAGE_MAX_HEIGHT) {
+    height = HEADER_IMAGE_MAX_HEIGHT;
+    width = height * aspectRatio;
+  }
+
+  return {
+    width: Math.round(width),
+    height: Math.round(height),
+  };
+}
+
+function pixelsToEmu(pixels: number): number {
+  return Math.round(pixels * 9525);
+}
+
+function excelColumnWidthToPixels(width: number): number {
+  return Math.floor(width * 7 + 5);
+}
+
+function getColumnAnchorFromPixels(pixels: number): { column: number; offset: number } {
+  let remainingPixels = Math.max(0, pixels);
+
+  for (let index = 0; index < WORKSHEET_COLUMN_WIDTHS.length; index += 1) {
+    const columnPixels = excelColumnWidthToPixels(WORKSHEET_COLUMN_WIDTHS[index]);
+
+    if (remainingPixels < columnPixels) {
+      return { column: index, offset: pixelsToEmu(remainingPixels) };
+    }
+
+    remainingPixels -= columnPixels;
+  }
+
+  return { column: WORKSHEET_COLUMN_WIDTHS.length - 1, offset: 0 };
+}
+
+function getWorksheetPixelWidth(): number {
+  return WORKSHEET_COLUMN_WIDTHS.reduce(
+    (total, width) => total + excelColumnWidthToPixels(width),
+    0,
+  );
+}
+
+function renderDrawing(image: EmbeddedImage): string {
+  const size = getContainedImageSize(image.dimensions);
+  const leftPixels = (getWorksheetPixelWidth() - size.width) / 2;
+  const anchor = getColumnAnchorFromPixels(leftPixels);
+  const rowOff = pixelsToEmu(HEADER_IMAGE_TOP_PADDING + (HEADER_IMAGE_MAX_HEIGHT - size.height) / 2);
+  const cx = pixelsToEmu(size.width);
+  const cy = pixelsToEmu(size.height);
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
-  <xdr:twoCellAnchor editAs="oneCell">
-    <xdr:from><xdr:col>4</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
-    <xdr:to><xdr:col>9</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+  <xdr:oneCellAnchor>
+    <xdr:from><xdr:col>${anchor.column}</xdr:col><xdr:colOff>${anchor.offset}</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>${rowOff}</xdr:rowOff></xdr:from>
+    <xdr:ext cx="${cx}" cy="${cy}"/>
     <xdr:pic>
       <xdr:nvPicPr>
         <xdr:cNvPr id="1" name="Logo"/>
@@ -408,10 +787,13 @@ function renderDrawing(): string {
         <a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId1"/>
         <a:stretch><a:fillRect/></a:stretch>
       </xdr:blipFill>
-      <xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>
+      <xdr:spPr>
+        <a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>
+        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+      </xdr:spPr>
     </xdr:pic>
     <xdr:clientData/>
-  </xdr:twoCellAnchor>
+  </xdr:oneCellAnchor>
 </xdr:wsDr>`;
 }
 
@@ -419,7 +801,7 @@ export async function generateAccountStatementXlsxBase64(
   options: AccountStatementXlsxOptions,
 ): Promise<string> {
   const zip = new JSZip();
-  const image = parseImageDataUrl(options.logoDataUrl);
+  const image = parseImageDataUrl(buildHeaderImageDataUrl(options));
   const { rows, merges } = buildWorksheetRows(options);
   const now = new Date().toISOString();
 
@@ -478,7 +860,7 @@ export async function generateAccountStatementXlsxBase64(
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
 </Relationships>`,
     );
-    zip.file('xl/drawings/drawing1.xml', renderDrawing());
+    zip.file('xl/drawings/drawing1.xml', renderDrawing(image));
     zip.file(
       'xl/drawings/_rels/drawing1.xml.rels',
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -486,7 +868,11 @@ export async function generateAccountStatementXlsxBase64(
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo.${image.extension}"/>
 </Relationships>`,
     );
-    zip.file(`xl/media/logo.${image.extension}`, image.base64, { base64: true });
+    zip.file(
+      `xl/media/logo.${image.extension}`,
+      image.data,
+      image.encoding === 'base64' ? { base64: true } : undefined,
+    );
   }
 
   zip.file(
