@@ -42,30 +42,49 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // رابط العودة الموحّد لتأكيد الإيميل وتسجيل الدخول عبر Google
 const getRedirectUrl = () => Linking.createURL('auth-callback');
 
+const normalizeOtpCode = (value: string) => {
+  return value
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/\D/g, '')
+    .trim()
+    .slice(0, 6);
+};
+
+const EMAIL_OTP_TYPES = ['email', 'signup'] as const;
+
 // ترجمة رسائل أخطاء Supabase Auth إلى العربية
 function translateAuthError(message?: string): string {
   const msg = (message || '').toLowerCase();
+
   if (msg.includes('invalid login credentials')) {
     return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
   }
+
   if (msg.includes('email not confirmed')) {
     return 'يجب تأكيد بريدك الإلكتروني أولاً. تحقّق من صندوق الوارد';
   }
+
   if (msg.includes('user already registered') || msg.includes('already been registered')) {
     return 'هذا البريد الإلكتروني مسجّل بالفعل';
   }
+
   if (msg.includes('password should be at least')) {
     return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
   }
+
   if (msg.includes('unable to validate email') || msg.includes('invalid email')) {
     return 'صيغة البريد الإلكتروني غير صحيحة';
   }
+
   if (msg.includes('rate limit') || msg.includes('too many requests')) {
     return 'محاولات كثيرة جداً. يرجى المحاولة بعد قليل';
   }
+
   if (msg.includes('network')) {
     return 'تعذّر الاتصال بالخادم. تحقّق من اتصالك بالإنترنت';
   }
+
   return message || 'حدث خطأ غير متوقّع';
 }
 
@@ -185,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const params: Record<string, string> = {};
       const parsed = Linking.parse(url);
+
       Object.entries(parsed.queryParams || {}).forEach(([k, v]) => {
         if (typeof v === 'string') params[k] = v;
       });
@@ -233,7 +253,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       // تأجيل أي استدعاء آخر لـ supabase خارج هذا الـ callback (توصية رسمية)
       setTimeout(async () => {
         if (!mounted) return;
@@ -241,6 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           const profile = await loadProfile(session.user);
           if (!mounted) return;
+
           if (profile) {
             setCurrentUser(profile);
             setIsAuthenticated(true);
@@ -261,6 +284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const linkSub = Linking.addEventListener('url', ({ url }) => {
       handleDeepLink(url);
     });
+
     Linking.getInitialURL().then((url) => {
       if (url) handleDeepLink(url);
     });
@@ -309,9 +333,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!fullName || fullName.trim().length < 2) {
         return { success: false, error: 'الاسم الكامل يجب أن يكون حرفين على الأقل' };
       }
+
       if (!email || !email.includes('@')) {
         return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
       }
+
       if (!password || password.length < 6) {
         return { success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' };
       }
@@ -379,30 +405,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifyEmailOtp = async (email: string, token: string): Promise<AuthResult> => {
     try {
-      const code = token.replace(/\D/g, '').trim();
+      const cleanEmail = email.trim().toLowerCase();
+      const code = normalizeOtpCode(token);
+
       if (code.length !== 6) {
         return { success: false, error: 'رمز التأكيد يجب أن يكون 6 أرقام' };
       }
 
-      const { error } = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: code,
-        type: 'signup',
-      });
+      let lastErrorMessage = '';
 
-      if (error) {
-        const msg = (error.message || '').toLowerCase();
-        if (msg.includes('expired')) {
-          return { success: false, error: 'انتهت صلاحية الرمز. اطلب رمزاً جديداً' };
+      for (const type of EMAIL_OTP_TYPES) {
+        const { data, error } = await supabase.auth.verifyOtp({
+          email: cleanEmail,
+          token: code,
+          type,
+          options: { redirectTo: getRedirectUrl() },
+        });
+
+        if (!error) {
+          const authUser = data.user;
+
+          if (authUser) {
+            const profile = await loadProfile(authUser);
+            if (profile) {
+              setCurrentUser(profile);
+              setIsAuthenticated(true);
+            }
+          }
+
+          return { success: true };
         }
-        if (msg.includes('invalid') || msg.includes('token')) {
-          return { success: false, error: 'رمز التأكيد غير صحيح' };
-        }
-        return { success: false, error: translateAuthError(error.message) };
+
+        lastErrorMessage = error.message || '';
+        console.warn(`[Auth] verifyOtp failed with type ${type}:`, lastErrorMessage);
       }
 
-      // onAuthStateChange سيتكفّل بتعيين currentUser بعد نجاح التحقق
-      return { success: true };
+      const normalizedError = lastErrorMessage.toLowerCase();
+      if (normalizedError.includes('expired')) {
+        return { success: false, error: 'انتهت صلاحية الرمز. اطلب رمزاً جديداً واستخدم آخر رمز وصلك.' };
+      }
+      if (normalizedError.includes('invalid') || normalizedError.includes('token')) {
+        return {
+          success: false,
+          error:
+            'الرمز غير صحيح أو تم استخدامه أو انتهت صلاحيته. اطلب رمزاً جديداً واستخدم آخر رمز وصلك.',
+        };
+      }
+
+      return { success: false, error: translateAuthError(lastErrorMessage) };
     } catch (error) {
       console.error('[Auth] verifyEmailOtp error:', error);
       return { success: false, error: 'حدث خطأ أثناء التحقق من الرمز' };
@@ -434,10 +484,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
       }
 
-      const { error } = await supabase.auth.resetPasswordForEmail(
-        email.trim().toLowerCase(),
-        { redirectTo: getRedirectUrl() }
-      );
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: getRedirectUrl(),
+      });
 
       if (error) {
         return { success: false, error: translateAuthError(error.message) };
@@ -452,12 +501,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshCurrentUser = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         setCurrentUser(null);
         setIsAuthenticated(false);
         return;
       }
+
       const profile = await loadProfile(user);
       if (profile) {
         setCurrentUser(profile);
@@ -484,7 +537,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = async (newSettings: Partial<AppSettings>): Promise<boolean> => {
     try {
-      if (newSettings.shop_logo !== undefined && currentUser?.role !== 'admin') {
+      if ((newSettings as any).shop_logo !== undefined && currentUser?.role !== 'admin') {
         console.error('[AuthContext] Non-admin user attempted to update shop logo');
         return false;
       }
@@ -498,7 +551,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error: upsertError } = await supabase
         .from('app_settings')
         .upsert(
-          { user_id: activeUserId, ...newSettings },
+          {
+            user_id: activeUserId,
+            ...newSettings,
+          },
           { onConflict: 'user_id', ignoreDuplicates: false }
         )
         .select();
@@ -542,6 +598,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
+
   if (context === undefined) {
     // قيم افتراضية أثناء التهيئة
     return {
@@ -570,5 +627,6 @@ export function useAuth() {
       updateSettings: async () => false,
     } as AuthContextType;
   }
+
   return context;
 }

@@ -16,12 +16,28 @@ import { useAuth } from '@/contexts/AuthContext';
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
 
+const normalizeOtpCode = (value: string) => {
+  return value
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/\D/g, '')
+    .slice(0, CODE_LENGTH);
+};
+
+const normalizeEmailParam = (value?: string | string[]) => {
+  const rawEmail = Array.isArray(value) ? value[0] : value;
+  return (rawEmail || '').trim().toLowerCase();
+};
+
 export default function CheckEmailScreen() {
   const router = useRouter();
   const { email } = useLocalSearchParams<{ email?: string }>();
   const { verifyEmailOtp, resendEmailOtp } = useAuth();
-
   const inputRef = useRef<TextInput>(null);
+  const verifyingRef = useRef(false);
+
+  const normalizedEmail = normalizeEmailParam(email);
+
   const [code, setCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -31,56 +47,74 @@ export default function CheckEmailScreen() {
   // عدّاد إعادة الإرسال
   useEffect(() => {
     if (cooldown <= 0) return;
-    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+
+    const timer = setTimeout(() => setCooldown((current) => current - 1), 1000);
     return () => clearTimeout(timer);
   }, [cooldown]);
 
   const handleVerify = async (value?: string) => {
-    const finalCode = (value ?? code).replace(/\D/g, '');
+    if (verifyingRef.current) return;
+
+    const finalCode = normalizeOtpCode(value ?? code);
+
     if (finalCode.length !== CODE_LENGTH) {
       setError('أدخل رمز التأكيد المكوّن من 6 أرقام');
       return;
     }
-    if (!email) {
+
+    if (!normalizedEmail) {
       setError('تعذّر تحديد البريد الإلكتروني. ارجع وأعد التسجيل');
       return;
     }
 
     setError('');
+    verifyingRef.current = true;
     setIsVerifying(true);
-    const result = await verifyEmailOtp(email, finalCode);
-    setIsVerifying(false);
 
-    if (result.success) {
-      router.replace('/(tabs)');
-    } else {
-      setError(result.error || 'رمز التأكيد غير صحيح');
-      setCode('');
+    try {
+      const result = await verifyEmailOtp(normalizedEmail, finalCode);
+
+      if (result.success) {
+        router.replace('/(tabs)');
+      } else {
+        setError(result.error || 'رمز التأكيد غير صحيح أو انتهت صلاحيته');
+        setCode('');
+        inputRef.current?.focus();
+      }
+    } finally {
+      verifyingRef.current = false;
+      setIsVerifying(false);
     }
   };
 
   const handleResend = async () => {
-    if (cooldown > 0 || !email) return;
+    if (cooldown > 0 || !normalizedEmail) return;
 
     setError('');
     setIsResending(true);
-    const result = await resendEmailOtp(email);
+
+    const result = await resendEmailOtp(normalizedEmail);
+
     setIsResending(false);
 
     if (result.success) {
+      setCode('');
       setCooldown(RESEND_COOLDOWN);
-      Alert.alert('تم الإرسال', 'أرسلنا رمز تأكيد جديداً إلى بريدك الإلكتروني');
+      Alert.alert('تم الإرسال', 'أرسلنا رمز تأكيد جديداً إلى بريدك الإلكتروني. استخدم آخر رمز وصلك فقط.');
+      inputRef.current?.focus();
     } else {
       setError(result.error || 'تعذّر إعادة إرسال الرمز');
     }
   };
 
   const handleChange = (text: string) => {
-    const digits = text.replace(/\D/g, '').slice(0, CODE_LENGTH);
+    const digits = normalizeOtpCode(text);
+
     setCode(digits);
     if (error) setError('');
+
     if (digits.length === CODE_LENGTH) {
-      handleVerify(digits);
+      void handleVerify(digits);
     }
   };
 
@@ -99,9 +133,10 @@ export default function CheckEmailScreen() {
         </View>
 
         <Text style={styles.title}>تأكيد بريدك الإلكتروني</Text>
+
         <Text style={styles.subtitle}>
-          أدخل رمز التأكيد المكوّن من 6 أرقام المُرسَل إلى{'\n'}
-          <Text style={styles.emailText}>{email || 'بريدك الإلكتروني'}</Text>
+          أدخل رمز التأكيد المكوّن من 6 أرقام المُرسَل إلى{`\n`}
+          <Text style={styles.emailText}>{normalizedEmail || 'بريدك الإلكتروني'}</Text>
         </Text>
 
         {/* خانات إدخال الرمز */}
@@ -109,6 +144,7 @@ export default function CheckEmailScreen() {
           {Array.from({ length: CODE_LENGTH }).map((_, i) => {
             const filled = i < code.length;
             const active = i === code.length;
+
             return (
               <View
                 key={i}
@@ -150,6 +186,7 @@ export default function CheckEmailScreen() {
 
         <View style={styles.resendRow}>
           <Text style={styles.resendText}>لم يصلك الرمز؟</Text>
+
           <TouchableOpacity onPress={handleResend} disabled={cooldown > 0 || busy}>
             <Text style={[styles.resendLink, (cooldown > 0 || busy) && styles.resendLinkDisabled]}>
               {isResending
@@ -162,7 +199,7 @@ export default function CheckEmailScreen() {
         </View>
 
         <Text style={styles.note}>
-          تحقّق من مجلد الرسائل غير المرغوب فيها (Spam) إذا لم تجد الرسالة.
+          تحقّق من مجلد الرسائل غير المرغوب فيها (Spam) إذا لم تجد الرسالة. عند طلب رمز جديد، استخدم آخر رمز وصلك فقط.
         </Text>
       </View>
     </View>
