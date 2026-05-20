@@ -9,13 +9,16 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { DataRefreshProvider } from '@/contexts/DataRefreshContext';
 import { setupArabicRTL } from '@/utils/rtl';
 import { DailyStartupAd } from '@/components/DailyStartupAd';
+import { useSystemNotifications } from '@/hooks/useSystemNotifications';
 
 setupArabicRTL();
 
 function RootLayoutNav() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { currentUser, isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  useSystemNotifications(currentUser);
 
   useEffect(() => {
     if (isLoading) return;

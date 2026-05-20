@@ -45,6 +45,13 @@
         }
       ],
       "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "color": "#2563EB",
+          "defaultChannel": "akked-alerts-v2"
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-asset",
       "expo-sharing"
