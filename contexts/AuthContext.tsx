@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { User } from '@supabase/supabase-js';
@@ -19,6 +19,7 @@ export interface CurrentUser {
 
 type AuthResult = { success: boolean; error?: string };
 type RegisterResult = { success: boolean; needsEmailConfirmation?: boolean; error?: string };
+type PendingEmailSignup = { email: string; fullName: string; password: string };
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -51,7 +52,7 @@ const normalizeOtpCode = (value: string) => {
     .slice(0, 6);
 };
 
-const EMAIL_OTP_TYPES = ['email', 'signup'] as const;
+const EMAIL_OTP_TYPE = 'email' as const;
 
 // ترجمة رسائل أخطاء Supabase Auth إلى العربية
 function translateAuthError(message?: string): string {
@@ -93,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const pendingSignupRef = useRef<PendingEmailSignup | null>(null);
 
   const buildDefaultSettings = (): AppSettings => ({
     id: '',
@@ -197,6 +199,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // إرسال رمز بريد قابل للإدخال في شاشة التحقق.
+  const sendEmailOtp = async (
+    cleanEmail: string,
+    fullName?: string,
+    shouldCreateUser = true
+  ): Promise<AuthResult> => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: cleanEmail,
+      options: {
+        shouldCreateUser,
+        data: fullName ? { full_name: fullName } : {},
+        emailRedirectTo: getRedirectUrl(),
+      },
+    });
+
+    if (error) {
+      console.warn('[Auth] signInWithOtp failed:', {
+        message: error.message,
+        code: (error as any).code,
+        status: (error as any).status,
+      });
+      return { success: false, error: translateAuthError(error.message) };
+    }
+
+    return { success: true };
+  };
+
+  const completePendingSignup = async (authUser: User): Promise<AuthResult> => {
+    const pending = pendingSignupRef.current;
+    const cleanUserEmail = (authUser.email || '').trim().toLowerCase();
+
+    if (!pending || pending.email !== cleanUserEmail) {
+      return { success: true };
+    }
+
+    const { error: passwordError } = await supabase.auth.updateUser({
+      password: pending.password,
+      data: { full_name: pending.fullName },
+    });
+
+    if (passwordError) {
+      console.warn('[Auth] update password after OTP failed:', {
+        message: passwordError.message,
+        code: (passwordError as any).code,
+        status: (passwordError as any).status,
+      });
+      return { success: false, error: translateAuthError(passwordError.message) };
+    }
+
+    const { error: profileError } = await supabase
+      .from('app_security')
+      .update({
+        email: cleanUserEmail,
+        user_name: cleanUserEmail,
+        full_name: pending.fullName,
+        auth_provider: 'email',
+      })
+      .eq('id', authUser.id);
+
+    if (profileError) {
+      console.warn('[Auth] profile update after OTP failed:', profileError.message);
+    }
+
+    pendingSignupRef.current = null;
+    return { success: true };
+  };
+
   // معالجة روابط العودة (تأكيد الإيميل / Google / استعادة كلمة المرور)
   const handleDeepLink = async (url: string) => {
     try {
@@ -261,6 +330,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!mounted) return;
 
         if (session?.user) {
+          const pendingResult = await completePendingSignup(session.user);
+          if (!pendingResult.success) {
+            console.warn('[Auth] pending signup completion failed:', pendingResult.error);
+          }
+
           const profile = await loadProfile(session.user);
           if (!mounted) return;
 
@@ -342,31 +416,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' };
       }
 
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanFullName = fullName.trim();
+
+      pendingSignupRef.current = {
+        email: cleanEmail,
+        fullName: cleanFullName,
         password,
-        options: {
-          data: { full_name: fullName.trim() },
-          emailRedirectTo: getRedirectUrl(),
-        },
-      });
+      };
 
-      if (error) {
-        return { success: false, error: translateAuthError(error.message) };
+      const otpResult = await sendEmailOtp(cleanEmail, cleanFullName, true);
+
+      if (!otpResult.success) {
+        pendingSignupRef.current = null;
+        return { success: false, error: otpResult.error };
       }
 
-      // عند تفعيل تأكيد الإيميل: إذا كان البريد مسجّلاً مسبقاً يرجع Supabase
-      // مستخدماً بدون identities لأسباب أمنية.
-      if (data.user && data.user.identities && data.user.identities.length === 0) {
-        return { success: false, error: 'هذا البريد الإلكتروني مسجّل بالفعل' };
-      }
-
-      // تأكيد الإيميل مُفعّل: لا توجد جلسة حتى يؤكّد المستخدم بريده
-      if (data.user && !data.session) {
-        return { success: true, needsEmailConfirmation: true };
-      }
-
-      return { success: true, needsEmailConfirmation: false };
+      return { success: true, needsEmailConfirmation: true };
     } catch (error) {
       console.error('[Auth] register error:', error);
       return { success: false, error: 'حدث خطأ أثناء إنشاء الحساب' };
@@ -412,33 +478,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'رمز التأكيد يجب أن يكون 6 أرقام' };
       }
 
-      let lastErrorMessage = '';
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: cleanEmail,
+        token: code,
+        type: EMAIL_OTP_TYPE,
+        options: { redirectTo: getRedirectUrl() },
+      });
 
-      for (const type of EMAIL_OTP_TYPES) {
-        const { data, error } = await supabase.auth.verifyOtp({
-          email: cleanEmail,
-          token: code,
-          type,
-          options: { redirectTo: getRedirectUrl() },
-        });
+      if (!error) {
+        const authUser = data.user;
 
-        if (!error) {
-          const authUser = data.user;
-
-          if (authUser) {
-            const profile = await loadProfile(authUser);
-            if (profile) {
-              setCurrentUser(profile);
-              setIsAuthenticated(true);
-            }
+        if (authUser) {
+          const pendingResult = await completePendingSignup(authUser);
+          if (!pendingResult.success) {
+            return pendingResult;
           }
 
-          return { success: true };
+          const {
+            data: { user: refreshedUser },
+          } = await supabase.auth.getUser();
+          const profile = await loadProfile(refreshedUser || authUser);
+          if (profile) {
+            setCurrentUser(profile);
+            setIsAuthenticated(true);
+          }
         }
 
-        lastErrorMessage = error.message || '';
-        console.warn(`[Auth] verifyOtp failed with type ${type}:`, lastErrorMessage);
+        return { success: true };
       }
+
+      const lastErrorMessage = error.message || '';
+      console.warn('[Auth] verifyOtp failed:', {
+        message: error.message,
+        code: (error as any).code,
+        status: (error as any).status,
+      });
 
       const normalizedError = lastErrorMessage.toLowerCase();
       if (normalizedError.includes('expired')) {
@@ -461,17 +535,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resendEmailOtp = async (email: string): Promise<AuthResult> => {
     try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email.trim().toLowerCase(),
-        options: { emailRedirectTo: getRedirectUrl() },
-      });
-
-      if (error) {
-        return { success: false, error: translateAuthError(error.message) };
-      }
-
-      return { success: true };
+      const cleanEmail = email.trim().toLowerCase();
+      const pending = pendingSignupRef.current;
+      return sendEmailOtp(
+        cleanEmail,
+        pending?.email === cleanEmail ? pending.fullName : undefined,
+        true
+      );
     } catch (error) {
       console.error('[Auth] resendEmailOtp error:', error);
       return { success: false, error: 'تعذّر إعادة إرسال الرمز' };
