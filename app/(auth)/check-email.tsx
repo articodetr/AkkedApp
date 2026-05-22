@@ -34,7 +34,6 @@ export default function CheckEmailScreen() {
   const { email } = useLocalSearchParams<{ email?: string }>();
   const { verifyEmailOtp, resendEmailOtp } = useAuth();
   const inputRef = useRef<TextInput>(null);
-  const verifyingRef = useRef(false);
 
   const normalizedEmail = normalizeEmailParam(email);
 
@@ -53,12 +52,10 @@ export default function CheckEmailScreen() {
   }, [cooldown]);
 
   const handleVerify = async (value?: string) => {
-    if (verifyingRef.current) return;
-
     const finalCode = normalizeOtpCode(value ?? code);
 
     if (finalCode.length !== CODE_LENGTH) {
-      setError('أدخل رمز التأكيد المكوّن من 6 أرقام');
+      setError('أدخل رمز التحقق المكوّن من 6 أرقام');
       return;
     }
 
@@ -68,22 +65,18 @@ export default function CheckEmailScreen() {
     }
 
     setError('');
-    verifyingRef.current = true;
     setIsVerifying(true);
 
-    try {
-      const result = await verifyEmailOtp(normalizedEmail, finalCode);
+    const result = await verifyEmailOtp(normalizedEmail, finalCode);
 
-      if (result.success) {
-        router.replace('/(tabs)');
-      } else {
-        setError(result.error || 'رمز التأكيد غير صحيح أو انتهت صلاحيته');
-        setCode('');
-        inputRef.current?.focus();
-      }
-    } finally {
-      verifyingRef.current = false;
-      setIsVerifying(false);
+    setIsVerifying(false);
+
+    if (result.success) {
+      router.replace('/(tabs)');
+    } else {
+      setError(result.error || 'الرمز غير صحيح أو تم استخدامه أو انتهت صلاحيته');
+      setCode('');
+      inputRef.current?.focus();
     }
   };
 
@@ -100,7 +93,7 @@ export default function CheckEmailScreen() {
     if (result.success) {
       setCode('');
       setCooldown(RESEND_COOLDOWN);
-      Alert.alert('تم الإرسال', 'أرسلنا رمز تأكيد جديداً إلى بريدك الإلكتروني. استخدم آخر رمز وصلك فقط.');
+      Alert.alert('تم الإرسال', 'أرسلنا رمز تحقق جديداً إلى بريدك الإلكتروني. استخدم آخر رمز وصلك فقط.');
       inputRef.current?.focus();
     } else {
       setError(result.error || 'تعذّر إعادة إرسال الرمز');
@@ -114,7 +107,7 @@ export default function CheckEmailScreen() {
     if (error) setError('');
 
     if (digits.length === CODE_LENGTH) {
-      void handleVerify(digits);
+      handleVerify(digits);
     }
   };
 
@@ -135,7 +128,7 @@ export default function CheckEmailScreen() {
         <Text style={styles.title}>تأكيد بريدك الإلكتروني</Text>
 
         <Text style={styles.subtitle}>
-          أدخل رمز التأكيد المكوّن من 6 أرقام المُرسَل إلى{`\n`}
+          أدخل رمز التحقق المكوّن من 6 أرقام المُرسَل إلى{`\n`}
           <Text style={styles.emailText}>{normalizedEmail || 'بريدك الإلكتروني'}</Text>
         </Text>
 
@@ -162,7 +155,7 @@ export default function CheckEmailScreen() {
           value={code}
           onChangeText={handleChange}
           keyboardType="number-pad"
-          maxLength={CODE_LENGTH}
+          maxLength={CODE_LENGTH * 2}
           autoFocus
           editable={!busy}
           textContentType="oneTimeCode"

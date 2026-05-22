@@ -57,7 +57,6 @@ function RootLayoutNav() {
         <Stack.Screen name="backup" />
         <Stack.Screen name="link-legacy-data" />
         <Stack.Screen name="reports" />
-        <Stack.Screen name="notification-detail" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <DailyStartupAd enabled={isAuthenticated && !isLoading} />

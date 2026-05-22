@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { User } from '@supabase/supabase-js';
@@ -19,15 +20,20 @@ export interface CurrentUser {
 
 type AuthResult = { success: boolean; error?: string };
 type RegisterResult = { success: boolean; needsEmailConfirmation?: boolean; error?: string };
-type PendingEmailSignup = { email: string; fullName: string; password: string };
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   currentUser: CurrentUser | null;
-  login: (email: string, password: string) => Promise<AuthResult>;
-  register: (fullName: string, email: string, password: string) => Promise<RegisterResult>;
+  login: (userNameOrEmail: string, password: string) => Promise<AuthResult>;
+  register: (
+    fullName: string,
+    userName: string,
+    email: string,
+    password: string
+  ) => Promise<RegisterResult>;
   signInWithGoogle: () => Promise<AuthResult>;
+  completeAuthFromUrl: (url: string) => Promise<AuthResult>;
   verifyEmailOtp: (email: string, token: string) => Promise<AuthResult>;
   resendEmailOtp: (email: string) => Promise<AuthResult>;
   resetPassword: (email: string) => Promise<AuthResult>;
@@ -39,9 +45,35 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const CUSTOM_AUTH_USER_ID_KEY = 'akked.customAuth.userId';
 
-// رابط العودة الموحّد لتأكيد الإيميل وتسجيل الدخول عبر Google
+// رابط العودة الموحّد لتسجيل الدخول عبر Google واستعادة كلمة المرور
 const getRedirectUrl = () => Linking.createURL('auth-callback');
+
+const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+const normalizeUserName = (value: string) => value.trim().replace(/\s+/g, '').toLowerCase();
+
+const isValidUserName = (value: string) =>
+  /^[A-Za-z0-9_.\-\u0621-\u064A\u0660-\u0669\u06F0-\u06F9]+$/.test(value);
+
+type AppSecurityProfile = {
+  id: string;
+  user_name: string | null;
+  role: string | null;
+  full_name: string | null;
+  account_number: string | null;
+  email: string | null;
+};
+
+const profileToCurrentUser = (profile: AppSecurityProfile): CurrentUser => ({
+  userId: profile.id,
+  email: profile.email || '',
+  userName: profile.user_name || profile.email || profile.id,
+  role: profile.role || 'user',
+  fullName: profile.full_name || profile.user_name || 'مستخدم',
+  accountNumber: profile.account_number || '',
+});
 
 const normalizeOtpCode = (value: string) => {
   return value
@@ -52,22 +84,48 @@ const normalizeOtpCode = (value: string) => {
     .slice(0, 6);
 };
 
-const EMAIL_OTP_TYPE = 'email' as const;
-
 // ترجمة رسائل أخطاء Supabase Auth إلى العربية
 function translateAuthError(message?: string): string {
   const msg = (message || '').toLowerCase();
 
   if (msg.includes('invalid login credentials')) {
-    return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+    return 'اسم المستخدم أو كلمة المرور غير صحيحة';
   }
 
   if (msg.includes('email not confirmed')) {
-    return 'يجب تأكيد بريدك الإلكتروني أولاً. تحقّق من صندوق الوارد';
+    return 'تأكيد البريد ما زال مفعّلاً في Supabase. عطّل خيار Confirm email من إعدادات المصادقة ثم حاول التسجيل مرة أخرى';
   }
 
   if (msg.includes('user already registered') || msg.includes('already been registered')) {
     return 'هذا البريد الإلكتروني مسجّل بالفعل';
+  }
+
+  if (msg.includes('user_name_or_email_exists')) {
+    return 'اسم المستخدم أو البريد مستخدم بالفعل';
+  }
+
+  if (msg.includes('full_name_too_short')) {
+    return 'الاسم الكامل يجب أن يكون حرفين على الأقل';
+  }
+
+  if (msg.includes('user_name_too_short')) {
+    return 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل';
+  }
+
+  if (msg.includes('invalid_email')) {
+    return 'يرجى إدخال بريد إلكتروني صحيح';
+  }
+
+  if (msg.includes('password_too_short')) {
+    return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
+  }
+
+  if (
+    msg.includes('duplicate key') ||
+    msg.includes('unique constraint') ||
+    msg.includes('database error saving new user')
+  ) {
+    return 'اسم المستخدم أو البريد مستخدم بالفعل';
   }
 
   if (msg.includes('password should be at least')) {
@@ -94,7 +152,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const pendingSignupRef = useRef<PendingEmailSignup | null>(null);
 
   const buildDefaultSettings = (): AppSettings => ({
     id: '',
@@ -135,6 +192,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const loadProfileById = async (userId: string): Promise<CurrentUser | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('app_security')
+        .select('id, user_name, role, full_name, account_number, email')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error || !data) {
+        if (error) console.error('[Auth] loadProfileById error:', error);
+        return null;
+      }
+
+      return profileToCurrentUser(data as AppSecurityProfile);
+    } catch (error) {
+      console.error('[Auth] loadProfileById exception:', error);
+      return null;
+    }
+  };
+
+  const loadStoredCustomSession = async (): Promise<CurrentUser | null> => {
+    try {
+      const storedUserId = await AsyncStorage.getItem(CUSTOM_AUTH_USER_ID_KEY);
+      if (!storedUserId) return null;
+
+      const profile = await loadProfileById(storedUserId);
+      if (!profile) {
+        await AsyncStorage.removeItem(CUSTOM_AUTH_USER_ID_KEY);
+      }
+
+      return profile;
+    } catch (error) {
+      console.error('[Auth] loadStoredCustomSession error:', error);
+      return null;
+    }
+  };
+
   // تحميل ملف تعريف المستخدم من app_security (يُنشأ تلقائياً عبر trigger)
   const loadProfile = async (authUser: User): Promise<CurrentUser | null> => {
     try {
@@ -150,12 +244,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         (meta.name as string) ||
         (authUser.email ? authUser.email.split('@')[0] : '') ||
         'مستخدم';
+      const fallbackUserName =
+        normalizeUserName((meta.user_name as string) || (meta.username as string) || '') ||
+        (authUser.email ? authUser.email.split('@')[0] : '') ||
+        authUser.id;
 
       if (data) {
         return {
           userId: data.id,
           email: data.email || authUser.email || '',
-          userName: data.email || data.user_name || authUser.email || '',
+          userName: data.user_name || fallbackUserName,
           role: data.role || 'user',
           fullName: data.full_name || fallbackName,
           accountNumber: data.account_number || '',
@@ -163,14 +261,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // احتياط: إنشاء الملف إذا لم يُنشئه الـ trigger لأي سبب.
-      // user_name إلزامي لأن دوال RPC القديمة تبحث عن المستخدم عبره (نستخدم البريد).
+      // user_name إلزامي لأن دوال RPC القديمة تبحث عن المستخدم عبره.
       const { data: created } = await supabase
         .from('app_security')
         .upsert(
           {
             id: authUser.id,
             email: authUser.email,
-            user_name: authUser.email,
+            user_name: fallbackUserName,
             full_name: fallbackName,
             role: 'user',
             is_active: true,
@@ -185,7 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return {
           userId: created.id,
           email: created.email || authUser.email || '',
-          userName: created.email || created.user_name || authUser.email || '',
+          userName: created.user_name || fallbackUserName,
           role: created.role || 'user',
           fullName: created.full_name || fallbackName,
           accountNumber: created.account_number || '',
@@ -199,77 +297,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // إرسال رمز بريد قابل للإدخال في شاشة التحقق.
-  const sendEmailOtp = async (
-    cleanEmail: string,
-    fullName?: string,
-    shouldCreateUser = true
-  ): Promise<AuthResult> => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email: cleanEmail,
-      options: {
-        shouldCreateUser,
-        data: fullName ? { full_name: fullName } : {},
-        emailRedirectTo: getRedirectUrl(),
-      },
-    });
-
-    if (error) {
-      console.warn('[Auth] signInWithOtp failed:', {
-        message: error.message,
-        code: (error as any).code,
-        status: (error as any).status,
-      });
-      return { success: false, error: translateAuthError(error.message) };
-    }
-
-    return { success: true };
-  };
-
-  const completePendingSignup = async (authUser: User): Promise<AuthResult> => {
-    const pending = pendingSignupRef.current;
-    const cleanUserEmail = (authUser.email || '').trim().toLowerCase();
-
-    if (!pending || pending.email !== cleanUserEmail) {
-      return { success: true };
-    }
-
-    const { error: passwordError } = await supabase.auth.updateUser({
-      password: pending.password,
-      data: { full_name: pending.fullName },
-    });
-
-    if (passwordError) {
-      console.warn('[Auth] update password after OTP failed:', {
-        message: passwordError.message,
-        code: (passwordError as any).code,
-        status: (passwordError as any).status,
-      });
-      return { success: false, error: translateAuthError(passwordError.message) };
-    }
-
-    const { error: profileError } = await supabase
-      .from('app_security')
-      .update({
-        email: cleanUserEmail,
-        user_name: cleanUserEmail,
-        full_name: pending.fullName,
-        auth_provider: 'email',
-      })
-      .eq('id', authUser.id);
-
-    if (profileError) {
-      console.warn('[Auth] profile update after OTP failed:', profileError.message);
-    }
-
-    pendingSignupRef.current = null;
-    return { success: true };
-  };
-
-  // معالجة روابط العودة (تأكيد الإيميل / Google / استعادة كلمة المرور)
-  const handleDeepLink = async (url: string) => {
+  // معالجة روابط العودة (Google / استعادة كلمة المرور)
+  const handleDeepLink = async (url: string): Promise<AuthResult> => {
     try {
-      if (!url) return;
+      if (!url) return { success: false, error: 'رابط العودة غير صالح' };
 
       const params: Record<string, string> = {};
       const parsed = Linking.parse(url);
@@ -292,69 +323,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (params.error) {
         console.warn('[Auth] deep link error:', params.error_description || params.error);
-        return;
+        return {
+          success: false,
+          error: params.error_description || 'تعذّر إكمال تسجيل الدخول',
+        };
       }
 
       if (params.access_token && params.refresh_token) {
-        await supabase.auth.setSession({
+        const { error } = await supabase.auth.setSession({
           access_token: params.access_token,
           refresh_token: params.refresh_token,
         });
-        return;
+        return error
+          ? { success: false, error: translateAuthError(error.message) }
+          : { success: true };
       }
 
       if (params.code) {
-        await supabase.auth.exchangeCodeForSession(params.code);
-        return;
+        const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+        return error
+          ? { success: false, error: translateAuthError(error.message) }
+          : { success: true };
       }
 
       if (params.token_hash && params.type) {
-        await supabase.auth.verifyOtp({
+        const { error } = await supabase.auth.verifyOtp({
           token_hash: params.token_hash,
           type: params.type as any,
         });
+        return error
+          ? { success: false, error: translateAuthError(error.message) }
+          : { success: true };
       }
+
+      return { success: false, error: 'تعذّر قراءة رابط العودة' };
     } catch (error) {
       console.error('[Auth] handleDeepLink error:', error);
+      return { success: false, error: 'حدث خطأ أثناء إكمال تسجيل الدخول' };
     }
   };
 
   useEffect(() => {
     let mounted = true;
 
+    const applySessionState = async (authUser?: User | null) => {
+      if (authUser) {
+        const profile = await loadProfile(authUser);
+        if (!mounted) return;
+
+        setCurrentUser(profile);
+        setIsAuthenticated(Boolean(profile));
+        return;
+      }
+
+      const customProfile = await loadStoredCustomSession();
+      if (!mounted) return;
+
+      setCurrentUser(customProfile);
+      setIsAuthenticated(Boolean(customProfile));
+    };
+
+    const initSession = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        await applySessionState(session?.user ?? null);
+      } catch (error) {
+        console.error('[Auth] initSession error:', error);
+        await applySessionState(null);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+
+    initSession();
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      // تأجيل أي استدعاء آخر لـ supabase خارج هذا الـ callback (توصية رسمية)
       setTimeout(async () => {
         if (!mounted) return;
-
-        if (session?.user) {
-          const pendingResult = await completePendingSignup(session.user);
-          if (!pendingResult.success) {
-            console.warn('[Auth] pending signup completion failed:', pendingResult.error);
-          }
-
-          const profile = await loadProfile(session.user);
-          if (!mounted) return;
-
-          if (profile) {
-            setCurrentUser(profile);
-            setIsAuthenticated(true);
-          } else {
-            setCurrentUser(null);
-            setIsAuthenticated(false);
-          }
-        } else {
-          setCurrentUser(null);
-          setIsAuthenticated(false);
-        }
-
+        await applySessionState(session?.user ?? null);
         if (mounted) setIsLoading(false);
       }, 0);
     });
 
-    // التقاط رابط العودة (التطبيق مفتوح أو يُفتح من رابط)
     const linkSub = Linking.addEventListener('url', ({ url }) => {
       handleDeepLink(url);
     });
@@ -379,18 +433,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser?.userId]);
 
-  const login = async (email: string, password: string): Promise<AuthResult> => {
+  const resolveEmailForLogin = async (userNameOrEmail: string): Promise<string | null> => {
+    const cleanLogin = userNameOrEmail.trim();
+
+    if (!cleanLogin) return null;
+    if (isEmailAddress(cleanLogin)) return cleanLogin.toLowerCase();
+
+    const normalizedUserName = normalizeUserName(cleanLogin);
+
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
+      const { data: loginEmail, error: rpcError } = await supabase.rpc('get_login_email', {
+        p_login: normalizedUserName,
+      });
+
+      if (!rpcError && typeof loginEmail === 'string' && loginEmail) {
+        return loginEmail.trim().toLowerCase();
+      }
+    } catch (error) {
+      console.warn('[Auth] get_login_email fallback:', error);
+    }
+
+    const candidates = Array.from(new Set([cleanLogin, normalizedUserName])).filter(Boolean);
+    const { data, error } = await supabase
+      .from('app_security')
+      .select('email')
+      .in('user_name', candidates)
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data?.email) {
+      return null;
+    }
+
+    return data.email.trim().toLowerCase();
+  };
+
+  const isUserNameTaken = async (userName: string): Promise<boolean> => {
+    const candidates = Array.from(new Set([userName, normalizeUserName(userName)])).filter(Boolean);
+
+    try {
+      const { data: loginEmail, error: rpcError } = await supabase.rpc('get_login_email', {
+        p_login: normalizeUserName(userName),
+      });
+
+      if (!rpcError && typeof loginEmail === 'string' && loginEmail) {
+        return true;
+      }
+    } catch (error) {
+      console.warn('[Auth] username RPC availability check skipped:', error);
+    }
+
+    const { data, error } = await supabase
+      .from('app_security')
+      .select('id')
+      .in('user_name', candidates)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[Auth] username availability check skipped:', error);
+      return false;
+    }
+
+    return Boolean(data?.id);
+  };
+
+  const login = async (userNameOrEmail: string, password: string): Promise<AuthResult> => {
+    try {
+      const { data, error } = await supabase.rpc('login_app_user', {
+        p_login: userNameOrEmail.trim(),
+        p_password: password,
       });
 
       if (error) {
-        return { success: false, error: translateAuthError(error.message) };
+        console.error('[Auth] custom login RPC error:', error);
+        return {
+          success: false,
+          error: error.message?.includes('login_app_user')
+            ? 'تحديثات قاعدة البيانات غير مطبقة. طبّق migration ثم حاول مرة أخرى'
+            : translateAuthError(error.message),
+        };
       }
 
-      // onAuthStateChange سيتكفّل بتعيين currentUser
+      const profileRow = Array.isArray(data) ? data[0] : data;
+      if (!profileRow?.id) {
+        return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
+      }
+
+      const profile = profileToCurrentUser(profileRow as AppSecurityProfile);
+      await AsyncStorage.setItem(CUSTOM_AUTH_USER_ID_KEY, profile.userId);
+      setCurrentUser(profile);
+      setIsAuthenticated(true);
+
       return { success: true };
     } catch (error) {
       console.error('[Auth] login error:', error);
@@ -400,15 +534,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (
     fullName: string,
+    userName: string,
     email: string,
     password: string
   ): Promise<RegisterResult> => {
     try {
+      const cleanFullName = fullName.trim();
+      const cleanUserName = normalizeUserName(userName);
+      const cleanEmail = email.trim().toLowerCase();
+
       if (!fullName || fullName.trim().length < 2) {
         return { success: false, error: 'الاسم الكامل يجب أن يكون حرفين على الأقل' };
       }
 
-      if (!email || !email.includes('@')) {
+      if (cleanUserName.length < 3) {
+        return { success: false, error: 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل' };
+      }
+
+      if (!isValidUserName(cleanUserName)) {
+        return { success: false, error: 'اسم المستخدم يقبل الحروف والأرقام والرموز . _ - فقط' };
+      }
+
+      if (!isEmailAddress(cleanEmail)) {
         return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
       }
 
@@ -416,23 +563,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' };
       }
 
-      const cleanEmail = email.trim().toLowerCase();
-      const cleanFullName = fullName.trim();
+      const { data, error } = await supabase.rpc('register_app_user', {
+        p_full_name: cleanFullName,
+        p_user_name: cleanUserName,
+        p_email: cleanEmail,
+        p_password: password,
+      });
 
-      pendingSignupRef.current = {
-        email: cleanEmail,
-        fullName: cleanFullName,
-        password,
-      };
-
-      const otpResult = await sendEmailOtp(cleanEmail, cleanFullName, true);
-
-      if (!otpResult.success) {
-        pendingSignupRef.current = null;
-        return { success: false, error: otpResult.error };
+      if (error) {
+        console.error('[Auth] custom register RPC error:', error);
+        return {
+          success: false,
+          error:
+            error.message?.includes('register_app_user')
+              ? 'تحديثات قاعدة البيانات غير مطبقة. طبّق migration ثم حاول مرة أخرى'
+              : translateAuthError(error.message),
+        };
       }
 
-      return { success: true, needsEmailConfirmation: true };
+      const profileRow = Array.isArray(data) ? data[0] : data;
+      if (!profileRow?.id) {
+        return { success: false, error: 'تعذّر إنشاء الحساب' };
+      }
+
+      const profile = profileToCurrentUser(profileRow as AppSecurityProfile);
+      await AsyncStorage.setItem(CUSTOM_AUTH_USER_ID_KEY, profile.userId);
+      setCurrentUser(profile);
+      setIsAuthenticated(true);
+
+      return { success: true, needsEmailConfirmation: false };
     } catch (error) {
       console.error('[Auth] register error:', error);
       return { success: false, error: 'حدث خطأ أثناء إنشاء الحساب' };
@@ -440,33 +599,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = async (): Promise<AuthResult> => {
-    try {
-      const redirectTo = getRedirectUrl();
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo, skipBrowserRedirect: true },
-      });
+    return { success: false, error: 'تسجيل الدخول عبر Google معطّل' };
+  };
 
-      if (error || !data?.url) {
-        return { success: false, error: 'تعذّر بدء تسجيل الدخول عبر Google' };
-      }
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
-      if (result.type === 'success' && result.url) {
-        await handleDeepLink(result.url);
-        return { success: true };
-      }
-
-      if (result.type === 'cancel' || result.type === 'dismiss') {
-        return { success: false, error: 'تم إلغاء تسجيل الدخول' };
-      }
-
-      return { success: false, error: 'تعذّر إكمال تسجيل الدخول عبر Google' };
-    } catch (error) {
-      console.error('[Auth] Google sign-in error:', error);
-      return { success: false, error: 'حدث خطأ أثناء تسجيل الدخول عبر Google' };
-    }
+  const completeAuthFromUrl = async (url: string): Promise<AuthResult> => {
+    return await handleDeepLink(url);
   };
 
   const verifyEmailOtp = async (email: string, token: string): Promise<AuthResult> => {
@@ -478,47 +615,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'رمز التأكيد يجب أن يكون 6 أرقام' };
       }
 
-      const { data, error } = await supabase.auth.verifyOtp({
+      console.log('[Auth] verifyEmailOtp email:', cleanEmail);
+      console.log('[Auth] verifyEmailOtp code:', code);
+
+      // الطريقة الأحدث للتحقق من كود الإيميل
+      let result = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token: code,
-        type: EMAIL_OTP_TYPE,
-        options: { redirectTo: getRedirectUrl() },
+        type: 'email',
       });
 
-      if (!error) {
-        const authUser = data.user;
+      // احتياط لبعض مشاريع Supabase القديمة التي ما زالت تستخدم signup لتأكيد التسجيل
+      if (result.error) {
+        console.log('[Auth] verifyOtp email type error:', result.error);
 
-        if (authUser) {
-          const pendingResult = await completePendingSignup(authUser);
-          if (!pendingResult.success) {
-            return pendingResult;
-          }
-
-          const {
-            data: { user: refreshedUser },
-          } = await supabase.auth.getUser();
-          const profile = await loadProfile(refreshedUser || authUser);
-          if (profile) {
-            setCurrentUser(profile);
-            setIsAuthenticated(true);
-          }
-        }
-
-        return { success: true };
+        result = await supabase.auth.verifyOtp({
+          email: cleanEmail,
+          token: code,
+          type: 'signup' as any,
+        });
       }
 
-      const lastErrorMessage = error.message || '';
-      console.warn('[Auth] verifyOtp failed:', {
-        message: error.message,
-        code: (error as any).code,
-        status: (error as any).status,
-      });
+      if (result.error) {
+        console.log('[Auth] verifyOtp final error:', result.error);
 
-      const normalizedError = lastErrorMessage.toLowerCase();
-      if (normalizedError.includes('expired')) {
-        return { success: false, error: 'انتهت صلاحية الرمز. اطلب رمزاً جديداً واستخدم آخر رمز وصلك.' };
-      }
-      if (normalizedError.includes('invalid') || normalizedError.includes('token')) {
         return {
           success: false,
           error:
@@ -526,7 +646,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      return { success: false, error: translateAuthError(lastErrorMessage) };
+      // onAuthStateChange سيتكفّل بتعيين currentUser بعد نجاح التحقق
+      return { success: true };
     } catch (error) {
       console.error('[Auth] verifyEmailOtp error:', error);
       return { success: false, error: 'حدث خطأ أثناء التحقق من الرمز' };
@@ -534,39 +655,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resendEmailOtp = async (email: string): Promise<AuthResult> => {
-    try {
-      const cleanEmail = email.trim().toLowerCase();
-      const pending = pendingSignupRef.current;
-      return sendEmailOtp(
-        cleanEmail,
-        pending?.email === cleanEmail ? pending.fullName : undefined,
-        true
-      );
-    } catch (error) {
-      console.error('[Auth] resendEmailOtp error:', error);
-      return { success: false, error: 'تعذّر إعادة إرسال الرمز' };
-    }
+    return { success: false, error: 'تم تعطيل رسائل البريد الإلكتروني في التطبيق' };
   };
 
   const resetPassword = async (email: string): Promise<AuthResult> => {
-    try {
-      if (!email || !email.includes('@')) {
-        return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
-      }
-
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: getRedirectUrl(),
-      });
-
-      if (error) {
-        return { success: false, error: translateAuthError(error.message) };
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error('[Auth] resetPassword error:', error);
-      return { success: false, error: 'حدث خطأ أثناء إرسال رابط الاستعادة' };
-    }
+    return {
+      success: false,
+      error: 'تم تعطيل إرسال رسائل البريد الإلكتروني. تواصل مع المدير لتغيير كلمة المرور',
+    };
   };
 
   const refreshCurrentUser = async () => {
@@ -575,16 +671,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-        return;
-      }
-
-      const profile = await loadProfile(user);
+      const profile = user ? await loadProfile(user) : await loadStoredCustomSession();
       if (profile) {
         setCurrentUser(profile);
         setIsAuthenticated(true);
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
       }
     } catch (error) {
       console.error('[Auth] refreshCurrentUser error:', error);
@@ -593,6 +686,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      await AsyncStorage.removeItem(CUSTOM_AUTH_USER_ID_KEY);
       await supabase.auth.signOut();
       setIsAuthenticated(false);
       setCurrentUser(null);
@@ -651,6 +745,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         register,
         signInWithGoogle,
+        completeAuthFromUrl,
         verifyEmailOtp,
         resendEmailOtp,
         resetPassword,
@@ -679,11 +774,17 @@ export function useAuth() {
         success: false,
         error: 'Initializing...',
       }),
-      register: async (_fullName: string, _email: string, _password: string) => ({
+      register: async (
+        _fullName: string,
+        _userName: string,
+        _email: string,
+        _password: string
+      ) => ({
         success: false,
         error: 'Initializing...',
       }),
       signInWithGoogle: async () => ({ success: false, error: 'Initializing...' }),
+      completeAuthFromUrl: async (_url: string) => ({ success: false, error: 'Initializing...' }),
       verifyEmailOtp: async (_email: string, _token: string) => ({
         success: false,
         error: 'Initializing...',

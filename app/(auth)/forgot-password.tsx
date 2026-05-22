@@ -85,9 +85,9 @@ export default function ForgotPasswordScreen() {
               />
             </View>
 
-            <Text style={styles.title}>نسيت كلمة المرور؟</Text>
+            <Text style={styles.title}>استعادة كلمة المرور</Text>
             <Text style={styles.subtitle}>
-              أدخل بريدك الإلكتروني وسنرسل لك رابطاً لتعيين كلمة مرور جديدة
+              تم تعطيل إرسال رسائل البريد الإلكتروني. تواصل مع المدير لتغيير كلمة المرور
             </Text>
 
             {error ? (
@@ -121,7 +121,7 @@ export default function ForgotPasswordScreen() {
               {isLoading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.buttonText}>إرسال رابط الاستعادة</Text>
+                <Text style={styles.buttonText}>متابعة</Text>
               )}
             </TouchableOpacity>
           </>

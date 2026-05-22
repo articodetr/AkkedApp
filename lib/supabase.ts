@@ -2,9 +2,40 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
+import * as ExpoCrypto from 'expo-crypto';
 import { Platform } from 'react-native';
 
 type ExtraConfig = Record<string, unknown>;
+type DigestAlgorithm = string | { name?: string };
+
+const normalizeDigestAlgorithm = (algorithm: DigestAlgorithm) => {
+  const name = typeof algorithm === 'string' ? algorithm : algorithm.name || 'SHA-256';
+  return name.toUpperCase().replace('SHA256', 'SHA-256');
+};
+
+const installCryptoPolyfill = () => {
+  const crypto = ((globalThis as any).crypto ?? {}) as Crypto & {
+    subtle?: {
+      digest?: (algorithm: DigestAlgorithm, data: BufferSource) => Promise<ArrayBuffer>;
+    };
+  };
+
+  if (!crypto.getRandomValues) {
+    (crypto as any).getRandomValues = ExpoCrypto.getRandomValues;
+  }
+
+  if (!crypto.subtle?.digest) {
+    (crypto as any).subtle = {
+      ...(crypto.subtle ?? {}),
+      digest: (algorithm: DigestAlgorithm, data: BufferSource) =>
+        ExpoCrypto.digest(normalizeDigestAlgorithm(algorithm) as any, data),
+    };
+  }
+
+  (globalThis as any).crypto = crypto;
+};
+
+installCryptoPolyfill();
 
 const readString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
@@ -52,7 +83,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // على الويب نسمح باكتشاف الجلسة من رابط العودة، وعلى الموبايل
     // نتعامل مع رابط العودة يدوياً عبر expo-linking في AuthContext.
     detectSessionInUrl: Platform.OS === 'web',
-    // PKCE مطلوب لتدفّق OAuth (Google) وتأكيد الإيميل على الموبايل.
+    // PKCE مطلوب لتدفّق OAuth (Google) وروابط استعادة كلمة المرور على الموبايل.
     flowType: 'pkce',
   },
 });

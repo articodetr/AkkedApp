@@ -7,30 +7,35 @@ import {
   StyleSheet,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Lock, Mail, Eye, EyeOff } from 'lucide-react-native';
+import { Lock, User, Eye, EyeOff } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ENABLE_GOOGLE_AUTH = false;
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const { login, signInWithGoogle } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
-
-  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  const scrollFormIntoView = () => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
+  };
 
   const handleLogin = async () => {
-    if (!isValidEmail(email)) {
-      Alert.alert('خطأ', 'الرجاء إدخال بريد إلكتروني صحيح');
+    if (loginId.trim().length < 3) {
+      Alert.alert('خطأ', 'الرجاء إدخال اسم المستخدم');
       return;
     }
 
@@ -40,13 +45,13 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
-    const result = await login(email, password);
+    const result = await login(loginId, password);
     setIsLoading(false);
 
     if (result.success) {
       router.replace('/(tabs)');
     } else {
-      Alert.alert('خطأ', result.error || 'البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      Alert.alert('خطأ', result.error || 'اسم المستخدم أو كلمة المرور غير صحيحة');
       setPassword('');
     }
   };
@@ -67,12 +72,20 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+        style={styles.keyboardView}
       >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 180 }]}
+          contentInsetAdjustmentBehavior="automatic"
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.logoContainer}>
           <Image
             source={require('../../assets/images/icon.png')}
@@ -82,7 +95,7 @@ export default function LoginScreen() {
         </View>
 
         <Text style={styles.title}>Akked</Text>
-        <Text style={styles.subtitle}>أهلاً بك 👋 سجّل الدخول للمتابعة</Text>
+        <Text style={styles.subtitle}>أهلاً بك، سجّل الدخول باسم المستخدم للمتابعة</Text>
 
         {ENABLE_GOOGLE_AUTH && (
           <>
@@ -113,17 +126,17 @@ export default function LoginScreen() {
         )}
 
         <View style={styles.inputContainer}>
-          <Mail size={20} color="#6B7280" style={styles.inputIcon} />
+          <User size={20} color="#6B7280" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="البريد الإلكتروني"
+            value={loginId}
+            onChangeText={setLoginId}
+            onFocus={scrollFormIntoView}
+            placeholder="اسم المستخدم"
             placeholderTextColor="#9CA3AF"
             textAlign="right"
             autoCapitalize="none"
             autoCorrect={false}
-            keyboardType="email-address"
             editable={!busy}
           />
         </View>
@@ -134,7 +147,7 @@ export default function LoginScreen() {
             style={styles.input}
             value={password}
             onChangeText={setPassword}
-            onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            onFocus={scrollFormIntoView}
             placeholder="كلمة المرور"
             placeholderTextColor="#9CA3AF"
             secureTextEntry={!showPassword}
@@ -151,14 +164,6 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.forgotButton}
-          onPress={() => router.push('/(auth)/forgot-password')}
-          disabled={busy}
-        >
-          <Text style={styles.forgotButtonText}>نسيت كلمة المرور؟</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.button, busy && styles.buttonDisabled]}
@@ -184,7 +189,8 @@ export default function LoginScreen() {
             <Text style={styles.registerLink}>إنشاء حساب جديد</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -193,6 +199,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  keyboardView: {
+    flex: 1,
   },
   content: {
     flexGrow: 1,
