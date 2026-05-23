@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Lock, User, Eye, EyeOff } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardAwareScroll } from '@/hooks/useKeyboardAwareScroll';
 
 const ENABLE_GOOGLE_AUTH = false;
 
@@ -28,10 +29,7 @@ export default function LoginScreen() {
   const { login, signInWithGoogle } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
-  const scrollFormIntoView = () => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
-  };
+  const { scrollRef, handleScroll, handleInputFocus } = useKeyboardAwareScroll();
 
   const handleLogin = async () => {
     if (loginId.trim().length < 3) {
@@ -73,17 +71,19 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
-        behavior="padding"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
         style={styles.keyboardView}
       >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 180 }]}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 72 }]}
           contentInsetAdjustmentBehavior="automatic"
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
         <View style={styles.logoContainer}>
@@ -131,7 +131,7 @@ export default function LoginScreen() {
             style={styles.input}
             value={loginId}
             onChangeText={setLoginId}
-            onFocus={scrollFormIntoView}
+            onFocus={handleInputFocus}
             placeholder="اسم المستخدم"
             placeholderTextColor="#9CA3AF"
             textAlign="right"
@@ -147,7 +147,7 @@ export default function LoginScreen() {
             style={styles.input}
             value={password}
             onChangeText={setPassword}
-            onFocus={scrollFormIntoView}
+            onFocus={handleInputFocus}
             placeholder="كلمة المرور"
             placeholderTextColor="#9CA3AF"
             secureTextEntry={!showPassword}

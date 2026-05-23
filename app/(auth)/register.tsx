@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,13 +14,14 @@ import { router } from 'expo-router';
 import { UserPlus, User, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { useKeyboardAwareScroll } from '@/hooks/useKeyboardAwareScroll';
 
 const ENABLE_GOOGLE_AUTH = false;
 
 export default function RegisterScreen() {
   const { register, signInWithGoogle } = useAuth();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const { scrollRef, handleScroll, handleInputFocus } = useKeyboardAwareScroll();
 
   const [fullName, setFullName] = useState('');
   const [userName, setUserName] = useState('');
@@ -36,9 +37,6 @@ export default function RegisterScreen() {
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
   const normalizeUserName = (value: string) => value.trim().replace(/\s+/g, '').toLowerCase();
   const isValidUserName = (value: string) => /^[A-Za-z0-9_.\-\u0621-\u064A\u0660-\u0669\u06F0-\u06F9]+$/.test(value);
-  const scrollFormIntoView = () => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
-  };
 
   const handleRegister = async () => {
     setError('');
@@ -116,17 +114,19 @@ export default function RegisterScreen() {
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
-        behavior="padding"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
         style={styles.keyboardView}
       >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 220 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 72 }]}
           contentInsetAdjustmentBehavior="automatic"
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.logoContainer}>
@@ -180,6 +180,7 @@ export default function RegisterScreen() {
               placeholderTextColor="#9CA3AF"
               value={fullName}
               onChangeText={setFullName}
+              onFocus={handleInputFocus}
               textAlign="right"
               editable={!busy}
               returnKeyType="next"
@@ -194,7 +195,7 @@ export default function RegisterScreen() {
               placeholderTextColor="#9CA3AF"
               value={userName}
               onChangeText={setUserName}
-              onFocus={scrollFormIntoView}
+              onFocus={handleInputFocus}
               autoCapitalize="none"
               autoCorrect={false}
               textAlign="right"
@@ -211,7 +212,7 @@ export default function RegisterScreen() {
               placeholderTextColor="#9CA3AF"
               value={email}
               onChangeText={setEmail}
-              onFocus={scrollFormIntoView}
+              onFocus={handleInputFocus}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -229,7 +230,7 @@ export default function RegisterScreen() {
               placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}
-              onFocus={scrollFormIntoView}
+              onFocus={handleInputFocus}
               secureTextEntry={!showPassword}
               textAlign="right"
               autoCapitalize="none"
@@ -250,7 +251,7 @@ export default function RegisterScreen() {
               placeholderTextColor="#9CA3AF"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              onFocus={scrollFormIntoView}
+              onFocus={handleInputFocus}
               secureTextEntry={!showConfirmPassword}
               textAlign="right"
               autoCapitalize="none"
