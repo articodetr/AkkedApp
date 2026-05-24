@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { UserPlus, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
@@ -73,7 +74,15 @@ export default function RegisterScreen() {
       const result = await register(cleanFullName, cleanEmail, password);
 
       if (result.success) {
-        router.replace('/(tabs)');
+        const successMessage = result.needsEmailConfirmation
+          ? 'تم إنشاء الحساب. افتح بريدك لتأكيد الحساب، ثم سجّل الدخول بالبريد الإلكتروني وكلمة المرور.'
+          : 'تم إنشاء الحساب بنجاح. سجّل الدخول الآن بالبريد الإلكتروني وكلمة المرور.';
+
+        Alert.alert(
+          'تم إنشاء الحساب',
+          successMessage,
+          [{ text: 'تسجيل الدخول', onPress: () => router.replace('/(auth)/login') }]
+        );
         return;
       }
 
@@ -130,7 +139,7 @@ export default function RegisterScreen() {
 
           <Text style={styles.title}>إنشاء حساب جديد</Text>
           <Text style={styles.subtitle}>
-            أدخل بياناتك لإنشاء الحساب. البريد يُستخدم لاستعادة كلمة المرور فقط
+            أدخل بياناتك لإنشاء الحساب. البريد يُستخدم لتسجيل الدخول واستعادة كلمة المرور
           </Text>
 
           {error ? (

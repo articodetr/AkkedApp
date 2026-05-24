@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -152,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const suppressRegistrationAutoLoginRef = useRef(false);
 
   const buildDefaultSettings = (): AppSettings => ({
     id: '',
@@ -275,14 +276,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         'مستخدم';
       const fallbackUserName =
         normalizeUserName((meta.user_name as string) || (meta.username as string) || '') ||
-        (authUser.email ? authUser.email.split('@')[0] : '') ||
+        authUser.email ||
         authUser.id;
 
       if (data) {
+        if (authUser.email && data.user_name !== authUser.email) {
+          await supabase
+            .from('app_security')
+            .update({ user_name: authUser.email, email: authUser.email })
+            .eq('id', authUser.id);
+        }
+
         return {
           userId: data.id,
           email: data.email || authUser.email || '',
-          userName: data.user_name || fallbackUserName,
+          userName: authUser.email || data.user_name || fallbackUserName,
           role: data.role || 'user',
           fullName: data.full_name || fallbackName,
           accountNumber: data.account_number || '',
@@ -433,7 +441,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setTimeout(async () => {
         if (!mounted) return;
-        await applySessionState(session?.user ?? null);
+        const authUser = session?.user ?? null;
+
+        if (suppressRegistrationAutoLoginRef.current && authUser) {
+          setCurrentUser(null);
+          setIsAuthenticated(false);
+          if (mounted) setIsLoading(false);
+          return;
+        }
+
+        if (suppressRegistrationAutoLoginRef.current && !authUser) {
+          suppressRegistrationAutoLoginRef.current = false;
+        }
+
+        await applySessionState(authUser);
         if (mounted) setIsLoading(false);
       }, 0);
     });
@@ -464,34 +485,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string): Promise<AuthResult> => {
     try {
+      suppressRegistrationAutoLoginRef.current = false;
       const cleanEmail = email.trim().toLowerCase();
 
       if (!isEmailAddress(cleanEmail)) {
         return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
       }
 
-      const { data, error } = await supabase.rpc('login_app_user', {
-        p_login: cleanEmail,
-        p_password: password,
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
       });
 
       if (error) {
-        console.error('[Auth] custom login RPC error:', error);
-        return {
-          success: false,
-          error: error.message?.includes('login_app_user')
-            ? 'تحديثات قاعدة البيانات غير مطبقة. طبّق migration ثم حاول مرة أخرى'
-            : translateAuthError(error.message),
-        };
+        console.error('[Auth] login error:', error);
+        return { success: false, error: translateAuthError(error.message) };
       }
 
-      const profileRow = Array.isArray(data) ? data[0] : data;
-      if (!profileRow?.id) {
+      const authUser = data.user;
+      if (!authUser) {
         return { success: false, error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
       }
 
-      const profile = profileToCurrentUser(profileRow as AppSecurityProfile);
-      await AsyncStorage.setItem(CUSTOM_AUTH_USER_ID_KEY, profile.userId);
+      const profile = await loadProfile(authUser);
+      if (!profile) {
+        await supabase.auth.signOut();
+        return { success: false, error: 'تعذّر تحميل بيانات الحساب' };
+      }
+
+      await AsyncStorage.removeItem(CUSTOM_AUTH_USER_ID_KEY);
       setCurrentUser(profile);
       setIsAuthenticated(true);
 
@@ -523,37 +545,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' };
       }
 
-      const { data, error } = await supabase.rpc('register_app_user', {
-        p_full_name: cleanFullName,
-        p_user_name: cleanEmail,
-        p_email: cleanEmail,
-        p_password: password,
+      suppressRegistrationAutoLoginRef.current = true;
+
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          emailRedirectTo: getRedirectUrl(),
+          data: {
+            full_name: cleanFullName,
+            user_name: cleanEmail,
+            username: cleanEmail,
+          },
+        },
       });
 
       if (error) {
-        console.error('[Auth] custom register RPC error:', error);
-        return {
-          success: false,
-          error:
-            error.message?.includes('register_app_user')
-              ? 'تحديثات قاعدة البيانات غير مطبقة. طبّق migration ثم حاول مرة أخرى'
-              : translateAuthError(error.message),
-        };
+        suppressRegistrationAutoLoginRef.current = false;
+        console.error('[Auth] register error:', error);
+        return { success: false, error: translateAuthError(error.message) };
       }
 
-      const profileRow = Array.isArray(data) ? data[0] : data;
-      if (!profileRow?.id) {
+      const authUser = data.user;
+      if (!authUser?.id) {
+        suppressRegistrationAutoLoginRef.current = false;
         return { success: false, error: 'تعذّر إنشاء الحساب' };
       }
 
-      const profile = profileToCurrentUser(profileRow as AppSecurityProfile);
-      await syncSettingsEmailIfEmpty(profile.userId, profile.email || cleanEmail);
-      await AsyncStorage.setItem(CUSTOM_AUTH_USER_ID_KEY, profile.userId);
-      setCurrentUser(profile);
-      setIsAuthenticated(true);
+      const { error: profileError } = await supabase
+        .from('app_security')
+        .upsert(
+          {
+            id: authUser.id,
+            email: cleanEmail,
+            user_name: cleanEmail,
+            full_name: cleanFullName,
+            role: 'user',
+            is_active: true,
+            auth_provider: 'email',
+          },
+          { onConflict: 'id' }
+        );
 
-      return { success: true, needsEmailConfirmation: false };
+      if (profileError) {
+        console.warn('[Auth] profile sync after signUp skipped:', profileError);
+      }
+
+      await syncSettingsEmailIfEmpty(authUser.id, cleanEmail);
+      await AsyncStorage.removeItem(CUSTOM_AUTH_USER_ID_KEY);
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+
+      return { success: true, needsEmailConfirmation: !data.session };
     } catch (error) {
+      if (suppressRegistrationAutoLoginRef.current) {
+        try {
+          await supabase.auth.signOut();
+        } catch (signOutError) {
+          console.warn('[Auth] sign out after failed register skipped:', signOutError);
+        }
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+      }
+
       console.error('[Auth] register error:', error);
       return { success: false, error: 'حدث خطأ أثناء إنشاء الحساب' };
     }
