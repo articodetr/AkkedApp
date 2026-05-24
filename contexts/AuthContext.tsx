@@ -80,6 +80,29 @@ const normalizeOtpCode = (value: string) => {
     .slice(0, 6);
 };
 
+type PasswordResetStatus =
+  | 'ready'
+  | 'invalid_email'
+  | 'missing_profile'
+  | 'inactive_profile'
+  | 'missing_auth_user'
+  | 'unknown';
+
+const passwordResetStatusMessage = (status: PasswordResetStatus) => {
+  switch (status) {
+    case 'invalid_email':
+      return 'يرجى إدخال بريد إلكتروني صحيح';
+    case 'missing_profile':
+      return 'هذا البريد غير مسجّل في التطبيق';
+    case 'inactive_profile':
+      return 'هذا الحساب غير نشط. تواصل مع مدير النظام';
+    case 'missing_auth_user':
+      return 'هذا الحساب قديم ولم يتم ربطه بعد بنظام استعادة كلمة المرور. طبّق تحديثات Supabase ثم حاول مرة أخرى';
+    default:
+      return 'تعذّر التحقق من الحساب قبل إرسال رابط الاستعادة';
+  }
+};
+
 // ترجمة رسائل أخطاء Supabase Auth إلى العربية
 function translateAuthError(message?: string): string {
   const msg = (message || '').toLowerCase();
@@ -680,6 +703,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!isEmailAddress(cleanEmail)) {
         return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
+      }
+
+      let resetStatus: PasswordResetStatus = 'unknown';
+      const { data: statusData, error: statusError } = await supabase.rpc(
+        'get_password_reset_status',
+        { p_email: cleanEmail }
+      );
+
+      if (!statusError && typeof statusData === 'string') {
+        resetStatus = statusData as PasswordResetStatus;
+      } else {
+        const statusMessage = statusError?.message?.toLowerCase() || '';
+
+        if (
+          statusMessage.includes('get_password_reset_status') ||
+          statusMessage.includes('schema cache') ||
+          statusMessage.includes('pgrst202')
+        ) {
+          const { data: profileRows, error: profileError } = await supabase
+            .from('app_security')
+            .select('id, is_active')
+            .ilike('email', cleanEmail)
+            .limit(1);
+
+          if (profileError) {
+            console.warn('[Auth] password reset profile check skipped:', profileError);
+          } else if (!profileRows?.length) {
+            resetStatus = 'missing_profile';
+          } else if (profileRows[0]?.is_active === false) {
+            resetStatus = 'inactive_profile';
+          } else {
+            resetStatus = 'ready';
+          }
+        } else {
+          console.warn('[Auth] password reset preflight skipped:', statusError);
+        }
+      }
+
+      if (resetStatus !== 'ready') {
+        return { success: false, error: passwordResetStatusMessage(resetStatus) };
       }
 
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
