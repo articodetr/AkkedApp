@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   Keyboard,
@@ -15,10 +15,22 @@ type MeasurableInput = {
   ) => void;
 };
 
+type FocusableInput = MeasurableInput & {
+  focus: () => void;
+};
+
 interface KeyboardAwareScrollOptions {
   keyboardGap?: number;
   topGap?: number;
 }
+
+const isMeasurableInput = (value: unknown): value is MeasurableInput => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as MeasurableInput).measureInWindow === 'function'
+  );
+};
 
 const getFocusedTextInput = () => {
   const state = (TextInput as typeof TextInput & {
@@ -36,6 +48,8 @@ export function useKeyboardAwareScroll({
   const scrollYRef = useRef(0);
   const focusedInputRef = useRef<MeasurableInput | null>(null);
   const keyboardTopRef = useRef(Dimensions.get('window').height);
+  const scrollTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const scrollFocusedInputIntoView = useCallback((input?: MeasurableInput | null) => {
     const target = input ?? focusedInputRef.current;
@@ -64,37 +78,80 @@ export function useKeyboardAwareScroll({
     });
   }, [keyboardGap, topGap]);
 
+  const clearQueuedScrolls = useCallback(() => {
+    scrollTimeoutsRef.current.forEach(clearTimeout);
+    scrollTimeoutsRef.current = [];
+  }, []);
+
+  const queueScrollFocusedInputIntoView = useCallback((input?: MeasurableInput | null) => {
+    const target = input ?? focusedInputRef.current;
+    if (target) {
+      focusedInputRef.current = target;
+    }
+
+    clearQueuedScrolls();
+    [0, 50, 120, 220].forEach((delay) => {
+      const timeout = setTimeout(() => {
+        scrollFocusedInputIntoView(target ?? focusedInputRef.current);
+      }, delay);
+
+      scrollTimeoutsRef.current.push(timeout);
+    });
+  }, [clearQueuedScrolls, scrollFocusedInputIntoView]);
+
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
     const showSubscription = Keyboard.addListener(showEvent, (event) => {
-      keyboardTopRef.current = event.endCoordinates.screenY;
-      setTimeout(() => scrollFocusedInputIntoView(), Platform.OS === 'ios' ? 40 : 80);
+      const windowHeight = Dimensions.get('window').height;
+      const keyboardTop = event.endCoordinates.screenY > 0
+        ? Math.min(event.endCoordinates.screenY, windowHeight)
+        : Math.max(0, windowHeight - event.endCoordinates.height);
+
+      keyboardTopRef.current = keyboardTop;
+      setKeyboardHeight(Math.max(0, event.endCoordinates.height || windowHeight - keyboardTop));
+      queueScrollFocusedInputIntoView();
     });
 
     const hideSubscription = Keyboard.addListener(hideEvent, () => {
       keyboardTopRef.current = Dimensions.get('window').height;
+      setKeyboardHeight(0);
+      clearQueuedScrolls();
     });
 
     return () => {
+      clearQueuedScrolls();
       showSubscription.remove();
       hideSubscription.remove();
     };
-  }, [scrollFocusedInputIntoView]);
+  }, [clearQueuedScrolls, queueScrollFocusedInputIntoView]);
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollYRef.current = event.nativeEvent.contentOffset.y;
   }, []);
 
-  const handleInputFocus = useCallback(() => {
-    focusedInputRef.current = getFocusedTextInput();
-    setTimeout(() => scrollFocusedInputIntoView(), 90);
-  }, [scrollFocusedInputIntoView]);
+  const handleInputFocus = useCallback((input?: unknown) => {
+    focusedInputRef.current = isMeasurableInput(input)
+      ? input
+      : getFocusedTextInput();
+    queueScrollFocusedInputIntoView();
+  }, [queueScrollFocusedInputIntoView]);
+
+  const focusInput = useCallback((input?: FocusableInput | null) => {
+    if (!input) return;
+
+    focusedInputRef.current = input;
+    input.focus();
+    queueScrollFocusedInputIntoView(input);
+  }, [queueScrollFocusedInputIntoView]);
 
   return {
     scrollRef,
     handleScroll,
     handleInputFocus,
+    focusInput,
+    scrollFocusedInputIntoView: queueScrollFocusedInputIntoView,
+    keyboardHeight,
   };
 }

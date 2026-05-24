@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -29,7 +29,11 @@ export default function LoginScreen() {
   const { login, signInWithGoogle } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { scrollRef, handleScroll, handleInputFocus } = useKeyboardAwareScroll();
+  const { scrollRef, handleScroll, handleInputFocus, focusInput, keyboardHeight } = useKeyboardAwareScroll({
+    keyboardGap: 24,
+  });
+  const loginIdInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
     if (loginId.trim().length < 3) {
@@ -67,17 +71,20 @@ export default function LoginScreen() {
   };
 
   const busy = isLoading || isGoogleLoading;
+  const contentBottomPadding = insets.bottom + (
+    Platform.OS === 'android' && keyboardHeight > 0 ? keyboardHeight + 96 : 72
+  );
 
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
         style={styles.keyboardView}
       >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 72 }]}
+          contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
           contentInsetAdjustmentBehavior="automatic"
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           keyboardDismissMode="interactive"
@@ -128,26 +135,31 @@ export default function LoginScreen() {
         <View style={styles.inputContainer}>
           <User size={20} color="#6B7280" style={styles.inputIcon} />
           <TextInput
+            ref={loginIdInputRef}
             style={styles.input}
             value={loginId}
             onChangeText={setLoginId}
-            onFocus={handleInputFocus}
+            onFocus={() => handleInputFocus(loginIdInputRef.current)}
             placeholder="اسم المستخدم"
             placeholderTextColor="#9CA3AF"
             textAlign="right"
             autoCapitalize="none"
             autoCorrect={false}
             editable={!busy}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => focusInput(passwordInputRef.current)}
           />
         </View>
 
         <View style={styles.inputContainer}>
           <Lock size={20} color="#6B7280" style={styles.inputIcon} />
           <TextInput
+            ref={passwordInputRef}
             style={styles.input}
             value={password}
             onChangeText={setPassword}
-            onFocus={handleInputFocus}
+            onFocus={() => handleInputFocus(passwordInputRef.current)}
             placeholder="كلمة المرور"
             placeholderTextColor="#9CA3AF"
             secureTextEntry={!showPassword}
@@ -155,6 +167,8 @@ export default function LoginScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             editable={!busy}
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
             {showPassword ? (

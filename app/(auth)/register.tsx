@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,14 @@ const ENABLE_GOOGLE_AUTH = false;
 export default function RegisterScreen() {
   const { register, signInWithGoogle } = useAuth();
   const insets = useSafeAreaInsets();
-  const { scrollRef, handleScroll, handleInputFocus } = useKeyboardAwareScroll();
+  const { scrollRef, handleScroll, handleInputFocus, focusInput, keyboardHeight } = useKeyboardAwareScroll({
+    keyboardGap: 24,
+  });
+  const fullNameInputRef = useRef<TextInput>(null);
+  const userNameInputRef = useRef<TextInput>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
 
   const [fullName, setFullName] = useState('');
   const [userName, setUserName] = useState('');
@@ -110,17 +117,20 @@ export default function RegisterScreen() {
   };
 
   const busy = isLoading || isGoogleLoading;
+  const contentBottomPadding = insets.bottom + (
+    Platform.OS === 'android' && keyboardHeight > 0 ? keyboardHeight + 96 : 72
+  );
 
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
         style={styles.keyboardView}
       >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 72 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
           contentInsetAdjustmentBehavior="automatic"
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           keyboardDismissMode="interactive"
@@ -175,68 +185,80 @@ export default function RegisterScreen() {
           <View style={styles.inputContainer}>
             <UserPlus size={22} color="#9CA3AF" style={styles.inputIcon} />
             <TextInput
+              ref={fullNameInputRef}
               style={styles.input}
               placeholder="الاسم الكامل"
               placeholderTextColor="#9CA3AF"
               value={fullName}
               onChangeText={setFullName}
-              onFocus={handleInputFocus}
+              onFocus={() => handleInputFocus(fullNameInputRef.current)}
               textAlign="right"
               editable={!busy}
               returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => focusInput(userNameInputRef.current)}
             />
           </View>
 
           <View style={styles.inputContainer}>
             <User size={22} color="#9CA3AF" style={styles.inputIcon} />
             <TextInput
+              ref={userNameInputRef}
               style={styles.input}
               placeholder="اسم المستخدم"
               placeholderTextColor="#9CA3AF"
               value={userName}
               onChangeText={setUserName}
-              onFocus={handleInputFocus}
+              onFocus={() => handleInputFocus(userNameInputRef.current)}
               autoCapitalize="none"
               autoCorrect={false}
               textAlign="right"
               editable={!busy}
               returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => focusInput(emailInputRef.current)}
             />
           </View>
 
           <View style={styles.inputContainer}>
             <Mail size={22} color="#9CA3AF" style={styles.inputIcon} />
             <TextInput
+              ref={emailInputRef}
               style={styles.input}
               placeholder="البريد الإلكتروني"
               placeholderTextColor="#9CA3AF"
               value={email}
               onChangeText={setEmail}
-              onFocus={handleInputFocus}
+              onFocus={() => handleInputFocus(emailInputRef.current)}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
               textAlign="right"
               editable={!busy}
               returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => focusInput(passwordInputRef.current)}
             />
           </View>
 
           <View style={styles.inputContainer}>
             <Lock size={22} color="#9CA3AF" style={styles.inputIcon} />
             <TextInput
+              ref={passwordInputRef}
               style={styles.input}
               placeholder="كلمة المرور"
               placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}
-              onFocus={handleInputFocus}
+              onFocus={() => handleInputFocus(passwordInputRef.current)}
               secureTextEntry={!showPassword}
               textAlign="right"
               autoCapitalize="none"
               autoCorrect={false}
               editable={!busy}
               returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => focusInput(confirmPasswordInputRef.current)}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
               {showPassword ? <EyeOff size={22} color="#6B7280" /> : <Eye size={22} color="#6B7280" />}
@@ -246,12 +268,13 @@ export default function RegisterScreen() {
           <View style={styles.inputContainer}>
             <Lock size={22} color="#9CA3AF" style={styles.inputIcon} />
             <TextInput
+              ref={confirmPasswordInputRef}
               style={styles.input}
               placeholder="تأكيد كلمة المرور"
               placeholderTextColor="#9CA3AF"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              onFocus={handleInputFocus}
+              onFocus={() => handleInputFocus(confirmPasswordInputRef.current)}
               secureTextEntry={!showConfirmPassword}
               textAlign="right"
               autoCapitalize="none"

@@ -24,10 +24,12 @@ function RootLayoutNav() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const authRoute = segments[1];
+    const inRecoveryFlow = authRoute === 'auth-callback' || authRoute === 'reset-password';
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (isAuthenticated && inAuthGroup) {
+    } else if (isAuthenticated && inAuthGroup && !inRecoveryFlow) {
       router.replace('/(tabs)');
     }
   }, [isAuthenticated, isLoading, segments]);

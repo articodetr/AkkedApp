@@ -87,7 +87,7 @@ export default function ForgotPasswordScreen() {
 
             <Text style={styles.title}>استعادة كلمة المرور</Text>
             <Text style={styles.subtitle}>
-              تم تعطيل إرسال رسائل البريد الإلكتروني. تواصل مع المدير لتغيير كلمة المرور
+              أدخل بريد حسابك وسنرسل لك رابطًا لتعيين كلمة مرور جديدة
             </Text>
 
             {error ? (

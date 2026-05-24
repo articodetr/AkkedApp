@@ -17,6 +17,11 @@ export default function AuthCallbackScreen() {
   const [error, setError] = useState('');
   const [handledUrl, setHandledUrl] = useState<string | null>(null);
 
+  const isRecoveryUrl = (url: string) =>
+    url.includes('type=recovery') ||
+    url.includes('type%3Drecovery') ||
+    url.includes('recovery');
+
   useEffect(() => {
     const timer = setTimeout(() => setTimedOut(true), 15000);
     return () => clearTimeout(timer);
@@ -36,7 +41,7 @@ export default function AuthCallbackScreen() {
       if (cancelled) return;
 
       if (result.success) {
-        router.replace('/(tabs)');
+        router.replace(isRecoveryUrl(url) ? '/(auth)/reset-password' : '/(tabs)');
       } else if (result.error) {
         setError(result.error);
       }

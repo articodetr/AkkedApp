@@ -104,6 +104,10 @@ function translateAuthError(message?: string): string {
     return 'اسم المستخدم أو البريد مستخدم بالفعل';
   }
 
+  if (msg.includes('ambiguous') || msg.includes('column reference')) {
+    return 'تحتاج قاعدة البيانات إلى تحديث دالة التسجيل. طبّق تحديثات Supabase ثم حاول مرة أخرى';
+  }
+
   if (msg.includes('full_name_too_short')) {
     return 'الاسم الكامل يجب أن يكون حرفين على الأقل';
   }
@@ -226,6 +230,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('[Auth] loadStoredCustomSession error:', error);
       return null;
+    }
+  };
+
+  const syncSettingsEmailIfEmpty = async (userId: string, email: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!userId || !isEmailAddress(cleanEmail)) return;
+
+    try {
+      const { data, error } = await supabase.rpc('get_or_create_user_settings', {
+        p_user_id: userId,
+      });
+
+      if (error) {
+        console.warn('[Auth] settings email sync skipped:', error);
+        return;
+      }
+
+      if ((data as AppSettings | null)?.email?.trim()) return;
+
+      const { error: updateError } = await supabase
+        .from('app_settings')
+        .update({ email: cleanEmail })
+        .eq('user_id', userId);
+
+      if (updateError) {
+        console.warn('[Auth] settings email update skipped:', updateError);
+      }
+    } catch (error) {
+      console.warn('[Auth] settings email sync error:', error);
     }
   };
 
@@ -587,6 +620,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const profile = profileToCurrentUser(profileRow as AppSecurityProfile);
+      await syncSettingsEmailIfEmpty(profile.userId, profile.email || cleanEmail);
       await AsyncStorage.setItem(CUSTOM_AUTH_USER_ID_KEY, profile.userId);
       setCurrentUser(profile);
       setIsAuthenticated(true);
@@ -659,10 +693,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string): Promise<AuthResult> => {
-    return {
-      success: false,
-      error: 'تم تعطيل إرسال رسائل البريد الإلكتروني. تواصل مع المدير لتغيير كلمة المرور',
-    };
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+
+      if (!isEmailAddress(cleanEmail)) {
+        return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: getRedirectUrl(),
+      });
+
+      if (error) {
+        return { success: false, error: translateAuthError(error.message) };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[Auth] resetPassword error:', error);
+      return { success: false, error: 'تعذّر إرسال رابط الاستعادة' };
+    }
   };
 
   const refreshCurrentUser = async () => {

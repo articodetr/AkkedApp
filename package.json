@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "expo start --go --port 8081 --host lan",
-    "dev": "expo start --go --port 8081 --host lan",
-    "dev:go": "expo start --go --port 8081 --host lan",
+    "start": "expo start --go --port 8081 --tunnel",
+    "dev": "expo start --go --port 8081 --tunnel",
+    "dev:go": "expo start --go --port 8081 --tunnel",
     "dev:go:lan": "expo start --go --port 8081 --host lan",
     "dev:go:tunnel": "expo start --go --port 8081 --tunnel",
     "dev:lan": "expo start --go --port 8081 --host lan",
