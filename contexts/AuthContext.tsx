@@ -25,10 +25,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   currentUser: CurrentUser | null;
-  login: (userNameOrEmail: string, password: string) => Promise<AuthResult>;
+  login: (email: string, password: string) => Promise<AuthResult>;
   register: (
     fullName: string,
-    userName: string,
     email: string,
     password: string
   ) => Promise<RegisterResult>;
@@ -54,9 +53,6 @@ const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valu
 
 const normalizeUserName = (value: string) => value.trim().replace(/\s+/g, '').toLowerCase();
 
-const isValidUserName = (value: string) =>
-  /^[A-Za-z0-9_.\-\u0621-\u064A\u0660-\u0669\u06F0-\u06F9]+$/.test(value);
-
 type AppSecurityProfile = {
   id: string;
   user_name: string | null;
@@ -69,9 +65,9 @@ type AppSecurityProfile = {
 const profileToCurrentUser = (profile: AppSecurityProfile): CurrentUser => ({
   userId: profile.id,
   email: profile.email || '',
-  userName: profile.user_name || profile.email || profile.id,
+  userName: profile.email || profile.user_name || profile.id,
   role: profile.role || 'user',
-  fullName: profile.full_name || profile.user_name || 'مستخدم',
+  fullName: profile.full_name || profile.email || profile.user_name || 'مستخدم',
   accountNumber: profile.account_number || '',
 });
 
@@ -89,7 +85,7 @@ function translateAuthError(message?: string): string {
   const msg = (message || '').toLowerCase();
 
   if (msg.includes('invalid login credentials')) {
-    return 'اسم المستخدم أو كلمة المرور غير صحيحة';
+    return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
   }
 
   if (msg.includes('email not confirmed')) {
@@ -101,7 +97,7 @@ function translateAuthError(message?: string): string {
   }
 
   if (msg.includes('user_name_or_email_exists')) {
-    return 'اسم المستخدم أو البريد مستخدم بالفعل';
+    return 'هذا البريد الإلكتروني مسجّل بالفعل';
   }
 
   if (msg.includes('ambiguous') || msg.includes('column reference')) {
@@ -113,7 +109,7 @@ function translateAuthError(message?: string): string {
   }
 
   if (msg.includes('user_name_too_short')) {
-    return 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل';
+    return 'يرجى إدخال بريد إلكتروني صحيح';
   }
 
   if (msg.includes('invalid_email')) {
@@ -129,7 +125,7 @@ function translateAuthError(message?: string): string {
     msg.includes('unique constraint') ||
     msg.includes('database error saving new user')
   ) {
-    return 'اسم المستخدم أو البريد مستخدم بالفعل';
+    return 'هذا البريد الإلكتروني مسجّل بالفعل';
   }
 
   if (msg.includes('password should be at least')) {
@@ -466,75 +462,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser?.userId]);
 
-  const resolveEmailForLogin = async (userNameOrEmail: string): Promise<string | null> => {
-    const cleanLogin = userNameOrEmail.trim();
-
-    if (!cleanLogin) return null;
-    if (isEmailAddress(cleanLogin)) return cleanLogin.toLowerCase();
-
-    const normalizedUserName = normalizeUserName(cleanLogin);
-
+  const login = async (email: string, password: string): Promise<AuthResult> => {
     try {
-      const { data: loginEmail, error: rpcError } = await supabase.rpc('get_login_email', {
-        p_login: normalizedUserName,
-      });
+      const cleanEmail = email.trim().toLowerCase();
 
-      if (!rpcError && typeof loginEmail === 'string' && loginEmail) {
-        return loginEmail.trim().toLowerCase();
+      if (!isEmailAddress(cleanEmail)) {
+        return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
       }
-    } catch (error) {
-      console.warn('[Auth] get_login_email fallback:', error);
-    }
 
-    const candidates = Array.from(new Set([cleanLogin, normalizedUserName])).filter(Boolean);
-    const { data, error } = await supabase
-      .from('app_security')
-      .select('email')
-      .in('user_name', candidates)
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data?.email) {
-      return null;
-    }
-
-    return data.email.trim().toLowerCase();
-  };
-
-  const isUserNameTaken = async (userName: string): Promise<boolean> => {
-    const candidates = Array.from(new Set([userName, normalizeUserName(userName)])).filter(Boolean);
-
-    try {
-      const { data: loginEmail, error: rpcError } = await supabase.rpc('get_login_email', {
-        p_login: normalizeUserName(userName),
-      });
-
-      if (!rpcError && typeof loginEmail === 'string' && loginEmail) {
-        return true;
-      }
-    } catch (error) {
-      console.warn('[Auth] username RPC availability check skipped:', error);
-    }
-
-    const { data, error } = await supabase
-      .from('app_security')
-      .select('id')
-      .in('user_name', candidates)
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      console.warn('[Auth] username availability check skipped:', error);
-      return false;
-    }
-
-    return Boolean(data?.id);
-  };
-
-  const login = async (userNameOrEmail: string, password: string): Promise<AuthResult> => {
-    try {
       const { data, error } = await supabase.rpc('login_app_user', {
-        p_login: userNameOrEmail.trim(),
+        p_login: cleanEmail,
         p_password: password,
       });
 
@@ -550,7 +487,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const profileRow = Array.isArray(data) ? data[0] : data;
       if (!profileRow?.id) {
-        return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
+        return { success: false, error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
       }
 
       const profile = profileToCurrentUser(profileRow as AppSecurityProfile);
@@ -567,25 +504,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (
     fullName: string,
-    userName: string,
     email: string,
     password: string
   ): Promise<RegisterResult> => {
     try {
       const cleanFullName = fullName.trim();
-      const cleanUserName = normalizeUserName(userName);
       const cleanEmail = email.trim().toLowerCase();
 
       if (!fullName || fullName.trim().length < 2) {
         return { success: false, error: 'الاسم الكامل يجب أن يكون حرفين على الأقل' };
-      }
-
-      if (cleanUserName.length < 3) {
-        return { success: false, error: 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل' };
-      }
-
-      if (!isValidUserName(cleanUserName)) {
-        return { success: false, error: 'اسم المستخدم يقبل الحروف والأرقام والرموز . _ - فقط' };
       }
 
       if (!isEmailAddress(cleanEmail)) {
@@ -598,7 +525,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data, error } = await supabase.rpc('register_app_user', {
         p_full_name: cleanFullName,
-        p_user_name: cleanUserName,
+        p_user_name: cleanEmail,
         p_email: cleanEmail,
         p_password: password,
       });
@@ -826,7 +753,6 @@ export function useAuth() {
       }),
       register: async (
         _fullName: string,
-        _userName: string,
         _email: string,
         _password: string
       ) => ({

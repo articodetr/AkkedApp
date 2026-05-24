@@ -6,8 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Platform,
-  ToastAndroid,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -18,11 +16,8 @@ import {
   User,
   MessageCircle,
   Link as LinkIcon,
-  FolderInput,
-  Bell,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { scheduleSystemNotificationTest } from '@/hooks/useSystemNotifications';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -46,23 +41,6 @@ export default function SettingsScreen() {
         },
       },
     ]);
-  };
-
-  const handleTestNotification = async () => {
-    try {
-      await scheduleSystemNotificationTest();
-      if (Platform.OS === 'android') {
-        ToastAndroid.show('تم إرسال إشعار اختبار', ToastAndroid.SHORT);
-      } else {
-        Alert.alert('اختبار الإشعار', 'تم إرسال إشعار اختبار.');
-      }
-    } catch (error) {
-      console.warn('[Settings] Notification test failed:', error);
-      Alert.alert(
-        'تعذر إرسال الإشعار',
-        'تأكد من تفعيل إذن الإشعارات للتطبيق من إعدادات الهاتف ثم أعد فتح التطبيق.'
-      );
-    }
   };
 
   const menuItems = [
@@ -93,20 +71,6 @@ export default function SettingsScreen() {
       subtitle: 'نسخ واستعادة البيانات',
       color: '#10B981',
       onPress: () => router.push('/backup' as any),
-    },
-    {
-      icon: FolderInput,
-      title: 'ربط البيانات القديمة',
-      subtitle: 'نقل بيانات حساب قديم إلى حسابك',
-      color: '#F59E0B',
-      onPress: () => router.push('/link-legacy-data' as any),
-    },
-    {
-      icon: Bell,
-      title: 'اختبار الإشعارات',
-      subtitle: 'إرسال إشعار نظام للتأكد من إعدادات الهاتف',
-      color: '#2563EB',
-      onPress: handleTestNotification,
     },
     {
       icon: Info,

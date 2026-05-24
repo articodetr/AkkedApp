@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
-import { UserPlus, User, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
+import { UserPlus, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useKeyboardAwareScroll } from '@/hooks/useKeyboardAwareScroll';
@@ -25,13 +25,11 @@ export default function RegisterScreen() {
     keyboardGap: 24,
   });
   const fullNameInputRef = useRef<TextInput>(null);
-  const userNameInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const confirmPasswordInputRef = useRef<TextInput>(null);
 
   const [fullName, setFullName] = useState('');
-  const [userName, setUserName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -42,28 +40,15 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
 
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-  const normalizeUserName = (value: string) => value.trim().replace(/\s+/g, '').toLowerCase();
-  const isValidUserName = (value: string) => /^[A-Za-z0-9_.\-\u0621-\u064A\u0660-\u0669\u06F0-\u06F9]+$/.test(value);
 
   const handleRegister = async () => {
     setError('');
 
     const cleanFullName = fullName.trim();
-    const cleanUserName = normalizeUserName(userName);
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanFullName || cleanFullName.length < 2) {
       setError('الاسم الكامل يجب أن يكون حرفين على الأقل');
-      return;
-    }
-
-    if (cleanUserName.length < 3) {
-      setError('اسم المستخدم يجب أن يكون 3 أحرف على الأقل');
-      return;
-    }
-
-    if (!isValidUserName(cleanUserName)) {
-      setError('اسم المستخدم يقبل الحروف والأرقام والرموز . _ - فقط');
       return;
     }
 
@@ -85,7 +70,7 @@ export default function RegisterScreen() {
     setIsLoading(true);
 
     try {
-      const result = await register(cleanFullName, cleanUserName, cleanEmail, password);
+      const result = await register(cleanFullName, cleanEmail, password);
 
       if (result.success) {
         router.replace('/(tabs)');
@@ -192,26 +177,6 @@ export default function RegisterScreen() {
               value={fullName}
               onChangeText={setFullName}
               onFocus={() => handleInputFocus(fullNameInputRef.current)}
-              textAlign="right"
-              editable={!busy}
-              returnKeyType="next"
-              blurOnSubmit={false}
-              onSubmitEditing={() => focusInput(userNameInputRef.current)}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <User size={22} color="#9CA3AF" style={styles.inputIcon} />
-            <TextInput
-              ref={userNameInputRef}
-              style={styles.input}
-              placeholder="اسم المستخدم"
-              placeholderTextColor="#9CA3AF"
-              value={userName}
-              onChangeText={setUserName}
-              onFocus={() => handleInputFocus(userNameInputRef.current)}
-              autoCapitalize="none"
-              autoCorrect={false}
               textAlign="right"
               editable={!busy}
               returnKeyType="next"

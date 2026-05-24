@@ -906,7 +906,7 @@ export async function approveMovementNotification(
 
   const userName = currentUser?.userName || currentUser?.fullName;
   if (!userName) {
-    throw new Error('تعذر معرفة اسم المستخدم الحالي');
+    throw new Error('تعذر معرفة المستخدم الحالي');
   }
 
   const rpcName = isMovementDeletionRequestNotification(item)
@@ -944,7 +944,7 @@ export async function rejectMovementNotification(
 
   const userName = currentUser?.userName || currentUser?.fullName;
   if (!userName) {
-    throw new Error('تعذر معرفة اسم المستخدم الحالي');
+    throw new Error('تعذر معرفة المستخدم الحالي');
   }
 
   const trimmedReason = rejectReason.trim();

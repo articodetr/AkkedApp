@@ -14,14 +14,14 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Lock, User, Eye, EyeOff } from 'lucide-react-native';
+import { Lock, Mail, Eye, EyeOff } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardAwareScroll } from '@/hooks/useKeyboardAwareScroll';
 
 const ENABLE_GOOGLE_AUTH = false;
 
 export default function LoginScreen() {
-  const [loginId, setLoginId] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,12 +32,16 @@ export default function LoginScreen() {
   const { scrollRef, handleScroll, handleInputFocus, focusInput, keyboardHeight } = useKeyboardAwareScroll({
     keyboardGap: 24,
   });
-  const loginIdInputRef = useRef<TextInput>(null);
+  const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
 
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
   const handleLogin = async () => {
-    if (loginId.trim().length < 3) {
-      Alert.alert('خطأ', 'الرجاء إدخال اسم المستخدم');
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!isValidEmail(cleanEmail)) {
+      Alert.alert('خطأ', 'يرجى إدخال بريد إلكتروني صحيح');
       return;
     }
 
@@ -47,13 +51,13 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
-    const result = await login(loginId, password);
+    const result = await login(cleanEmail, password);
     setIsLoading(false);
 
     if (result.success) {
       router.replace('/(tabs)');
     } else {
-      Alert.alert('خطأ', result.error || 'اسم المستخدم أو كلمة المرور غير صحيحة');
+      Alert.alert('خطأ', result.error || 'البريد الإلكتروني أو كلمة المرور غير صحيحة');
       setPassword('');
     }
   };
@@ -102,7 +106,7 @@ export default function LoginScreen() {
         </View>
 
         <Text style={styles.title}>Akked</Text>
-        <Text style={styles.subtitle}>أهلاً بك، سجّل الدخول باسم المستخدم للمتابعة</Text>
+        <Text style={styles.subtitle}>أهلاً بك، سجّل الدخول بالبريد الإلكتروني للمتابعة</Text>
 
         {ENABLE_GOOGLE_AUTH && (
           <>
@@ -133,16 +137,17 @@ export default function LoginScreen() {
         )}
 
         <View style={styles.inputContainer}>
-          <User size={20} color="#6B7280" style={styles.inputIcon} />
+          <Mail size={20} color="#6B7280" style={styles.inputIcon} />
           <TextInput
-            ref={loginIdInputRef}
+            ref={emailInputRef}
             style={styles.input}
-            value={loginId}
-            onChangeText={setLoginId}
-            onFocus={() => handleInputFocus(loginIdInputRef.current)}
-            placeholder="اسم المستخدم"
+            value={email}
+            onChangeText={setEmail}
+            onFocus={() => handleInputFocus(emailInputRef.current)}
+            placeholder="البريد الإلكتروني"
             placeholderTextColor="#9CA3AF"
             textAlign="right"
+            keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
             editable={!busy}
@@ -178,6 +183,14 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.forgotButton}
+          onPress={() => router.push('/(auth)/forgot-password')}
+          disabled={busy}
+        >
+          <Text style={styles.forgotButtonText}>نسيت كلمة المرور؟</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.button, busy && styles.buttonDisabled]}
