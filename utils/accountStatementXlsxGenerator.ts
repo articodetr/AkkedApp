@@ -372,7 +372,7 @@ function buildCompanyHeaderDataUrl(
   companyHeader: CompanyHeaderInfo,
   logoDataUrl?: string,
 ): string {
-  const nameAr = trimHeaderText(companyHeader.nameAr) || trimHeaderText(companyHeader.nameEn) || 'Akked';
+  const nameAr = trimHeaderText(companyHeader.nameAr) || trimHeaderText(companyHeader.nameEn) || 'أكِّد';
   const nameEn = trimHeaderText(companyHeader.nameEn) || trimHeaderText(companyHeader.nameAr) || 'Akked';
   const phoneAr = trimHeaderText(companyHeader.phoneAr) || trimHeaderText(companyHeader.phoneEn);
   const phoneEn = trimHeaderText(companyHeader.phoneEn) || trimHeaderText(companyHeader.phoneAr);

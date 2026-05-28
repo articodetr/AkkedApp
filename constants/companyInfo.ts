@@ -1,5 +1,5 @@
 export const COMPANY_INFO = {
-  nameAr: 'Akked',
+  nameAr: 'أكِّد',
   nameEn: 'Akked',
   addressAr: 'اليمن صنعاء',
   addressEn: 'Yemen Sanaa',

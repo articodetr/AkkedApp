@@ -105,7 +105,7 @@ export default function LoginScreen() {
           />
         </View>
 
-        <Text style={styles.title}>Akked</Text>
+        <Text style={styles.title}>أكِّد</Text>
         <Text style={styles.subtitle}>أهلاً بك، سجّل الدخول بالبريد الإلكتروني للمتابعة</Text>
 
         {ENABLE_GOOGLE_AUTH && (

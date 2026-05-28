@@ -86,7 +86,7 @@ async function ensureSystemNotificationsReady() {
 
   if (Platform.OS === 'android') {
     await setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-      name: 'Akked alerts',
+      name: 'إشعارات أكِّد',
       importance: AndroidImportance.MAX,
       sound: 'default',
       vibrationPattern: [0, 250, 250, 250],
@@ -160,8 +160,8 @@ async function showSystemNotification(
 ) {
   if (!canShowSystemNotification(item)) return;
 
-  let title = item.title || 'Akked';
-  let body = item.message || 'You have a new notification';
+  let title = item.title || 'أكِّد';
+  let body = item.message || 'لديك إشعار جديد';
 
   try {
     const meta = getNotificationMeta(item, currentUser);
@@ -198,8 +198,8 @@ export async function scheduleSystemNotificationTest() {
   await scheduleNotificationAsync({
     identifier: `akked-notification-test-${Date.now()}`,
     content: {
-      title: 'Akked',
-      body: 'Notification test',
+      title: 'أكِّد',
+      body: 'هذا إشعار تجريبي',
       sound: 'default',
       priority: AndroidNotificationPriority.MAX,
       color: '#2563EB',

@@ -7,21 +7,34 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Image,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Mail, ArrowRight, CheckCircle } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Mail,
+  ArrowRight,
+  CheckCircle2,
+  KeyRound,
+  Send,
+  ShieldCheck,
+} from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { resetPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
 
-  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  const isValidEmail = (value: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
   const handleReset = async () => {
     setError('');
@@ -44,89 +57,186 @@ export default function ForgotPasswordScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
+
+      <LinearGradient
+        colors={['#6366F1', '#4F46E5', '#4338CA']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.gradientHeader, { paddingTop: insets.top + 8 }]}
       >
-        <TouchableOpacity style={styles.backLink} onPress={() => router.back()}>
-          <ArrowRight size={22} color="#4F46E5" />
-          <Text style={styles.backLinkText}>رجوع</Text>
-        </TouchableOpacity>
-
-        {sent ? (
-          <View style={styles.centerBox}>
-            <View style={styles.successIcon}>
-              <CheckCircle size={64} color="#10B981" />
-            </View>
-            <Text style={styles.title}>تم إرسال الرابط ✅</Text>
-            <Text style={styles.subtitle}>
-              أرسلنا رابط استعادة كلمة المرور إلى{'\n'}
-              <Text style={styles.emailText}>{email.trim().toLowerCase()}</Text>
-            </Text>
-            <Text style={styles.note}>
-              افتح الرابط من بريدك لتعيين كلمة مرور جديدة. تحقّق من مجلد الرسائل غير المرغوب فيها (Spam) إذا لم تجده.
-            </Text>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => router.replace('/(auth)/login')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.buttonText}>العودة لتسجيل الدخول</Text>
-            </TouchableOpacity>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            style={styles.backCircle}
+            onPress={() => router.back()}
+            activeOpacity={0.85}
+            disabled={isLoading}
+          >
+            <ArrowRight size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.brandWrap}>
+            <Text style={styles.brandText}>أكِّد</Text>
           </View>
-        ) : (
-          <>
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('../../assets/images/icon.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
+          <View style={{ width: 40 }} />
+        </View>
 
-            <Text style={styles.title}>استعادة كلمة المرور</Text>
-            <Text style={styles.subtitle}>
-              أدخل بريد حسابك وسنرسل لك رابطًا لتعيين كلمة مرور جديدة
-            </Text>
-
-            {error ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
-            <View style={styles.inputContainer}>
-              <Mail size={20} color="#6B7280" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="البريد الإلكتروني"
-                placeholderTextColor="#9CA3AF"
-                textAlign="right"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                editable={!isLoading}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.button, isLoading && styles.buttonDisabled]}
-              onPress={handleReset}
-              disabled={isLoading}
-              activeOpacity={0.85}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
+        <View style={styles.heroBlock}>
+          <View style={styles.iconOuterRing}>
+            <View style={styles.iconInnerCircle}>
+              {sent ? (
+                <CheckCircle2 size={42} color="#10B981" />
               ) : (
-                <Text style={styles.buttonText}>متابعة</Text>
+                <KeyRound size={40} color="#4F46E5" />
               )}
-            </TouchableOpacity>
-          </>
-        )}
-      </ScrollView>
+            </View>
+          </View>
+
+          <Text style={styles.heroTitle}>
+            {sent ? 'تم الإرسال بنجاح' : 'هل نسيت كلمة المرور؟'}
+          </Text>
+          <Text style={styles.heroSubtitle}>
+            {sent
+              ? 'افتح بريدك الإلكتروني واتبع الرابط لاختيار كلمة مرور جديدة'
+              : 'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لإعادة تعيين كلمة المرور'}
+          </Text>
+        </View>
+      </LinearGradient>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardWrap}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingBottom: insets.bottom + 32 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.card}>
+            {sent ? (
+              <>
+                <View style={styles.successEmailBox}>
+                  <Mail size={18} color="#4F46E5" />
+                  <Text style={styles.successEmailText} numberOfLines={1}>
+                    {email.trim().toLowerCase()}
+                  </Text>
+                </View>
+
+                <View style={styles.tipsBox}>
+                  <View style={styles.tipRow}>
+                    <View style={[styles.tipDot, { backgroundColor: '#10B981' }]} />
+                    <Text style={styles.tipText}>
+                      تحقّق من صندوق الوارد خلال دقائق قليلة
+                    </Text>
+                  </View>
+                  <View style={styles.tipRow}>
+                    <View style={[styles.tipDot, { backgroundColor: '#F59E0B' }]} />
+                    <Text style={styles.tipText}>
+                      إذا لم تجد الرسالة، افحص مجلد الرسائل غير المرغوب فيها (Spam)
+                    </Text>
+                  </View>
+                  <View style={styles.tipRow}>
+                    <View style={[styles.tipDot, { backgroundColor: '#6366F1' }]} />
+                    <Text style={styles.tipText}>
+                      افتح الرابط من نفس الجهاز الذي عليه التطبيق
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={() => router.replace('/(auth)/login')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryButtonText}>العودة لتسجيل الدخول</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => {
+                    setSent(false);
+                    setError('');
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.secondaryButtonText}>
+                    لم تصلك الرسالة؟ أعد المحاولة
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={styles.sectionDot} />
+                  <Text style={styles.sectionTitle}>البريد الإلكتروني</Text>
+                </View>
+
+                {error ? (
+                  <View style={styles.errorBox}>
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.inputCard}>
+                  <View style={styles.inputIconWrap}>
+                    <Mail size={20} color="#4F46E5" />
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="name@example.com"
+                    placeholderTextColor="#9CA3AF"
+                    textAlign="right"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <View style={styles.assuranceRow}>
+                  <ShieldCheck size={16} color="#10B981" />
+                  <Text style={styles.assuranceText}>
+                    الرابط آمن وصالح لمدة 60 دقيقة فقط
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
+                  onPress={handleReset}
+                  disabled={isLoading}
+                  activeOpacity={0.85}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Send size={18} color="#FFFFFF" />
+                      <Text style={styles.primaryButtonText}>
+                        إرسال رابط الاستعادة
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => router.back()}
+                  disabled={isLoading}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.secondaryButtonText}>
+                    تذكّرت كلمة المرور؟ تسجيل الدخول
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -134,127 +244,249 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F3F4F6',
   },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 32,
+  gradientHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 80,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
-  backLink: {
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
     marginBottom: 24,
   },
-  backLinkText: {
-    fontSize: 16,
-    color: '#4F46E5',
-    fontWeight: '600',
-  },
-  logoContainer: {
-    width: 88,
-    height: 88,
-    alignSelf: 'center',
-    justifyContent: 'center',
+  backCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandWrap: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  brandText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    lineHeight: 22,
+    includeFontPadding: false,
+  },
+  heroBlock: {
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  iconOuterRing: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
   },
-  logoImage: {
-    width: '100%',
-    height: '100%',
-  },
-  centerBox: {
-    alignItems: 'center',
-    paddingTop: 32,
-  },
-  successIcon: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: '#ECFDF5',
+  iconInnerCircle: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  title: {
-    fontSize: 26,
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 10,
+    lineHeight: 36,
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.88)',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    lineHeight: 24,
+  },
+  keyboardWrap: {
+    flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    marginTop: -20,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingTop: 36,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  sectionDot: {
+    width: 6,
+    height: 22,
+    backgroundColor: '#4F46E5',
+    borderRadius: 3,
+  },
+  sectionTitle: {
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 10,
-    textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    marginBottom: 24,
-    textAlign: 'center',
-    lineHeight: 23,
-  },
-  emailText: {
-    color: '#111827',
-    fontWeight: '700',
-  },
-  note: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    marginBottom: 28,
-    lineHeight: 21,
-  },
-  errorContainer: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#DC2626',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    width: '100%',
-    marginBottom: 20,
+  inputCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: '#E5E7EB',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     height: 60,
+    marginBottom: 14,
   },
-  inputIcon: {
-    marginLeft: 12,
+  inputIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
   },
   input: {
     flex: 1,
     fontSize: 16,
     color: '#111827',
   },
-  button: {
+  assuranceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 20,
+  },
+  assuranceText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#047857',
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  errorBox: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  primaryButton: {
     width: '100%',
-    height: 58,
+    height: 56,
     backgroundColor: '#4F46E5',
-    borderRadius: 14,
+    borderRadius: 16,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 10,
     shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
-  buttonText: {
-    fontSize: 18,
+  primaryButtonText: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  secondaryButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+  successEmailBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 18,
+  },
+  successEmailText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'right',
+  },
+  tipsBox: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    gap: 10,
+  },
+  tipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  tipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 8,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 20,
+    textAlign: 'right',
   },
 });

@@ -16,6 +16,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchAccessibleCustomerIds } from '@/services/userScopeService';
+import { formatDateArabic } from '@/utils/arabicFormat';
 
 type BackupTableKey =
   | 'customers'
@@ -285,7 +286,7 @@ export default function BackupScreen() {
             <View style={styles.lastBackupContainer}>
               <Calendar size={16} color="#6B7280" />
               <Text style={styles.lastBackupText}>
-                آخر نسخة احتياطية: {new Date(lastBackup).toLocaleDateString('ar-EG')}
+                آخر نسخة احتياطية: {formatDateArabic(lastBackup)}
               </Text>
             </View>
           )}

@@ -236,12 +236,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const buildDefaultSettings = (): AppSettings => ({
     id: '',
-    shop_name: 'Akked',
+    shop_name: 'أكِّد',
     shop_phone: '',
     shop_address: '',
     header_layout: 'centered',
     header_primary_color: '#4F46E5',
     shop_name_en: 'Akked',
+    // ↑ English fallback kept intentionally as brand name
     shop_phone_en: '',
     shop_address_en: '',
     selected_receipt_logo: null,
@@ -444,6 +445,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
       }
 
+      console.log('[Auth] handleDeepLink url:', url);
+      console.log('[Auth] handleDeepLink params keys:', Object.keys(params).join(', ') || '(none)');
+
       if (params.error) {
         console.warn('[Auth] deep link error:', params.error_description || params.error);
         return {
@@ -469,9 +473,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           : { success: true };
       }
 
-      if (params.token_hash && params.type) {
+      // Supabase أحياناً يرسل token (وليس token_hash) في رسائل استعادة كلمة المرور
+      const verifyToken = params.token_hash || params.token;
+      if (verifyToken && params.type) {
         const { error } = await supabase.auth.verifyOtp({
-          token_hash: params.token_hash,
+          token_hash: verifyToken,
           type: params.type as any,
         });
         return error
@@ -479,7 +485,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           : { success: true };
       }
 
-      return { success: false, error: 'تعذّر قراءة رابط العودة' };
+      // الرابط لا يحوي أي معلومات مفيدة. عادةً يحدث هذا عندما يكون
+      // akked://auth-callback غير مُضاف في إعدادات Redirect URLs على Supabase.
+      const arrivedKeys = Object.keys(params);
+      return {
+        success: false,
+        error: arrivedKeys.length === 0
+          ? 'الرابط لا يحوي بيانات الجلسة. تأكّد من إضافة akked://auth-callback في Redirect URLs على Supabase.'
+          : `تعذّر قراءة رابط العودة (وصلت: ${arrivedKeys.join('، ')})`,
+      };
     } catch (error) {
       console.error('[Auth] handleDeepLink error:', error);
       return { success: false, error: 'حدث خطأ أثناء إكمال تسجيل الدخول' };

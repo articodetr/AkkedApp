@@ -119,3 +119,17 @@ export function formatDateTimeArabic(value: Date | string | number | null | unde
 
   return `${day}/${month}/${year} - ${pad2(hours12)}:${minutes} ${period}`;
 }
+
+export function formatDateArabic(value: Date | string | number | null | undefined) {
+  if (!value) return '';
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+// أسماء مختصرة موحَّدة لاستخدامها في الواجهة
+export const formatAmount = formatAmountArabic;
+export const formatDateTime = formatDateTimeArabic;
+export const formatDate = formatDateArabic;

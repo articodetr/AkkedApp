@@ -79,8 +79,8 @@ export default function SettingsScreen() {
       color: '#6B7280',
       onPress: () =>
         Alert.alert(
-          'Akked',
-          'الإصدار 1.0.0\n\nتطبيق Akked لإدارة الحوالات المالية والعملاء'
+          'أكِّد',
+          'الإصدار 1.0.0\n\nتطبيق أكِّد لإدارة الحوالات المالية والعملاء'
         ),
     },
   ];
@@ -139,7 +139,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Akked</Text>
+          <Text style={styles.footerText}>أكِّد</Text>
           <Text style={styles.footerVersion}>الإصدار 1.0.0</Text>
         </View>
       </ScrollView>
