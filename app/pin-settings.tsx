@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CURRENCIES } from '@/types/database';
 import { LetterheadEditor } from '@/components/LetterheadEditor';
 import * as Haptics from 'expo-haptics';
+import { formatSmartNumber } from '@/utils/arabicFormat';
 
 function getInitials(fullName?: string | null, fallback?: string | null): string {
   const source = (fullName && fullName.trim()) || fallback || '';
@@ -1048,7 +1049,7 @@ export default function PinSettings() {
                         </Text>
                       </View>
                       <Text style={styles.settlementAmount}>
-                        {Math.round(Math.abs(balanceValue))}{' '}
+                        {formatSmartNumber(Math.abs(balanceValue))}{' '}
                         <Text style={styles.settlementCurrency}>
                           {getCurrencySymbol(item.currency)}
                         </Text>

@@ -22,6 +22,7 @@ import { fetchAccessibleCustomerById } from '@/services/userScopeService';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { isMovementCreator, isPendingMovement } from '@/utils/movementApproval';
 import { syncEditedMovementNotifications } from '@/services/movementNotificationSyncService';
+import { validateNumericInput } from '@/utils/numericValidation';
 
 export default function EditMovementScreen() {
   const router = useRouter();
@@ -34,6 +35,8 @@ export default function EditMovementScreen() {
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [originalMovement, setOriginalMovement] = useState<AccountMovement | null>(null);
+  const [amountError, setAmountError] = useState<string | null>(null);
+  const [commissionError, setCommissionError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -313,15 +316,22 @@ export default function EditMovementScreen() {
                 <Text style={styles.currencySymbol}>{getCurrencySymbol(formData.currency)}</Text>
               </TouchableOpacity>
               <TextInput
-                style={styles.amountInput}
+                style={[styles.amountInput, amountError ? styles.fieldInputError : null]}
                 value={formData.amount}
-                onChangeText={(text) => setFormData({ ...formData, amount: text })}
+                onChangeText={(text) => {
+                  const validation = validateNumericInput(text, { allowDecimal: true });
+                  setFormData({ ...formData, amount: validation.cleanedValue });
+                  setAmountError(validation.error);
+                }}
                 placeholder="0.00"
                 placeholderTextColor="#9CA3AF"
                 keyboardType="decimal-pad"
                 textAlign="center"
               />
             </View>
+            {amountError ? (
+              <Text style={styles.fieldErrorText}>{amountError}</Text>
+            ) : null}
           </View>
 
           <View style={styles.inputGroup}>
@@ -334,15 +344,22 @@ export default function EditMovementScreen() {
                 </Text>
               </View>
               <TextInput
-                style={styles.commissionInput}
+                style={[styles.commissionInput, commissionError ? styles.fieldInputError : null]}
                 value={formData.commission}
-                onChangeText={(text) => setFormData({ ...formData, commission: text })}
+                onChangeText={(text) => {
+                  const validation = validateNumericInput(text, { allowDecimal: true });
+                  setFormData({ ...formData, commission: validation.cleanedValue });
+                  setCommissionError(validation.error);
+                }}
                 placeholder="0.00"
                 placeholderTextColor="#9CA3AF"
                 keyboardType="decimal-pad"
                 textAlign="right"
               />
             </View>
+            {commissionError ? (
+              <Text style={styles.fieldErrorText}>{commissionError}</Text>
+            ) : null}
           </View>
 
           <View style={styles.inputGroup}>
@@ -670,6 +687,16 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     color: '#111827',
+  },
+  fieldInputError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  fieldErrorText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#DC2626',
+    textAlign: 'right',
   },
   textArea: {
     height: 80,

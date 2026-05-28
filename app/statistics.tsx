@@ -938,7 +938,7 @@ export default function StatisticsScreen() {
 
           <CurrencyLedger
             rows={ledgerRows}
-            onAddMovement={goToNewMovement}
+            onAddMovement={goToCustomers}
           />
 
           <TopCustomers

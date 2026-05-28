@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(npx --yes expo install expo-build-properties)",
+      "Bash(git add *)"
     ]
   }
 }

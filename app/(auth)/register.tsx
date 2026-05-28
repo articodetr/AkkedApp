@@ -10,14 +10,25 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
-import { UserPlus, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
+import {
+  UserPlus,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  Copy,
+  Check,
+} from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useKeyboardAwareScroll } from '@/hooks/useKeyboardAwareScroll';
 
-const ENABLE_GOOGLE_AUTH = false;
+const ENABLE_GOOGLE_AUTH = true;
 
 export default function RegisterScreen() {
   const { register, signInWithGoogle } = useAuth();
@@ -39,6 +50,9 @@ export default function RegisterScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successAccountNumber, setSuccessAccountNumber] = useState<string | null>(null);
+  const [successNeedsEmailConfirmation, setSuccessNeedsEmailConfirmation] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
@@ -74,14 +88,35 @@ export default function RegisterScreen() {
       const result = await register(cleanFullName, cleanEmail, password);
 
       if (result.success) {
-        const successMessage = result.needsEmailConfirmation
-          ? 'تم إنشاء الحساب. افتح بريدك لتأكيد الحساب، ثم سجّل الدخول بالبريد الإلكتروني وكلمة المرور.'
-          : 'تم إنشاء الحساب بنجاح. سجّل الدخول الآن بالبريد الإلكتروني وكلمة المرور.';
+        if (result.accountNumber) {
+          setSuccessAccountNumber(result.accountNumber);
+          setSuccessNeedsEmailConfirmation(!!result.needsEmailConfirmation);
+          setCopied(false);
+        } else {
+          const successMessage = result.needsEmailConfirmation
+            ? 'تم إنشاء الحساب. افتح بريدك لتأكيد الحساب، ثم سجّل الدخول بالبريد الإلكتروني وكلمة المرور.'
+            : 'تم إنشاء الحساب بنجاح. سجّل الدخول الآن بالبريد الإلكتروني وكلمة المرور.';
 
+          Alert.alert(
+            'تم إنشاء الحساب',
+            successMessage,
+            [{ text: 'تسجيل الدخول', onPress: () => router.replace('/(auth)/login') }]
+          );
+        }
+        return;
+      }
+
+      if (result.errorCode === 'EMAIL_EXISTS') {
         Alert.alert(
-          'تم إنشاء الحساب',
-          successMessage,
-          [{ text: 'تسجيل الدخول', onPress: () => router.replace('/(auth)/login') }]
+          'البريد مسجَّل مسبقاً',
+          'هذا البريد الإلكتروني لديه حساب بالفعل. هل تريد الانتقال إلى تسجيل الدخول؟',
+          [
+            { text: 'إلغاء', style: 'cancel' },
+            {
+              text: 'تسجيل الدخول',
+              onPress: () => router.replace('/(auth)/login'),
+            },
+          ]
         );
         return;
       }
@@ -93,6 +128,24 @@ export default function RegisterScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCopyAccountNumber = async () => {
+    if (!successAccountNumber) return;
+    try {
+      await Clipboard.setStringAsync(successAccountNumber);
+      setCopied(true);
+    } catch (err) {
+      console.error('[Register] copy account number failed:', err);
+      Alert.alert('تعذّر النسخ', 'حدث خطأ أثناء نسخ رقم الحساب. حاول مرة أخرى.');
+    }
+  };
+
+  const handleGoToLogin = () => {
+    setSuccessAccountNumber(null);
+    setSuccessNeedsEmailConfirmation(false);
+    setCopied(false);
+    router.replace('/(auth)/login');
   };
 
   const handleGoogleRegister = async () => {
@@ -292,6 +345,65 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={!!successAccountNumber}
+        transparent
+        animationType="fade"
+        onRequestClose={handleGoToLogin}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconWrap}>
+              <CheckCircle2 size={56} color="#10B981" />
+            </View>
+
+            <Text style={styles.modalTitle}>تم إنشاء الحساب بنجاح</Text>
+            <Text style={styles.modalSubtitle}>
+              هذا هو رقم حسابك. احتفظ به في مكان آمن — ستحتاجه للتواصل مع الدعم.
+            </Text>
+
+            <View style={styles.accountNumberBox}>
+              <Text style={styles.accountNumberLabel}>رقم الحساب</Text>
+              <Text style={styles.accountNumberValue} selectable>
+                {successAccountNumber}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.copyButton, copied && styles.copyButtonCopied]}
+              onPress={handleCopyAccountNumber}
+              activeOpacity={0.85}
+            >
+              {copied ? (
+                <>
+                  <Check size={20} color="#FFFFFF" />
+                  <Text style={styles.copyButtonText}>تم النسخ</Text>
+                </>
+              ) : (
+                <>
+                  <Copy size={20} color="#FFFFFF" />
+                  <Text style={styles.copyButtonText}>نسخ الرقم</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {successNeedsEmailConfirmation ? (
+              <Text style={styles.modalNote}>
+                افتح بريدك الإلكتروني لتأكيد الحساب قبل تسجيل الدخول.
+              </Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.modalPrimaryButton}
+              onPress={handleGoToLogin}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalPrimaryButtonText}>الذهاب لتسجيل الدخول</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -466,5 +578,117 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#4F46E5',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 22,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  modalIconWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 18,
+  },
+  accountNumberBox: {
+    width: '100%',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  accountNumberLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  accountNumberValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#111827',
+    letterSpacing: 4,
+  },
+  copyButton: {
+    width: '100%',
+    height: 52,
+    backgroundColor: '#4F46E5',
+    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  copyButtonCopied: {
+    backgroundColor: '#10B981',
+  },
+  copyButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  modalNote: {
+    fontSize: 13,
+    color: '#92400E',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    textAlign: 'center',
+    width: '100%',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  modalPrimaryButton: {
+    width: '100%',
+    height: 52,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalPrimaryButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

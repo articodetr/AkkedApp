@@ -18,6 +18,7 @@ import { AlertTriangle, Scale, Send } from 'lucide-react-native';
 
 import { supabase } from '@/lib/supabase';
 import { CURRENCIES } from '@/types/database';
+import { formatSmartNumber } from '@/utils/arabicFormat';
 
 interface CurrencyBalance {
   currency: string;
@@ -229,7 +230,7 @@ export function PreDeleteSettlementSheet({
                     </Text>
                   </View>
                   <Text style={styles.balanceAmount}>
-                    {Math.round(Math.abs(balanceValue))}{' '}
+                    {formatSmartNumber(Math.abs(balanceValue))}{' '}
                     <Text style={styles.balanceCurrency}>
                       {getCurrencySymbol(item.currency)}
                     </Text>

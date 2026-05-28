@@ -19,7 +19,21 @@ export interface CurrentUser {
 }
 
 type AuthResult = { success: boolean; error?: string };
-type RegisterResult = { success: boolean; needsEmailConfirmation?: boolean; error?: string };
+type RegisterErrorCode =
+  | 'EMAIL_EXISTS'
+  | 'INVALID_EMAIL'
+  | 'PASSWORD_TOO_SHORT'
+  | 'FULL_NAME_TOO_SHORT'
+  | 'RATE_LIMIT'
+  | 'NETWORK'
+  | 'UNKNOWN';
+type RegisterResult = {
+  success: boolean;
+  needsEmailConfirmation?: boolean;
+  error?: string;
+  errorCode?: RegisterErrorCode;
+  accountNumber?: string;
+};
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -103,6 +117,48 @@ const passwordResetStatusMessage = (status: PasswordResetStatus) => {
   }
 };
 
+function classifyRegisterError(message?: string): RegisterErrorCode {
+  const msg = (message || '').toLowerCase();
+
+  if (
+    msg.includes('user_name_or_email_exists') ||
+    msg.includes('user already registered') ||
+    msg.includes('already been registered') ||
+    msg.includes('duplicate key') ||
+    msg.includes('unique constraint') ||
+    msg.includes('database error saving new user')
+  ) {
+    return 'EMAIL_EXISTS';
+  }
+
+  if (msg.includes('full_name_too_short')) {
+    return 'FULL_NAME_TOO_SHORT';
+  }
+
+  if (
+    msg.includes('user_name_too_short') ||
+    msg.includes('invalid_email') ||
+    msg.includes('unable to validate email') ||
+    msg.includes('invalid email')
+  ) {
+    return 'INVALID_EMAIL';
+  }
+
+  if (msg.includes('password_too_short') || msg.includes('password should be at least')) {
+    return 'PASSWORD_TOO_SHORT';
+  }
+
+  if (msg.includes('rate limit') || msg.includes('too many requests')) {
+    return 'RATE_LIMIT';
+  }
+
+  if (msg.includes('network')) {
+    return 'NETWORK';
+  }
+
+  return 'UNKNOWN';
+}
+
 // ترجمة رسائل أخطاء Supabase Auth إلى العربية
 function translateAuthError(message?: string): string {
   const msg = (message || '').toLowerCase();
@@ -176,6 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const suppressRegistrationAutoLoginRef = useRef(false);
+  const processedAuthUrlRef = useRef<string | null>(null);
 
   const buildDefaultSettings = (): AppSettings => ({
     id: '',
@@ -361,6 +418,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleDeepLink = async (url: string): Promise<AuthResult> => {
     try {
       if (!url) return { success: false, error: 'رابط العودة غير صالح' };
+
+      // منع معالجة نفس الرابط مرّتين (يحدث عند تداخل WebBrowser مع URL listener)
+      if (processedAuthUrlRef.current === url) {
+        return { success: true };
+      }
+      processedAuthUrlRef.current = url;
 
       const params: Record<string, string> = {};
       const parsed = Linking.parse(url);
@@ -568,77 +631,87 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' };
       }
 
-      suppressRegistrationAutoLoginRef.current = true;
-
-      const { data, error } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password,
-        options: {
-          emailRedirectTo: getRedirectUrl(),
-          data: {
-            full_name: cleanFullName,
-            user_name: cleanEmail,
-            username: cleanEmail,
-          },
-        },
+      const { data, error } = await supabase.rpc('register_app_user', {
+        p_full_name: cleanFullName,
+        p_user_name: cleanEmail,
+        p_email: cleanEmail,
+        p_password: password,
       });
 
       if (error) {
-        suppressRegistrationAutoLoginRef.current = false;
         console.error('[Auth] register error:', error);
-        return { success: false, error: translateAuthError(error.message) };
+        return {
+          success: false,
+          error: translateAuthError(error.message),
+          errorCode: classifyRegisterError(error.message),
+        };
       }
 
-      const authUser = data.user;
-      if (!authUser?.id) {
-        suppressRegistrationAutoLoginRef.current = false;
-        return { success: false, error: 'تعذّر إنشاء الحساب' };
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.id) {
+        return { success: false, error: 'تعذّر إنشاء الحساب', errorCode: 'UNKNOWN' };
       }
 
-      const { error: profileError } = await supabase
-        .from('app_security')
-        .upsert(
-          {
-            id: authUser.id,
-            email: cleanEmail,
-            user_name: cleanEmail,
-            full_name: cleanFullName,
-            role: 'user',
-            is_active: true,
-            auth_provider: 'email',
-          },
-          { onConflict: 'id' }
-        );
-
-      if (profileError) {
-        console.warn('[Auth] profile sync after signUp skipped:', profileError);
-      }
-
-      await syncSettingsEmailIfEmpty(authUser.id, cleanEmail);
       await AsyncStorage.removeItem(CUSTOM_AUTH_USER_ID_KEY);
-      await supabase.auth.signOut();
-      setCurrentUser(null);
-      setIsAuthenticated(false);
 
-      return { success: true, needsEmailConfirmation: !data.session };
+      return {
+        success: true,
+        needsEmailConfirmation: false,
+        accountNumber: row.account_number ?? undefined,
+      };
     } catch (error) {
-      if (suppressRegistrationAutoLoginRef.current) {
-        try {
-          await supabase.auth.signOut();
-        } catch (signOutError) {
-          console.warn('[Auth] sign out after failed register skipped:', signOutError);
-        }
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-      }
-
       console.error('[Auth] register error:', error);
-      return { success: false, error: 'حدث خطأ أثناء إنشاء الحساب' };
+      return {
+        success: false,
+        error: 'حدث خطأ أثناء إنشاء الحساب',
+        errorCode: 'UNKNOWN',
+      };
     }
   };
 
   const signInWithGoogle = async (): Promise<AuthResult> => {
-    return { success: false, error: 'تسجيل الدخول عبر Google معطّل' };
+    try {
+      const redirectTo = getRedirectUrl();
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (error || !data?.url) {
+        console.error('[Auth] signInWithGoogle error:', error);
+        return {
+          success: false,
+          error: error?.message
+            ? translateAuthError(error.message)
+            : 'تعذّر بدء تسجيل الدخول عبر Google',
+        };
+      }
+
+      const browserResult = await WebBrowser.openAuthSessionAsync(data.url, redirectTo, {
+        showInRecents: true,
+      });
+
+      if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
+        return { success: false, error: 'تم إلغاء تسجيل الدخول' };
+      }
+
+      if (browserResult.type !== 'success' || !browserResult.url) {
+        return { success: false, error: 'تعذّر إكمال تسجيل الدخول عبر Google' };
+      }
+
+      return await handleDeepLink(browserResult.url);
+    } catch (error) {
+      console.error('[Auth] signInWithGoogle exception:', error);
+      return { success: false, error: 'تعذّر تسجيل الدخول عبر Google' };
+    }
   };
 
   const completeAuthFromUrl = async (url: string): Promise<AuthResult> => {

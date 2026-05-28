@@ -12,6 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MailCheck, ArrowRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { validateNumericInput } from '@/utils/numericValidation';
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
@@ -101,8 +102,17 @@ export default function CheckEmailScreen() {
   };
 
   const handleChange = (text: string) => {
-    const digits = normalizeOtpCode(text);
+    const validation = validateNumericInput(text, {
+      allowDecimal: false,
+      maxLength: CODE_LENGTH,
+    });
 
+    if (!validation.isValid) {
+      setError(validation.error || 'يُسمح بإدخال الأرقام فقط');
+      return;
+    }
+
+    const digits = validation.cleanedValue.slice(0, CODE_LENGTH);
     setCode(digits);
     if (error) setError('');
 

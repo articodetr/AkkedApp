@@ -28,6 +28,7 @@ import {
   generateRegularCustomerAccountNumber,
   isCustomerAccountNumberConflict,
 } from '@/utils/customerAccountNumber';
+import { validateNumericInput } from '@/utils/numericValidation';
 
 type CustomerType = 'regular' | 'linked';
 
@@ -67,6 +68,7 @@ export default function AddCustomerScreen() {
   const [searchResults, setSearchResults] = useState<SearchUserResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedUser, setSelectedUser] = useState<SearchUserResult | null>(null);
+  const [searchQueryError, setSearchQueryError] = useState<string | null>(null);
 
   const [showAdditionalFields, setShowAdditionalFields] = useState(false);
   const [formData, setFormData] = useState<FormDataState>(EMPTY_FORM);
@@ -172,12 +174,23 @@ export default function AddCustomerScreen() {
   };
 
   const handleSearchQueryChange = (text: string) => {
-    const cleanedText = text.replace(/\D/g, '');
-    setSearchQuery(cleanedText);
+    const validation = validateNumericInput(text, {
+      allowDecimal: false,
+      maxLength: ACCOUNT_NUMBER_LENGTH,
+    });
+
+    setSearchQuery(validation.cleanedValue);
+    setSearchQueryError(validation.error);
     setSelectedUser(null);
 
-    if (cleanedText) {
-      searchUsers(cleanedText);
+    if (!validation.isValid) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    if (validation.cleanedValue) {
+      searchUsers(validation.cleanedValue);
     } else {
       setSearchResults([]);
       setIsSearching(false);
@@ -439,7 +452,7 @@ export default function AddCustomerScreen() {
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>البحث برقم الحساب</Text>
 
-            <View style={styles.searchBox}>
+            <View style={[styles.searchBox, searchQueryError ? styles.searchBoxError : null]}>
               <Search size={18} color="#6B7280" />
               <TextInput
                 value={searchQuery}
@@ -451,6 +464,10 @@ export default function AddCustomerScreen() {
                 textAlign="right"
               />
             </View>
+
+            {searchQueryError ? (
+              <Text style={styles.fieldErrorText}>{searchQueryError}</Text>
+            ) : null}
 
             {isSearching ? (
               <View style={styles.inlineLoading}>
@@ -773,6 +790,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: '#111827',
+  },
+
+  searchBoxError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+
+  fieldErrorText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#DC2626',
+    textAlign: 'right',
   },
 
   inlineLoading: {

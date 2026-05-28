@@ -17,6 +17,7 @@ import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildScopedCustomerFilter } from '@/services/userScopeService';
 import { sortCustomersKeepingOriginalOrder } from '@/utils/customerDisplay';
+import { formatSmartNumber } from '@/utils/arabicFormat';
 
 interface CustomerWithBalances extends Customer {
   balances: CustomerBalanceByCurrency[];
@@ -245,9 +246,8 @@ export default function CustomersScreen() {
   };
 
   const formatBalanceAmount = (amount: number, currencyCode: string) => {
-    const rounded = Math.round(Number(amount) || 0);
     const symbol = getCurrencySymbol(currencyCode);
-    return `${rounded.toLocaleString('en-US')} ${symbol}`;
+    return `${formatSmartNumber(amount)} ${symbol}`;
   };
 
   const handleDeleteCustomer = async (customer: CustomerWithBalances) => {
@@ -260,9 +260,9 @@ export default function CustomersScreen() {
         const balanceAmount = Number(balance.balance);
         const symbol = getCurrencySymbol(balance.currency);
         if (balanceAmount > 0) {
-          message += `• له ${Math.round(balanceAmount)} ${symbol}\n`;
+          message += `• له ${formatSmartNumber(balanceAmount)} ${symbol}\n`;
         } else {
-          message += `• عليه ${Math.round(Math.abs(balanceAmount))} ${symbol}\n`;
+          message += `• عليه ${formatSmartNumber(Math.abs(balanceAmount))} ${symbol}\n`;
         }
       });
       message += '\n';

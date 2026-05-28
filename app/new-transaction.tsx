@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CustomerStatusBadge } from '@/components/customer/CustomerStatusBadge';
 import { sortCustomersByDisplayPriority } from '@/utils/customerDisplay';
 import { buildOwnedCustomerFilter } from '@/services/userScopeService';
+import { validateNumericInput } from '@/utils/numericValidation';
 
 export default function NewTransactionScreen() {
   const router = useRouter();
@@ -30,6 +31,9 @@ export default function NewTransactionScreen() {
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [currencyPickerType, setCurrencyPickerType] = useState<'sent' | 'received'>('sent');
+  const [amountSentError, setAmountSentError] = useState<string | null>(null);
+  const [exchangeRateError, setExchangeRateError] = useState<string | null>(null);
+  const [amountReceivedError, setAmountReceivedError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -228,15 +232,22 @@ export default function NewTransactionScreen() {
               </Text>
             </TouchableOpacity>
             <TextInput
-              style={styles.amountInput}
+              style={[styles.amountInput, amountSentError ? styles.fieldInputError : null]}
               value={formData.amount_sent}
-              onChangeText={(text) => setFormData({ ...formData, amount_sent: text })}
+              onChangeText={(text) => {
+                const validation = validateNumericInput(text, { allowDecimal: true });
+                setFormData({ ...formData, amount_sent: validation.cleanedValue });
+                setAmountSentError(validation.error);
+              }}
               placeholder="0.00"
               placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad"
               textAlign="center"
             />
           </View>
+          {amountSentError ? (
+            <Text style={styles.fieldErrorText}>{amountSentError}</Text>
+          ) : null}
         </View>
 
         <View style={styles.exchangeRateSection}>
@@ -244,14 +255,21 @@ export default function NewTransactionScreen() {
           <View style={styles.exchangeRateInputContainer}>
             <Text style={styles.exchangeRateLabel}>سعر الصرف</Text>
             <TextInput
-              style={styles.exchangeRateInput}
+              style={[styles.exchangeRateInput, exchangeRateError ? styles.fieldInputError : null]}
               value={formData.exchange_rate}
-              onChangeText={(text) => setFormData({ ...formData, exchange_rate: text })}
+              onChangeText={(text) => {
+                const validation = validateNumericInput(text, { allowDecimal: true });
+                setFormData({ ...formData, exchange_rate: validation.cleanedValue });
+                setExchangeRateError(validation.error);
+              }}
               placeholder="0.0000"
               placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad"
               textAlign="center"
             />
+            {exchangeRateError ? (
+              <Text style={styles.fieldErrorText}>{exchangeRateError}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -271,15 +289,22 @@ export default function NewTransactionScreen() {
               </Text>
             </TouchableOpacity>
             <TextInput
-              style={styles.amountInput}
+              style={[styles.amountInput, amountReceivedError ? styles.fieldInputError : null]}
               value={formData.amount_received}
-              onChangeText={(text) => setFormData({ ...formData, amount_received: text })}
+              onChangeText={(text) => {
+                const validation = validateNumericInput(text, { allowDecimal: true });
+                setFormData({ ...formData, amount_received: validation.cleanedValue });
+                setAmountReceivedError(validation.error);
+              }}
               placeholder="0.00"
               placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad"
               textAlign="center"
             />
           </View>
+          {amountReceivedError ? (
+            <Text style={styles.fieldErrorText}>{amountReceivedError}</Text>
+          ) : null}
         </View>
 
         <View style={styles.inputGroup}>
@@ -537,6 +562,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#111827',
+  },
+  fieldInputError: {
+    borderWidth: 2,
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  fieldErrorText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#DC2626',
+    textAlign: 'right',
   },
   inputGroup: {
     marginBottom: 20,

@@ -13,6 +13,7 @@ import { ArrowRight, User, TrendingUp, TrendingDown } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserLinkedAccount } from '@/types/database';
+import { formatSmartNumber } from '@/utils/arabicFormat';
 
 export default function LinkedAccountsScreen() {
   const router = useRouter();
@@ -114,7 +115,7 @@ export default function LinkedAccountsScreen() {
                 {balanceLabel}
               </Text>
               <Text style={[styles.balanceAmount, { color: balanceColor }]}>
-                {Math.round(Math.abs(balance))}
+                {formatSmartNumber(Math.abs(balance))}
               </Text>
             </View>
           )}

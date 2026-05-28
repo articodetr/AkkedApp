@@ -18,7 +18,7 @@ import { Lock, Mail, Eye, EyeOff } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardAwareScroll } from '@/hooks/useKeyboardAwareScroll';
 
-const ENABLE_GOOGLE_AUTH = false;
+const ENABLE_GOOGLE_AUTH = true;
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');

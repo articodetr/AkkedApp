@@ -12,12 +12,14 @@ import { ArrowRight, ArrowRightLeft } from 'lucide-react-native';
 import { KeyboardAwareView } from '@/components/KeyboardAwareView';
 import { getExchangeRate } from '@/services/exchangeRateService';
 import { Currency, CURRENCIES } from '@/types/database';
+import { validateNumericInput } from '@/utils/numericValidation';
 
 export default function CalculatorScreen() {
   const router = useRouter();
   const [fromCurrency, setFromCurrency] = useState<Currency>('USD');
   const [toCurrency, setToCurrency] = useState<Currency>('TRY');
   const [amount, setAmount] = useState('');
+  const [amountError, setAmountError] = useState<string | null>(null);
   const [result, setResult] = useState('');
   const [exchangeRate, setExchangeRate] = useState(0);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
@@ -43,6 +45,12 @@ export default function CalculatorScreen() {
     } catch (error) {
       console.error('Error loading exchange rate:', error);
     }
+  };
+
+  const handleAmountChange = (text: string) => {
+    const validation = validateNumericInput(text, { allowDecimal: true });
+    setAmount(validation.cleanedValue);
+    setAmountError(validation.error);
   };
 
   const handleSwapCurrencies = () => {
@@ -92,14 +100,17 @@ export default function CalculatorScreen() {
               <Text style={styles.currencyName}>{getCurrencyName(fromCurrency)}</Text>
             </TouchableOpacity>
             <TextInput
-              style={styles.amountInput}
+              style={[styles.amountInput, amountError ? styles.amountInputError : null]}
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={handleAmountChange}
               placeholder="0.00"
               placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad"
               textAlign="center"
             />
+            {amountError ? (
+              <Text style={styles.fieldErrorText}>{amountError}</Text>
+            ) : null}
           </View>
 
           <TouchableOpacity style={styles.swapButton} onPress={handleSwapCurrencies}>
@@ -242,6 +253,16 @@ const styles = StyleSheet.create({
     color: '#111827',
     borderWidth: 2,
     borderColor: '#E5E7EB',
+  },
+  amountInputError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  fieldErrorText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#DC2626',
+    textAlign: 'center',
   },
   swapButton: {
     alignSelf: 'center',

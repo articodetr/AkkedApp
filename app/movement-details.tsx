@@ -43,6 +43,7 @@ import {
   isRejectedMovement,
   normalizeMovementApprovalStatus,
 } from '@/utils/movementApproval';
+import { formatSmartNumber } from '@/utils/arabicFormat';
 
 export default function MovementDetailsScreen() {
   const router = useRouter();
@@ -371,7 +372,7 @@ const handleDelete = () => {
           <Text style={styles.amountLabel}>المبلغ الإجمالي</Text>
           <View style={styles.amountRow}>
             <Text style={[styles.amountValue, { color: movementTypeColor }]}>
-              {Math.round(
+              {formatSmartNumber(
                 Number(movement.amount) +
                   relatedCommissionMovements.reduce(
                     (sum, c) => sum + Number(c.amount),
@@ -386,12 +387,12 @@ const handleDelete = () => {
           {relatedCommissionMovements.length > 0 && (
             <View style={styles.amountBreakdown}>
               <Text style={styles.breakdownLabel}>
-                المبلغ الأساسي: {Math.round(Number(movement.amount))}{' '}
+                المبلغ الأساسي: {formatSmartNumber(Number(movement.amount))}{' '}
                 {getCurrencySymbol(movement.currency)}
               </Text>
               <Text style={styles.breakdownLabel}>
                 العمولة:{' '}
-                {Math.round(
+                {formatSmartNumber(
                   relatedCommissionMovements.reduce(
                     (sum, c) => sum + Number(c.amount),
                     0,
@@ -475,7 +476,7 @@ const handleDelete = () => {
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>العمولة</Text>
                   <Text style={[styles.infoValue, { color: '#10B981' }]}>
-                    {Math.round(Number(movement.commission))} {getCurrencySymbol(movement.commission_currency || 'YER')}
+                    {formatSmartNumber(Number(movement.commission))} {getCurrencySymbol(movement.commission_currency || 'YER')}
                   </Text>
                 </View>
               </View>

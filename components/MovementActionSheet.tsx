@@ -34,6 +34,7 @@ import {
   isMovementCreator,
   isRejectedMovement,
 } from '@/utils/movementApproval';
+import { formatSmartNumber } from '@/utils/arabicFormat';
 
 interface Props {
   movement: AccountMovement | null;
@@ -103,7 +104,7 @@ export function MovementActionSheet({
   const typeLabel = isOutgoing ? 'عليه' : 'له';
   const typeColor = isOutgoing ? '#DC2626' : '#16A34A';
   const typeBg = isOutgoing ? '#FEE2E2' : '#ECFDF5';
-  const amount = Math.round(Number(movement.amount));
+  const amount = formatSmartNumber(Number(movement.amount));
   const currencySymbol = getCurrencySymbol(movement.currency);
 
   let statusLabel = '';
