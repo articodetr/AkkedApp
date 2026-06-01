@@ -88,18 +88,22 @@ export default function RegisterScreen() {
       const result = await register(cleanFullName, cleanEmail, password);
 
       if (result.success) {
+        if (result.needsEmailConfirmation) {
+          router.replace({
+            pathname: '/(auth)/check-email',
+            params: { email: cleanEmail },
+          });
+          return;
+        }
+
         if (result.accountNumber) {
           setSuccessAccountNumber(result.accountNumber);
-          setSuccessNeedsEmailConfirmation(!!result.needsEmailConfirmation);
+          setSuccessNeedsEmailConfirmation(false);
           setCopied(false);
         } else {
-          const successMessage = result.needsEmailConfirmation
-            ? 'تم إنشاء الحساب. افتح بريدك لتأكيد الحساب، ثم سجّل الدخول بالبريد الإلكتروني وكلمة المرور.'
-            : 'تم إنشاء الحساب بنجاح. سجّل الدخول الآن بالبريد الإلكتروني وكلمة المرور.';
-
           Alert.alert(
             'تم إنشاء الحساب',
-            successMessage,
+            'تم إنشاء الحساب بنجاح. سجّل الدخول الآن بالبريد الإلكتروني وكلمة المرور.',
             [{ text: 'تسجيل الدخول', onPress: () => router.replace('/(auth)/login') }]
           );
         }

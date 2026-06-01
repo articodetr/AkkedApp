@@ -18,7 +18,7 @@ export interface CurrentUser {
   accountNumber: string;
 }
 
-type AuthResult = { success: boolean; error?: string };
+type AuthResult = { success: boolean; error?: string; accountNumber?: string };
 type RegisterErrorCode =
   | 'EMAIL_EXISTS'
   | 'INVALID_EMAIL'
@@ -60,10 +60,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const CUSTOM_AUTH_USER_ID_KEY = 'akked.customAuth.userId';
 
-// رابط العودة الموحّد لتسجيل الدخول عبر Google واستعادة كلمة المرور
+// رابط العودة الموحّد لتأكيد البريد وتسجيل الدخول عبر Google واستعادة كلمة المرور
 const getRedirectUrl = () => Linking.createURL('auth-callback');
 
 const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+const isEmailConfirmationType = (type?: string) => type === 'signup' || type === 'email';
 
 const normalizeUserName = (value: string) => value.trim().replace(/\s+/g, '').toLowerCase();
 
@@ -168,7 +169,7 @@ function translateAuthError(message?: string): string {
   }
 
   if (msg.includes('email not confirmed')) {
-    return 'تأكيد البريد ما زال مفعّلاً في Supabase. عطّل خيار Confirm email من إعدادات المصادقة ثم حاول التسجيل مرة أخرى';
+    return 'لم يتم تأكيد البريد الإلكتروني بعد. أدخل رمز التأكيد المرسل إلى بريدك';
   }
 
   if (msg.includes('user already registered') || msg.includes('already been registered')) {
@@ -415,6 +416,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const clearEmailConfirmationSession = async () => {
+    try {
+      await AsyncStorage.removeItem(CUSTOM_AUTH_USER_ID_KEY);
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+
+      if (error) {
+        console.warn('[Auth] clear email confirmation session failed:', error);
+      }
+    } catch (error) {
+      console.warn('[Auth] clear email confirmation session exception:', error);
+    } finally {
+      suppressRegistrationAutoLoginRef.current = false;
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+    }
+  };
+
   // معالجة روابط العودة (Google / استعادة كلمة المرور)
   const handleDeepLink = async (url: string): Promise<AuthResult> => {
     try {
@@ -445,7 +463,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
       }
 
-      console.log('[Auth] handleDeepLink url:', url);
       console.log('[Auth] handleDeepLink params keys:', Object.keys(params).join(', ') || '(none)');
 
       if (params.error) {
@@ -457,32 +474,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (params.access_token && params.refresh_token) {
+        const isEmailConfirmation = isEmailConfirmationType(params.type);
+        if (isEmailConfirmation) suppressRegistrationAutoLoginRef.current = true;
+
         const { error } = await supabase.auth.setSession({
           access_token: params.access_token,
           refresh_token: params.refresh_token,
         });
-        return error
-          ? { success: false, error: translateAuthError(error.message) }
-          : { success: true };
+
+        if (error) {
+          suppressRegistrationAutoLoginRef.current = false;
+          return { success: false, error: translateAuthError(error.message) };
+        }
+
+        if (isEmailConfirmation) await clearEmailConfirmationSession();
+        return { success: true };
       }
 
       if (params.code) {
+        const isEmailConfirmation = isEmailConfirmationType(params.type);
+        if (isEmailConfirmation) suppressRegistrationAutoLoginRef.current = true;
+
         const { error } = await supabase.auth.exchangeCodeForSession(params.code);
-        return error
-          ? { success: false, error: translateAuthError(error.message) }
-          : { success: true };
+
+        if (error) {
+          suppressRegistrationAutoLoginRef.current = false;
+          return { success: false, error: translateAuthError(error.message) };
+        }
+
+        if (isEmailConfirmation) await clearEmailConfirmationSession();
+        return { success: true };
       }
 
       // Supabase أحياناً يرسل token (وليس token_hash) في رسائل استعادة كلمة المرور
       const verifyToken = params.token_hash || params.token;
       if (verifyToken && params.type) {
+        const isEmailConfirmation = isEmailConfirmationType(params.type);
+        if (isEmailConfirmation) suppressRegistrationAutoLoginRef.current = true;
+
         const { error } = await supabase.auth.verifyOtp({
           token_hash: verifyToken,
           type: params.type as any,
         });
-        return error
-          ? { success: false, error: translateAuthError(error.message) }
-          : { success: true };
+
+        if (error) {
+          suppressRegistrationAutoLoginRef.current = false;
+          return { success: false, error: translateAuthError(error.message) };
+        }
+
+        if (isEmailConfirmation) await clearEmailConfirmationSession();
+        return { success: true };
       }
 
       // الرابط لا يحوي أي معلومات مفيدة. عادةً يحدث هذا عندما يكون
@@ -539,18 +580,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      const authUser = session?.user ?? null;
+      const suppressAutoLogin = suppressRegistrationAutoLoginRef.current;
+
       setTimeout(async () => {
         if (!mounted) return;
-        const authUser = session?.user ?? null;
 
-        if (suppressRegistrationAutoLoginRef.current && authUser) {
+        if (suppressAutoLogin && authUser) {
           setCurrentUser(null);
           setIsAuthenticated(false);
           if (mounted) setIsLoading(false);
           return;
         }
 
-        if (suppressRegistrationAutoLoginRef.current && !authUser) {
+        if (suppressAutoLogin && !authUser) {
           suppressRegistrationAutoLoginRef.current = false;
         }
 
@@ -645,14 +688,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' };
       }
 
-      const { data, error } = await supabase.rpc('register_app_user', {
-        p_full_name: cleanFullName,
-        p_user_name: cleanEmail,
-        p_email: cleanEmail,
-        p_password: password,
+      suppressRegistrationAutoLoginRef.current = true;
+
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: {
+            full_name: cleanFullName,
+            user_name: cleanEmail,
+          },
+          emailRedirectTo: getRedirectUrl(),
+        },
       });
 
       if (error) {
+        suppressRegistrationAutoLoginRef.current = false;
         console.error('[Auth] register error:', error);
         return {
           success: false,
@@ -661,19 +712,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      const row = Array.isArray(data) ? data[0] : data;
-      if (!row?.id) {
+      if (!data.user) {
+        suppressRegistrationAutoLoginRef.current = false;
         return { success: false, error: 'تعذّر إنشاء الحساب', errorCode: 'UNKNOWN' };
       }
 
+      // Supabase returns an empty identities array for an existing confirmed
+      // account while email confirmation is enabled.
+      if (data.user.identities && data.user.identities.length === 0) {
+        suppressRegistrationAutoLoginRef.current = false;
+        return {
+          success: false,
+          error: 'هذا البريد الإلكتروني مسجّل بالفعل',
+          errorCode: 'EMAIL_EXISTS',
+        };
+      }
+
+      if (data.session) {
+        await supabase.auth.signOut();
+        return {
+          success: false,
+          error:
+            'تأكيد البريد غير مفعّل في إعدادات Supabase. فعّل Confirm email ثم حاول التسجيل مرة أخرى.',
+          errorCode: 'UNKNOWN',
+        };
+      }
+
       await AsyncStorage.removeItem(CUSTOM_AUTH_USER_ID_KEY);
+      suppressRegistrationAutoLoginRef.current = false;
 
       return {
         success: true,
-        needsEmailConfirmation: false,
-        accountNumber: row.account_number ?? undefined,
+        needsEmailConfirmation: true,
       };
     } catch (error) {
+      suppressRegistrationAutoLoginRef.current = false;
       console.error('[Auth] register error:', error);
       return {
         success: false,
@@ -685,17 +758,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async (): Promise<AuthResult> => {
     try {
+      suppressRegistrationAutoLoginRef.current = false;
       const redirectTo = getRedirectUrl();
+      console.log('[Auth] Google OAuth redirectTo:', redirectTo);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo,
           skipBrowserRedirect: true,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
         },
       });
 
@@ -741,30 +812,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'رمز التأكيد يجب أن يكون 6 أرقام' };
       }
 
-      console.log('[Auth] verifyEmailOtp email:', cleanEmail);
-      console.log('[Auth] verifyEmailOtp code:', code);
+      suppressRegistrationAutoLoginRef.current = true;
 
-      // الطريقة الأحدث للتحقق من كود الإيميل
-      let result = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token: code,
         type: 'email',
+        options: { redirectTo: getRedirectUrl() },
       });
 
-      // احتياط لبعض مشاريع Supabase القديمة التي ما زالت تستخدم signup لتأكيد التسجيل
-      if (result.error) {
-        console.log('[Auth] verifyOtp email type error:', result.error);
-
-        result = await supabase.auth.verifyOtp({
-          email: cleanEmail,
-          token: code,
-          type: 'signup' as any,
+      if (error) {
+        suppressRegistrationAutoLoginRef.current = false;
+        console.warn('[Auth] verifyOtp failed:', {
+          message: error.message,
+          code: (error as any).code,
+          status: (error as any).status,
         });
-      }
-
-      if (result.error) {
-        console.log('[Auth] verifyOtp final error:', result.error);
-
         return {
           success: false,
           error:
@@ -772,8 +835,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // onAuthStateChange سيتكفّل بتعيين currentUser بعد نجاح التحقق
-      return { success: true };
+      let verifiedUser = data.user;
+
+      if (!verifiedUser) {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) {
+          console.warn('[Auth] verified user lookup failed:', userError);
+        }
+
+        verifiedUser = user;
+      }
+
+      const profile = verifiedUser ? await loadProfile(verifiedUser) : null;
+      const accountNumber = profile?.accountNumber?.trim() || undefined;
+
+      if (!accountNumber) {
+        console.warn('[Auth] verified account number is unavailable');
+      }
+
+      await clearEmailConfirmationSession();
+
+      return { success: true, accountNumber };
     } catch (error) {
       console.error('[Auth] verifyEmailOtp error:', error);
       return { success: false, error: 'حدث خطأ أثناء التحقق من الرمز' };
@@ -781,7 +867,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resendEmailOtp = async (email: string): Promise<AuthResult> => {
-    return { success: false, error: 'تم تعطيل رسائل البريد الإلكتروني في التطبيق' };
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+
+      if (!isEmailAddress(cleanEmail)) {
+        return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح' };
+      }
+
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: cleanEmail,
+        options: { emailRedirectTo: getRedirectUrl() },
+      });
+
+      if (error) {
+        return { success: false, error: translateAuthError(error.message) };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[Auth] resendEmailOtp error:', error);
+      return { success: false, error: 'تعذّر إعادة إرسال الرمز' };
+    }
   };
 
   const resetPassword = async (email: string): Promise<AuthResult> => {

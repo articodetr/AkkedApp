@@ -1,207 +1,83 @@
-# قوالب الإيميل — تطبيق أكِّد
+# قوالب البريد الإلكتروني - تطبيق أكِّد
 
-كل القوالب مصمَّمة لتطابق هوية التطبيق البصرية:
-- **Gradient بنفسجي**: `#6366F1 → #4F46E5 → #4338CA`
-- **بطاقة بيضاء عائمة** بزوايا مستديرة (24px) وظل ناعم
-- **Brand pill** يحوي "أكِّد"
-- **أيقونة دائرية** مع حلقة شفافة
-- **زر CTA** بـ gradient وظل بنفسجي
-- **بطاقات معلومات** ملوّنة (سبب الإجراء + نصائح + تحذيرات)
-- **Footer** أنيق
+يحتوي هذا المجلد على قوالب عربية حديثة وخفيفة لرسائل المصادقة في Supabase.
+التصميم موحّد ومتوافق مع تطبيقات البريد الشائعة: خلفية رمادية، بطاقة بيضاء،
+ترويسة بنفسجية باسم **أكِّد**، محتوى مختصر، وإجراء واحد واضح.
 
-## القوالب المتوفّرة
+## القوالب
 
-| الملف | الاستخدام في Supabase |
+| الملف | القالب في Supabase | عنوان الرسالة |
+|---|---|---|
+| `confirm-signup.html` | Confirm signup | `رمز تأكيد حسابك في أكِّد` |
+| `reset-password.html` | Reset Password | `استعادة كلمة المرور في أكِّد` |
+| `magic-link.html` | Magic Link | `رابط تسجيل الدخول إلى أكِّد` |
+| `change-email.html` | Change Email Address | `تأكيد تغيير بريدك الإلكتروني في أكِّد` |
+
+## اعتماد القوالب في Supabase
+
+تعديل الملفات المحلية لا يغيّر الرسائل المرسلة تلقائياً. بعد أي تحديث:
+
+1. افتح **Supabase Dashboard**.
+2. اختر المشروع ثم افتح **Authentication -> Email Templates**.
+3. اختر القالب المطلوب من القائمة.
+4. انسخ محتوى ملف HTML المقابل بالكامل والصقه في **Message body**.
+5. ضع عنوان الرسالة من الجدول أعلاه في **Subject heading**.
+6. اضغط **Save**.
+7. كرّر الخطوات للقوالب الأربعة.
+
+## المتغيّرات الديناميكية
+
+| المتغيّر | الاستخدام |
 |---|---|
-| `reset-password.html` | Reset Password |
-| `confirm-signup.html` | Confirm signup |
-| `magic-link.html` | Magic Link |
-| `change-email.html` | Change Email Address |
+| `{{ .Token }}` | رمز OTP من 6 أرقام في `confirm-signup.html` |
+| `{{ .ConfirmationURL }}` | رابط الإجراء في القوالب الثلاثة الأخرى |
 
-كلها جاهزة للنسخ المباشر في **Supabase Dashboard → Authentication → Email Templates**.
+> مهم: لا تستبدل `{{ .Token }}` برابط داخل قالب تأكيد التسجيل.
+> التطبيق ينتظر إدخال رمز OTP داخل شاشة التأكيد ثم يعرض رقم الحساب للمستخدم.
 
----
+## إعداد تأكيد البريد
 
-## 🚀 إعداد Resend مع Supabase (خطوة بخطوة)
+1. افتح **Authentication -> Providers -> Email**.
+2. فعّل **Confirm email**.
+3. طبّق migrations المشروع، بما فيها:
 
-### الفائدة:
-- ✅ الإيميلات لن تذهب لـ Spam (لأنها من نطاقك الموثوق)
-- ✅ تظهر الأيقونات وتنسيق HTML بالكامل
-- ✅ Resend مجاني حتى 3,000 إيميل/شهر
-- ✅ سرعة إيصال أعلى من SMTP الافتراضي
+```bash
+npx supabase db push
+```
 
-### الخطوة 1️⃣: إنشاء حساب Resend
+ملف الترحيل المطلوب لمسار OTP هو:
 
-1. اذهب إلى [resend.com](https://resend.com) → **Sign up**
-2. سجّل بإيميل عملك (يفضّل نطاق الشركة)
+```text
+supabase/migrations/20260601010000_enable_email_signup_otp.sql
+```
 
-### الخطوة 2️⃣: إضافة نطاقك (Domain)
+## Redirect URLs
 
-> ⚠️ **مهمّ**: تحتاج نطاقاً تملكه (مثل `articode.com`). لا يمكن استخدام Gmail/Outlook الشخصي.
-
-1. في Resend → **Domains** → **Add Domain**
-2. أدخل نطاقك (مثلاً: `articode.com`)
-3. Resend سيعطيك سجلات **DNS** ثلاثة:
-   - **SPF** (TXT record)
-   - **DKIM** (TXT record)
-   - **MX** (للاستلام، اختياري)
-
-### الخطوة 3️⃣: إضافة سجلات DNS
-
-اذهب لمزوّد نطاقك (GoDaddy / Namecheap / Cloudflare / إلخ):
-1. افتح إعدادات DNS
-2. أضف الـ 3 سجلات بالضبط كما تظهر في Resend
-3. ارجع لـ Resend واضغط **Verify Domain**
-4. الانتظار: 5-30 دقيقة عادةً
-5. عند ظهور علامة ✅ **Verified** → النطاق جاهز
-
-### الخطوة 4️⃣: إنشاء API Key
-
-1. في Resend → **API Keys** → **Create API Key**
-2. **Name**: `Supabase Auth`
-3. **Permission**: `Sending access`
-4. **Domain**: اختر نطاقك الذي تحقّقت منه
-5. **Create** → انسخ الـ API Key فوراً (لن يظهر مرة أخرى)
-   - يبدأ بـ `re_xxxxxxxxxxxxxxxxxxx`
-
-### الخطوة 5️⃣: ربط Resend بـ Supabase
-
-1. افتح [Supabase Dashboard](https://supabase.com/dashboard/project/hnaudgieczuzuduplhkp/settings/auth)
-2. **Project Settings** → **Authentication** → **SMTP Settings**
-3. شغّل **Enable Custom SMTP** ✓
-4. املأ:
-
-| الحقل | القيمة |
-|---|---|
-| **Sender email** | `noreply@articode.com` (نطاقك) |
-| **Sender name** | `أكِّد` |
-| **Host** | `smtp.resend.com` |
-| **Port number** | `465` |
-| **Username** | `resend` |
-| **Password** | الـ API Key من Resend (`re_xxx...`) |
-| **Minimum interval between emails** | `60` (ثانية — لتفادي spam) |
-
-5. اضغط **Save**
-
-### الخطوة 6️⃣: تثبيت القوالب في Supabase
-
-لكل قالب:
-
-1. **Authentication** → **Email Templates**
-2. اختر القالب المطلوب من القائمة:
-   - Confirm signup → `confirm-signup.html`
-   - Magic Link → `magic-link.html`
-   - Change Email Address → `change-email.html`
-   - Reset Password → `reset-password.html`
-3. **Subject heading**: استخدم العنوان المقترح أدناه
-4. **Message body**: افتح الملف المقابل، انسخ محتواه كاملاً، الصقه
-5. اضغط **Save**
-
-#### العناوين المقترَحة (Subject)
-
-| القالب | Subject |
-|---|---|
-| Confirm signup | `أهلاً بك في أكِّد — أكّد بريدك` |
-| Magic Link | `رابط الدخول السحري — أكِّد` |
-| Change Email | `تأكيد تغيير البريد الإلكتروني — أكِّد` |
-| Reset Password | `استعادة كلمة المرور — أكِّد` |
-
-### الخطوة 7️⃣: ضبط Redirect URLs
-
-في **Authentication** → **URL Configuration**:
+في **Authentication -> URL Configuration** استخدم:
 
 | الحقل | القيمة |
 |---|---|
 | **Site URL** | `akked://` |
-| **Redirect URLs** | `akked://**` + `akked://auth-callback` + `exp://**` |
+| **Redirect URLs** | `akked://**` و `akked://auth-callback` و `exp://**` |
 
----
+عند اختبار Google عبر Expo Go أضف أيضاً رابط العودة الكامل الذي يظهر في سجل
+التطبيق، مثل:
 
-## 🧪 اختبار الإرسال
-
-### اختبار من Resend مباشرة:
-1. في Resend → **Emails** → **Send Email** (واجهة اختبار)
-2. أرسل إيميل تجريبي لنفسك
-
-### اختبار من التطبيق:
-1. افتح التطبيق → "نسيت كلمة المرور" → أدخل إيميلك
-2. تحقق من صندوق الوارد (وليس Spam هذه المرة)
-3. يجب أن يصل إيميل **بهوية أكِّد بالكامل**
-
----
-
-## 🎨 ملاحظات حول التصميم
-
-### المتغيّرات الديناميكية في القوالب
-Supabase يدعم هذه المتغيّرات داخل القوالب:
-
-| المتغيّر | المعنى |
-|---|---|
-| `{{ .ConfirmationURL }}` | رابط التأكيد/الإجراء (الأهم) |
-| `{{ .Email }}` | بريد المستخدم |
-| `{{ .Token }}` | الـ token الخام (نادر الاستخدام) |
-| `{{ .TokenHash }}` | hash الـ token (للتحقق المخصص) |
-| `{{ .SiteURL }}` | عنوان موقعك |
-| `{{ .RedirectTo }}` | عنوان العودة |
-
-كل قوالبنا تستخدم `{{ .ConfirmationURL }}` فقط (الأشهر والأنسب).
-
-### توافق الإيميل
-القوالب اختُبرت تصميمياً لتعمل في:
-- ✅ Gmail (Web + Mobile + iOS App)
-- ✅ Outlook (Web + Desktop)
-- ✅ Apple Mail (macOS + iOS)
-- ✅ Yahoo Mail
-- ✅ Samsung Mail
-- ✅ Dark mode (يبقى أبيض اللون عبر `color-scheme: light only`)
-
-### ملاحظة عن الـ Gradient في Outlook القديم
-بعض إصدارات Outlook Desktop لا تدعم `linear-gradient`. لهذا أضفنا `background-color: #4F46E5` كاحتياطي صلب قبل التدرّج — فلن يظهر للمستخدمين فراغ أبيض.
-
----
-
-## 🛠️ الصيانة
-
-### تغيير اللون البنفسجي مستقبلاً
-ابحث في كل قالب عن:
-```css
-#6366F1   (المسار الفاتح للـ gradient)
-#4F46E5   (اللون الرئيسي)
-#4338CA   (المسار الغامق)
+```text
+exp://192.168.1.3:8081/--/auth-callback
 ```
-وبدّلها بألوانك الجديدة.
 
-### تغيير اسم العلامة
-ابحث عن `أكِّد` واستبدله.
+## التحقق بعد النشر
 
-### إضافة Logo بدل الإيموجي
-استبدل سطر الإيموجي (مثلاً `🔑` أو `👋`) بـ:
-```html
-<img src="https://your-cdn.com/icon.png" width="64" height="64" alt="أكِّد" />
-```
-ارفع الصورة لـ Supabase Storage أو CDN.
+1. سجّل حساباً جديداً ببريد لم يُستخدم سابقاً.
+2. تأكد أن رسالة التسجيل تعرض بطاقة أكِّد الحديثة ورمز OTP واضحاً.
+3. أدخل الرمز داخل التطبيق وتأكد من ظهور رقم الحساب بعد نجاح التحقق.
+4. جرّب الرسالة على Gmail في الكمبيوتر والهاتف.
+5. اختبر استعادة كلمة المرور وتأكد أن الزر والرابط الاحتياطي يعملان.
 
----
+## ملاحظات التوافق
 
-## ❓ مشاكل شائعة وحلولها
-
-| المشكلة | الحل |
-|---|---|
-| الإيميل لا يصل | تحقّق من Resend → **Emails** → ابحث عن الإيميل وارَ سجل التسليم |
-| الإيميل في Spam | تأكّد أن SPF + DKIM مُعرَّفان ومُتحقَّق منهما في Resend |
-| الـ gradient لا يظهر | المستخدم على Outlook قديم — اللون الصلب الاحتياطي سيظهر |
-| الزر بأبيض شفّاف | بعض client تتجاهل `background-image`. اللون الصلب `#4F46E5` سيظهر |
-| Arabic يبدو معكوساً | تأكّد من `dir="rtl"` في تاغ `<html>` و `<body>` (موجود في كل القوالب) |
-| `{{ .ConfirmationURL }}` يظهر كنص | أنت في صفحة Preview في Supabase — في الإيميل الفعلي سيُستبدَل |
-
----
-
-## 📋 قائمة فحص قبل الإطلاق
-
-- [ ] نطاقك مُتحقّق منه في Resend (✅ Verified)
-- [ ] API Key أُنشِئ ومحفوظ بأمان
-- [ ] SMTP في Supabase مُفعَّل ومحفوظ
-- [ ] القوالب الأربعة منسوخة في Supabase
-- [ ] Redirect URLs مضافة (`akked://**`)
-- [ ] جربت إرسال إيميل تجريبي ووصل بنجاح
-- [ ] فتحت الرابط من الهاتف وعمل التطبيق
+- القوالب تستخدم جداول HTML وخصائص inline لتحسين التوافق مع Gmail وOutlook.
+- لا توجد صور خارجية أو خطوط خارجية أو رموز تعتمد على دعم الجهاز.
+- قالب تأكيد التسجيل لا يحتوي رابطاً؛ يحتوي رمز OTP فقط.
+- القوالب الأخرى تحتوي زر الإجراء ورابطاً احتياطياً للنسخ.

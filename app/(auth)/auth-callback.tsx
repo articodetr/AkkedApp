@@ -17,10 +17,13 @@ export default function AuthCallbackScreen() {
   const [error, setError] = useState('');
   const [handledUrl, setHandledUrl] = useState<string | null>(null);
 
-  const isRecoveryUrl = (url: string) =>
-    url.includes('type=recovery') ||
-    url.includes('type%3Drecovery') ||
-    url.includes('recovery');
+  const hasAuthType = (url: string, type: string) =>
+    new RegExp(`(?:^|[?&#]|%3F|%26)type(?:=|%3D)${type}(?:$|[&#]|%26)`, 'i').test(url);
+
+  const isRecoveryUrl = (url: string) => hasAuthType(url, 'recovery');
+
+  const isEmailConfirmationUrl = (url: string) =>
+    hasAuthType(url, 'signup') || hasAuthType(url, 'email');
 
   useEffect(() => {
     const timer = setTimeout(() => setTimedOut(true), 15000);
@@ -41,7 +44,13 @@ export default function AuthCallbackScreen() {
       if (cancelled) return;
 
       if (result.success) {
-        router.replace(isRecoveryUrl(url) ? '/(auth)/reset-password' : '/(tabs)');
+        router.replace(
+          isRecoveryUrl(url)
+            ? '/(auth)/reset-password'
+            : isEmailConfirmationUrl(url)
+              ? '/(auth)/login'
+              : '/(tabs)'
+        );
       } else if (result.error) {
         setError(result.error);
       }

@@ -83,7 +83,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // على الويب نسمح باكتشاف الجلسة من رابط العودة، وعلى الموبايل
     // نتعامل مع رابط العودة يدوياً عبر expo-linking في AuthContext.
     detectSessionInUrl: Platform.OS === 'web',
-    // PKCE مطلوب لتدفّق OAuth (Google) وروابط استعادة كلمة المرور على الموبايل.
-    flowType: 'pkce',
+    // Native deep links return the session tokens directly. Web callback routes
+    // keep PKCE so the browser can exchange the returned authorization code.
+    flowType: Platform.OS === 'web' ? 'pkce' : 'implicit',
   },
 });

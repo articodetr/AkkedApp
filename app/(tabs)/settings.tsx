@@ -118,15 +118,13 @@ export default function SettingsScreen() {
                 activeOpacity={0.85}
               >
                 <ChevronLeft size={20} color="#9CA3AF" />
-                <View style={styles.menuItemContent}>
-                  <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
-                    <IconComponent size={22} color={item.color} />
-                  </View>
+                <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
+                  <IconComponent size={22} color={item.color} />
+                </View>
 
-                  <View style={styles.menuTextContainer}>
-                    <Text style={styles.menuTitle}>{item.title}</Text>
-                    <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
-                  </View>
+                <View style={styles.menuTextContainer}>
+                  <Text style={styles.menuTitle}>{item.title}</Text>
+                  <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -210,22 +208,16 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   menuItem: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
-    direction: 'rtl',
+    direction: 'ltr',
   },
   lastMenuItem: {
     borderBottomWidth: 0,
-  },
-  menuItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    direction: 'rtl',
   },
   menuIcon: {
     width: 48,
@@ -233,14 +225,14 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
   },
   menuTextContainer: {
     flex: 1,
-    alignItems: 'flex-end',
+    alignItems: 'stretch',
     direction: 'rtl',
   },
   menuTitle: {
+    width: '100%',
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
@@ -249,6 +241,7 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   menuSubtitle: {
+    width: '100%',
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'right',
