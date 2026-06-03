@@ -1,7 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
-import * as Notifications from 'expo-notifications';
+// لا نستورد الحزمة كاملة عبر "expo-notifications": استيرادها يُحمّل
+// getExpoPushTokenAsync الذي يُشغّل DevicePushTokenAutoRegistration عند تحميل
+// الموديول، فيُسقط التطبيق على شاشة البداية في البناء المستقل وفي Expo Go.
+// نستورد فقط الأجزاء الآمنة، ونؤجّل getExpoPushTokenAsync ليُحمَّل كسولاً وقت
+// الحاجة فقط (انظر registerDeviceForPushNotifications).
+import { AndroidImportance, AndroidNotificationVisibility } from 'expo-notifications/build/NotificationChannelManager.types';
+import { getPermissionsAsync, requestPermissionsAsync } from 'expo-notifications/build/NotificationPermissions';
+import { setNotificationChannelAsync } from 'expo-notifications/build/setNotificationChannelAsync';
 import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
@@ -9,6 +16,10 @@ import { supabase } from '@/lib/supabase';
 export const ANDROID_NOTIFICATION_CHANNEL_ID = 'akked-alerts-v2';
 
 const DEVICE_ID_STORAGE_KEY = 'akked.push.deviceId';
+
+// Expo Go (SDK 53+) أزال دعم إشعارات Push عن بُعد، ومحاولة جلب رمز Push هناك
+// ترمي خطأً يُعطّل الإقلاع. نكتشف Expo Go لتخطّي التسجيل بأمان.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 type PushStatus =
   | 'registered'
@@ -62,15 +73,15 @@ async function getOrCreateDeviceId() {
 export async function ensureAndroidNotificationChannel() {
   if (Platform.OS !== 'android') return;
 
-  await Notifications.setNotificationChannelAsync(ANDROID_NOTIFICATION_CHANNEL_ID, {
-    name: 'إشعارات Akked',
-    importance: Notifications.AndroidImportance.MAX,
+  await setNotificationChannelAsync(ANDROID_NOTIFICATION_CHANNEL_ID, {
+    name: 'إشعارات أكِّد',
+    importance: AndroidImportance.MAX,
     sound: 'default',
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#2563EB',
     enableVibrate: true,
     enableLights: true,
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    lockscreenVisibility: AndroidNotificationVisibility.PUBLIC,
   });
 }
 
@@ -85,10 +96,10 @@ export async function ensurePushNotificationPermission(): Promise<PushResult> {
 
   await ensureAndroidNotificationChannel();
 
-  const currentPermissions = await Notifications.getPermissionsAsync();
+  const currentPermissions = await getPermissionsAsync();
   const finalPermissions = currentPermissions.granted
     ? currentPermissions
-    : await Notifications.requestPermissionsAsync({
+    : await requestPermissionsAsync({
         ios: {
           allowAlert: true,
           allowBadge: true,
@@ -124,6 +135,15 @@ export async function registerDeviceForPushNotifications(): Promise<PushResult> 
       };
     }
 
+    if (isExpoGo) {
+      lastRegistrationOk = false;
+      return {
+        ok: false,
+        status: 'unsupported',
+        message: 'إشعارات Push غير مدعومة في Expo Go. استخدم بناء تطوير أو الإصدار المنشور لاختبارها.',
+      };
+    }
+
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -153,7 +173,12 @@ export async function registerDeviceForPushNotifications(): Promise<PushResult> 
       };
     }
 
-    const expoPushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    // استيراد كسول: getExpoPushTokenAsync يُشغّل DevicePushTokenAutoRegistration،
+    // لذا لا نحمّله إلا هنا (بعد التأكد أننا لسنا في الويب أو Expo Go).
+    const { getExpoPushTokenAsync } = await import(
+      'expo-notifications/build/getExpoPushTokenAsync'
+    );
+    const expoPushToken = (await getExpoPushTokenAsync({ projectId })).data;
     const deviceId = await getOrCreateDeviceId();
 
     const { data, error } = await supabase.rpc('register_device_push_token', {
@@ -220,7 +245,7 @@ export async function sendPushNotificationTest(): Promise<PushResult> {
       body: {
         type: 'test',
         title: 'اختبار الإشعارات',
-        message: 'هذا إشعار اختبار من تطبيق Akked',
+        message: 'هذا إشعار اختبار من تطبيق أكِّد',
       },
     });
 

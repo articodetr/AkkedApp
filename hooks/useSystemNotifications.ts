@@ -133,7 +133,7 @@ async function showSystemNotification(
 ) {
   if (!canShowSystemNotification(item)) return;
 
-  let title = item.title || 'Akked';
+  let title = item.title || 'أكِّد';
   let body = item.message || 'لديك إشعار جديد';
 
   try {
