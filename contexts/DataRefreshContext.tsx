@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -14,15 +14,23 @@ export function DataRefreshProvider({ children }: { children: React.ReactNode })
   const [lastRefreshTime, setLastRefreshTime] = useState(Date.now());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [channel, setChannel] = useState<RealtimeChannel | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // نُجمّع دفعات أحداث realtime المتتالية في تحديث واحد (debounce). بدون هذا
+  // التجميع، إدخال حركة واحدة يُطلق عدة أحداث متلاحقة فتُعيد كل الشاشات الجلب
+  // عدة مرات — وهو سبب ظهور "جاري التحميل" بشكل متكرر والبطء.
   const triggerRefresh = useCallback((type: 'movements' | 'customers' | 'all' = 'all') => {
     console.log('[DataRefresh] Triggering refresh:', type);
     setIsRefreshing(true);
-    setLastRefreshTime(Date.now());
 
-    setTimeout(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = setTimeout(() => {
+      setLastRefreshTime(Date.now());
       setIsRefreshing(false);
-    }, 500);
+      refreshTimerRef.current = null;
+    }, 800);
   }, []);
 
   useEffect(() => {
@@ -74,6 +82,10 @@ export function DataRefreshProvider({ children }: { children: React.ReactNode })
 
     return () => {
       console.log('[DataRefresh] Cleaning up realtime subscriptions...');
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
       if (realtimeChannel) {
         supabase.removeChannel(realtimeChannel);
       }
