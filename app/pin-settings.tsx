@@ -14,10 +14,11 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Dimensions,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowRight, Lock, User, Save, ShieldCheck, Phone, Mail, Printer, ChevronDown, ChevronUp, Trash2, AlertTriangle, Scale, Send, IdCard } from 'lucide-react-native';
+import { ArrowRight, Lock, User, Save, ShieldCheck, Phone, Mail, Printer, ChevronDown, ChevronUp, Trash2, AlertTriangle, Scale, Send, IdCard, ExternalLink, BellRing } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +26,7 @@ import { CURRENCIES } from '@/types/database';
 import { LetterheadEditor } from '@/components/LetterheadEditor';
 import * as Haptics from 'expo-haptics';
 import { formatSmartNumber } from '@/utils/arabicFormat';
+import { sendPushNotificationTest } from '@/services/pushNotificationService';
 
 function getInitials(fullName?: string | null, fallback?: string | null): string {
   const source = (fullName && fullName.trim()) || fallback || '';
@@ -50,6 +52,9 @@ function getCurrencySymbol(code: string) {
   return CURRENCIES.find((c) => c.code === code)?.symbol || code;
 }
 
+const PRIVACY_POLICY_URL = 'https://articode.com.tr/akked/privacy-policy';
+const ACCOUNT_DELETION_URL = 'https://articode.com.tr/akked/delete-account';
+
 export default function PinSettings() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -68,6 +73,7 @@ export default function PinSettings() {
   const [showSettlementModal, setShowSettlementModal] = useState(false);
   const [isCheckingDeletable, setIsCheckingDeletable] = useState(false);
   const [isAutoSettling, setIsAutoSettling] = useState(false);
+  const [isTestingPush, setIsTestingPush] = useState(false);
   const [unsettledBalances, setUnsettledBalances] = useState<UnsettledBalance[]>([]);
   const [pendingMovementsCount, setPendingMovementsCount] = useState(0);
   const [infoExpanded, setInfoExpanded] = useState(false);
@@ -87,6 +93,64 @@ export default function PinSettings() {
   const currentPasswordInputRef = useRef<TextInput>(null);
   const newPasswordInputRef = useRef<TextInput>(null);
   const confirmPasswordInputRef = useRef<TextInput>(null);
+
+  const openLegalUrl = async (url: string, label: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert('خطأ', `تعذر فتح ${label}`);
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('خطأ', `تعذر فتح ${label}`);
+    }
+  };
+
+  const openAppNotificationSettings = async () => {
+    try {
+      await Linking.openSettings();
+    } catch {
+      Alert.alert('خطأ', 'تعذر فتح إعدادات التطبيق');
+    }
+  };
+
+  const handleTestPushNotification = async () => {
+    if (!currentUser?.userId) {
+      Alert.alert('تنبيه', 'يجب تسجيل الدخول أولاً');
+      return;
+    }
+
+    try {
+      setIsTestingPush(true);
+      const result = await sendPushNotificationTest();
+
+      if (result.ok) {
+        Alert.alert(
+          'تم إرسال إشعار الاختبار',
+          'إذا كانت صلاحية الإشعارات مفعلة سيصل الإشعار إلى الهاتف خلال لحظات.'
+        );
+        return;
+      }
+
+      if (result.status === 'permission_denied') {
+        Alert.alert(
+          'الإشعارات غير مفعلة',
+          result.message,
+          [
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'فتح الإعدادات', onPress: openAppNotificationSettings },
+          ]
+        );
+        return;
+      }
+
+      Alert.alert('تعذر إرسال إشعار الاختبار', result.message);
+    } finally {
+      setIsTestingPush(false);
+    }
+  };
 
   const scrollFocusedInputIntoView = () => {
     if (focusScrollTimerRef.current) {
@@ -868,6 +932,56 @@ export default function PinSettings() {
             ) : null}
           </View>
 
+          <TouchableOpacity
+            style={styles.linkCard}
+            onPress={() => openLegalUrl(PRIVACY_POLICY_URL, 'سياسة الخصوصية')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.linkCardIcon}>
+              <ShieldCheck size={19} color="#0891B2" />
+            </View>
+            <View style={styles.linkCardTextWrap}>
+              <Text style={styles.linkCardTitle}>سياسة الخصوصية</Text>
+              <Text style={styles.linkCardSubtitle}>بيانات التطبيق وحقوق المستخدم</Text>
+            </View>
+            <ExternalLink size={18} color="#6B7280" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkCard}
+            onPress={() => openLegalUrl(ACCOUNT_DELETION_URL, 'طلب حذف الحساب')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.linkCardIcon, styles.linkCardDangerIcon]}>
+              <Trash2 size={19} color="#B91C1C" />
+            </View>
+            <View style={styles.linkCardTextWrap}>
+              <Text style={styles.linkCardTitle}>طلب حذف الحساب عبر الويب</Text>
+              <Text style={styles.linkCardSubtitle}>رابط خارجي لطلبات الحذف والخصوصية</Text>
+            </View>
+            <ExternalLink size={18} color="#6B7280" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.linkCard, isTestingPush && styles.saveButtonDisabled]}
+            onPress={handleTestPushNotification}
+            activeOpacity={0.85}
+            disabled={isTestingPush}
+          >
+            <View style={[styles.linkCardIcon, styles.linkCardNotificationIcon]}>
+              {isTestingPush ? (
+                <ActivityIndicator size="small" color="#4F46E5" />
+              ) : (
+                <BellRing size={19} color="#4F46E5" />
+              )}
+            </View>
+            <View style={styles.linkCardTextWrap}>
+              <Text style={styles.linkCardTitle}>اختبار الإشعارات</Text>
+              <Text style={styles.linkCardSubtitle}>إرسال إشعار Push فعلي لهذا الهاتف</Text>
+            </View>
+            <Send size={18} color="#6B7280" />
+          </TouchableOpacity>
+
           <View style={[styles.collapsibleCard, styles.collapsibleCardDanger]}>
             <TouchableOpacity
               style={styles.collapsibleHeader}
@@ -1455,6 +1569,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#CFFAFE',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  linkCardDangerIcon: {
+    backgroundColor: '#FEE2E2',
+  },
+  linkCardNotificationIcon: {
+    backgroundColor: '#EEF2FF',
   },
   dangerCard: {
     backgroundColor: '#FFFFFF',

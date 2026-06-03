@@ -11,16 +11,7 @@ import {
   AndroidNotificationPriority,
   SchedulableTriggerInputTypes,
 } from 'expo-notifications/build/Notifications.types';
-import {
-  AndroidImportance,
-  AndroidNotificationVisibility,
-} from 'expo-notifications/build/NotificationChannelManager.types';
-import {
-  getPermissionsAsync,
-  requestPermissionsAsync,
-} from 'expo-notifications/build/NotificationPermissions';
 import { scheduleNotificationAsync } from 'expo-notifications/build/scheduleNotificationAsync';
-import { setNotificationChannelAsync } from 'expo-notifications/build/setNotificationChannelAsync';
 import { setNotificationHandler } from 'expo-notifications/build/NotificationsHandler';
 
 import { supabase } from '@/lib/supabase';
@@ -30,8 +21,13 @@ import {
   getNotificationMeta,
   MovementNotification,
 } from '@/services/notificationService';
+import {
+  ANDROID_NOTIFICATION_CHANNEL_ID,
+  ensurePushNotificationPermission,
+  isPushNotificationReady,
+  registerDeviceForPushNotifications,
+} from '@/services/pushNotificationService';
 
-const ANDROID_CHANNEL_ID = 'akked-alerts-v2';
 const MAX_TEXT_LENGTH = 170;
 const NEW_NOTIFICATION_POLL_MS = 8000;
 
@@ -77,38 +73,15 @@ function getNotificationTrigger() {
   return {
     type: SchedulableTriggerInputTypes.TIME_INTERVAL,
     seconds: 1,
-    channelId: ANDROID_CHANNEL_ID,
+    channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
   } as const;
 }
 
 async function ensureSystemNotificationsReady() {
   if (Platform.OS === 'web') return false;
 
-  if (Platform.OS === 'android') {
-    await setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-      name: 'إشعارات أكِّد',
-      importance: AndroidImportance.MAX,
-      sound: 'default',
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#2563EB',
-      enableVibrate: true,
-      enableLights: true,
-      lockscreenVisibility: AndroidNotificationVisibility.PUBLIC,
-    });
-  }
-
-  const currentPermissions = await getPermissionsAsync();
-  const finalPermissions = currentPermissions.granted
-    ? currentPermissions
-    : await requestPermissionsAsync({
-        ios: {
-          allowAlert: true,
-          allowBadge: true,
-          allowSound: true,
-        },
-      });
-
-  return finalPermissions.granted;
+  const result = await ensurePushNotificationPermission();
+  return result.ok;
 }
 
 async function getUnreadNotificationRows(userId: string) {
@@ -160,7 +133,7 @@ async function showSystemNotification(
 ) {
   if (!canShowSystemNotification(item)) return;
 
-  let title = item.title || 'أكِّد';
+  let title = item.title || 'Akked';
   let body = item.message || 'لديك إشعار جديد';
 
   try {
@@ -235,6 +208,7 @@ export function useSystemNotifications(currentUser: CurrentUser | null) {
 
   const showNewNotifications = useCallback(async () => {
     if (!currentUser?.userId || Platform.OS === 'web') return;
+    if (isPushNotificationReady()) return;
 
     try {
       const hasPermission = await ensureSystemNotificationsReady();
@@ -285,11 +259,20 @@ export function useSystemNotifications(currentUser: CurrentUser | null) {
 
     let isActive = true;
 
-    ensureSystemNotificationsReady().catch((error) => {
-      console.warn('[SystemNotifications] Unable to enable system notifications:', error);
+    registerDeviceForPushNotifications().then((result) => {
+      if (!isActive) return;
+
+      if (!result.ok) {
+        console.warn('[SystemNotifications] Push registration fallback:', result.message);
+        showNewNotifications();
+      }
+    }).catch((error) => {
+      if (!isActive) return;
+      console.warn('[SystemNotifications] Unable to register push notifications:', error);
+      showNewNotifications();
     });
+
     updateAppIconBadge(currentUser.userId);
-    showNewNotifications();
 
     const channelName = `system-notifications-${currentUser.userId}-${Date.now()}`;
     const channel = supabase
@@ -308,6 +291,7 @@ export function useSystemNotifications(currentUser: CurrentUser | null) {
           if ((payload as any).eventType !== 'INSERT') return;
 
           const notificationId = String((payload.new as any)?.id || '');
+          if (isPushNotificationReady()) return;
           if (!notificationId || notifiedIdsRef.current.has(notificationId)) return;
 
           notifiedIdsRef.current.add(notificationId);
@@ -335,7 +319,12 @@ export function useSystemNotifications(currentUser: CurrentUser | null) {
 
     const appStateSubscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        showNewNotifications();
+        if (!isPushNotificationReady()) {
+          registerDeviceForPushNotifications().catch((error) => {
+            console.warn('[SystemNotifications] Unable to refresh push registration:', error);
+          });
+          showNewNotifications();
+        }
         updateAppIconBadge(currentUser.userId);
       }
     });

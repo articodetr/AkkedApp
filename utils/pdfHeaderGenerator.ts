@@ -13,16 +13,15 @@ export function generatePDFHeaderHTML(options: PDFHeaderOptions): string {
   const {
     title,
     logoDataUrl,
-    height = 110,
   } = options;
 
   // استخدام صورة البانر الكاملة
   const headerImageHTML = logoDataUrl && logoDataUrl !== '' && !logoDataUrl.includes('undefined')
     ? `<img src="${logoDataUrl}" alt="Header Banner" class="header-banner-image" onerror="this.style.display='none'" />`
-    : `<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Default Banner" class="header-banner-image" />`;
+    : '';
 
   return `
-    <div class="pdf-header-banner" style="height: ${height}px;">
+    <div class="pdf-header-banner">
       ${headerImageHTML}
     </div>
 
@@ -35,25 +34,20 @@ export function generatePDFHeaderStyles(): string {
     .pdf-header-banner {
       position: relative;
       width: 100%;
-      max-width: 720px;
-      height: 110px;
-      margin: 0 auto 12px;
-      overflow: hidden;
+      margin: 0 0 12px;
+      overflow: visible;
       flex-shrink: 0;
       box-sizing: border-box;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
+      display: block;
+      line-height: 0;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
 
     .header-banner-image {
       width: 100%;
-      height: 100%;
+      height: auto;
       display: block;
-      object-fit: contain;
-      object-position: top center;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -80,6 +74,12 @@ export function generatePDFHeaderStyles(): string {
       }
 
       .pdf-header-banner {
+        width: 100% !important;
+        max-width: none !important;
+        height: auto !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        overflow: visible !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         color-adjust: exact !important;
@@ -94,6 +94,9 @@ export function generatePDFHeaderStyles(): string {
       }
 
       .header-banner-image {
+        width: 100% !important;
+        height: auto !important;
+        max-width: none !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }

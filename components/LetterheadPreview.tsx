@@ -4,7 +4,7 @@ import { ImageIcon } from 'lucide-react-native';
 import { LetterheadSettings } from '@/services/letterheadService';
 
 const LETTERHEAD_WIDTH = 534;
-const LETTERHEAD_HEIGHT = 176;
+const LETTERHEAD_HEIGHT = 166;
 const ASPECT_RATIO = LETTERHEAD_WIDTH / LETTERHEAD_HEIGHT;
 
 interface LetterheadPreviewProps {
@@ -27,22 +27,27 @@ export function LetterheadPreview({
   const logoCircle = 132 * scale;
   const titleSize = Math.max(13, 19.5 * scale);
   const infoSize = Math.max(10, 12.8 * scale);
+  const titleLineHeight = titleSize * 1.18;
+  const infoLineHeight = infoSize * 1.22;
+  const rowGap = 6 * scale;
+  const titleTextStyle = { fontSize: titleSize, lineHeight: titleLineHeight };
+  const infoTextStyle = { fontSize: infoSize, lineHeight: infoLineHeight, marginTop: rowGap };
 
   return (
     <View style={styles.wrapper}>
-      <View style={[styles.preview, { width, height, paddingHorizontal: outerPadding, paddingVertical: 26 * scale }]}>
+      <View style={[styles.preview, { width, height, paddingHorizontal: outerPadding, paddingVertical: 16 * scale }]}>
         <View style={styles.topRow}>
           <View style={[styles.sideBlock, styles.leftBlock]}>
-            <Text numberOfLines={1} style={[styles.englishName, { fontSize: titleSize }]}>
+            <Text numberOfLines={1} style={[styles.englishName, titleTextStyle]}>
               {settings.english_name?.trim() || 'Company Name'}
             </Text>
             {settings.show_phone && !!settings.phone_number?.trim() && (
-              <Text numberOfLines={1} style={[styles.englishMeta, { fontSize: infoSize }]}>
+              <Text numberOfLines={1} style={[styles.englishMeta, infoTextStyle]}>
                 {settings.phone_number}
               </Text>
             )}
             {!!settings.address_en?.trim() && (
-              <Text numberOfLines={1} style={[styles.englishMeta, { fontSize: infoSize }]}>
+              <Text numberOfLines={1} style={[styles.englishMeta, infoTextStyle]}>
                 {settings.address_en}
               </Text>
             )}
@@ -67,23 +72,23 @@ export function LetterheadPreview({
           </View>
 
           <View style={[styles.sideBlock, styles.rightBlock]}>
-            <Text numberOfLines={1} style={[styles.arabicName, { fontSize: titleSize }]}>
+            <Text numberOfLines={1} style={[styles.arabicName, titleTextStyle]}>
               {settings.business_name?.trim() || 'اسم الشركة'}
             </Text>
             {settings.show_phone && !!settings.phone_number?.trim() && (
-              <Text numberOfLines={1} style={[styles.arabicMeta, { fontSize: infoSize }]}>
+              <Text numberOfLines={1} style={[styles.arabicMeta, infoTextStyle]}>
                 {settings.phone_number}
               </Text>
             )}
             {!!settings.address_ar?.trim() && (
-              <Text numberOfLines={1} style={[styles.arabicMeta, { fontSize: infoSize }]}>
+              <Text numberOfLines={1} style={[styles.arabicMeta, infoTextStyle]}>
                 {settings.address_ar}
               </Text>
             )}
           </View>
         </View>
 
-        <View style={styles.dividerWrap}>
+        <View style={[styles.dividerWrap, { left: outerPadding, right: outerPadding, bottom: 12 * scale }]}>
           <View style={styles.dividerLine} />
         </View>
       </View>
@@ -107,10 +112,12 @@ const styles = StyleSheet.create({
     borderColor: '#D4D4D4',
     borderRadius: 12,
     overflow: 'hidden',
+    position: 'relative',
   },
   topRow: {
     flex: 1,
     flexDirection: 'row',
+    direction: 'ltr',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
@@ -148,28 +155,30 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#111111',
     textAlign: 'left',
+    includeFontPadding: false,
   },
   englishMeta: {
-    marginTop: 6,
     fontWeight: '500',
     color: '#4B5563',
     textAlign: 'left',
+    includeFontPadding: false,
   },
   arabicName: {
     fontWeight: '800',
     color: '#111111',
     textAlign: 'right',
     writingDirection: 'rtl',
+    includeFontPadding: false,
   },
   arabicMeta: {
-    marginTop: 6,
     fontWeight: '500',
     color: '#4B5563',
     textAlign: 'right',
     writingDirection: 'rtl',
+    includeFontPadding: false,
   },
   dividerWrap: {
-    paddingTop: 12,
+    position: 'absolute',
     alignItems: 'center',
   },
   dividerLine: {

@@ -3,315 +3,373 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>سياسة الخصوصية — تطبيق أكِّد | Akked Privacy Policy</title>
-  <!-- Brand name: أكِّد (Arabic) / Akked (English) -->
+  <title>سياسة الخصوصية - تطبيق Akked</title>
   <style>
-    :root { --fg:#111; --muted:#555; --bg:#fff; --accent:#2563EB; --border:#e5e7eb; }
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif; color: var(--fg); background: var(--bg); margin: 0; line-height: 1.75; }
-    main { max-width: 820px; margin: 0 auto; padding: 32px 20px 80px; }
-    h1 { font-size: 1.8rem; margin: 0 0 4px; }
-    h2 { font-size: 1.25rem; margin: 32px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-    h3 { font-size: 1.05rem; margin: 20px 0 6px; color: var(--accent); }
-    p, li { color: var(--fg); }
-    .muted { color: var(--muted); font-size: 0.9rem; }
-    .nav { display: flex; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); background: #fafafa; position: sticky; top: 0; z-index: 10; }
-    .nav a { color: var(--accent); text-decoration: none; font-weight: 600; }
-    .nav a:hover { text-decoration: underline; }
-    section { padding-top: 8px; }
-    section[lang="en"] { direction: ltr; text-align: left; border-top: 2px solid var(--border); margin-top: 60px; padding-top: 40px; }
-    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-    .badge { display: inline-block; background: #eff6ff; color: var(--accent); padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; margin-inline-end: 6px; }
+    :root {
+      --bg: #ffffff;
+      --fg: #111827;
+      --muted: #4b5563;
+      --accent: #2563eb;
+      --border: #e5e7eb;
+      --soft: #f8fafc;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, "Segoe UI", Tahoma, Arial, sans-serif;
+      line-height: 1.8;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      display: flex;
+      gap: 16px;
+      padding: 14px 20px;
+      background: var(--soft);
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav a,
+    main a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    nav a:hover,
+    main a:hover {
+      text-decoration: underline;
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.9rem;
+      line-height: 1.3;
+    }
+
+    h2 {
+      margin: 32px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+      font-size: 1.25rem;
+    }
+
+    h3 {
+      margin: 20px 0 6px;
+      color: var(--accent);
+      font-size: 1.05rem;
+    }
+
+    p,
+    li {
+      color: var(--fg);
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .notice {
+      margin: 20px 0;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--soft);
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #f3f4f6;
+      font-size: 0.92em;
+      direction: ltr;
+      unicode-bidi: embed;
+    }
+
+    section[lang="en"] {
+      direction: ltr;
+      text-align: left;
+      margin-top: 56px;
+      padding-top: 40px;
+      border-top: 2px solid var(--border);
+    }
   </style>
 </head>
 <body>
-  <div class="nav">
+  <nav aria-label="Language">
     <a href="#ar">العربية</a>
     <a href="#en">English</a>
-  </div>
+  </nav>
 
   <main>
-
-    <!-- ============================== العربية ============================== -->
     <section id="ar" lang="ar" dir="rtl">
-      <h1>سياسة الخصوصية — تطبيق أكِّد</h1>
-      <p class="muted">تاريخ السريان: {{EFFECTIVE_DATE}} &nbsp;·&nbsp; آخر تحديث: {{LAST_UPDATED}}</p>
+      <h1>سياسة الخصوصية - تطبيق أكِّد</h1>
+      <p class="muted">تاريخ السريان: 3 يونيو 2026 · آخر تحديث: 3 يونيو 2026</p>
 
       <p>
-        تُوضِّح سياسة الخصوصية هذه كيف تقوم شركة <strong>{{COMPANY_NAME}}</strong> (المُشار إليها فيما بعد بـ "نحن" أو "المُطوِّر")
-        بجمع بياناتك واستخدامها وحمايتها عند استخدامك تطبيق <strong>أكِّد</strong> (الاسم البرمجي: <code>com.articode.akked</code>) على نظام أندرويد.
+        توضح هذه السياسة كيف تقوم ArtiCode بجمع واستخدام وحماية بياناتك عند استخدام تطبيق
+        <strong>أكِّد</strong> على أندرويد، والمعرّف باسم الحزمة <code>com.articode.akked</code>.
       </p>
+
+      <div class="notice">
+        رابط سياسة الخصوصية الرسمي: <a href="https://articode.com.tr/akked/privacy-policy">https://articode.com.tr/akked/privacy-policy</a><br />
+        رابط طلب حذف الحساب: <a href="https://articode.com.tr/akked/delete-account">https://articode.com.tr/akked/delete-account</a>
+      </div>
 
       <h2>1. من نحن</h2>
       <p>
-        <strong>اسم المُطوِّر:</strong> {{COMPANY_NAME}}<br />
-        <strong>البلد:</strong> {{COUNTRY}}<br />
-        <strong>بريد التواصل بشأن الخصوصية:</strong> <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a>
+        <strong>المطور:</strong> ArtiCode<br />
+        <strong>الموقع:</strong> <a href="https://articode.com.tr">https://articode.com.tr</a><br />
+        <strong>بريد الدعم والخصوصية:</strong> <a href="mailto:jallalalomary@gmail.com">jallalalomary@gmail.com</a>
       </p>
 
-      <h2>2. البيانات التي نجمعها</h2>
+      <h2>2. البيانات التي يجمعها التطبيق</h2>
 
-      <h3>أ. بيانات الحساب (تُقدِّمها أنت)</h3>
+      <h3>بيانات الحساب</h3>
       <ul>
-        <li><span class="badge">إجباري</span> البريد الإلكتروني وكلمة المرور لإنشاء الحساب وتسجيل الدخول.</li>
-        <li><span class="badge">اختياري</span> رمز PIN لحماية إضافية داخل التطبيق.</li>
+        <li>الاسم والبريد الإلكتروني وكلمة المرور لإنشاء الحساب وتسجيل الدخول.</li>
+        <li>رمز PIN اختياري لحماية التطبيق داخل الجهاز.</li>
+        <li>بيانات جلسة الدخول اللازمة للمصادقة وحماية الحساب.</li>
       </ul>
 
-      <h3>ب. بيانات الأعمال التي تُدخِلها</h3>
-      <p>التطبيق أداة لإدارة العملاء والحركات المالية، ولذلك تُخزَّن البيانات التي تُدخلها بنفسك:</p>
+      <h3>بيانات العمل التي تدخلها أنت</h3>
       <ul>
-        <li>بيانات العملاء (الأسماء، أرقام الهاتف، العناوين، أرصدة الديون).</li>
-        <li>المعاملات المالية والحركات وأسعار الصرف.</li>
-        <li>الإيصالات والفواتير وإعدادات المتجر (الشعار، ترويسة الفاتورة، اسم المتجر).</li>
-        <li>الإشعارات المُجدوَلة محلياً على جهازك.</li>
-      </ul>
-      <p><strong>هذه البيانات مِلكك أنت</strong> ولا تُستخدم لأي غرض تجاري من قِبَلنا.</p>
-
-      <h3>ج. الصور والملفات</h3>
-      <ul>
-        <li>صور شعار المتجر وترويسة الفواتير التي تختارها من معرض الصور أو تلتقطها بالكاميرا.</li>
-        <li>ملفات النسخ الاحتياطي التي تختارها بنفسك عبر منتقي الملفات (Document Picker).</li>
+        <li>بيانات العملاء مثل الاسم، رقم الهاتف، العنوان، والملاحظات.</li>
+        <li>الحركات المالية، الأرصدة، الديون، الدفعات، وأسعار الصرف.</li>
+        <li>إعدادات المتجر مثل الاسم، الشعار، وترويسة مستندات PDF.</li>
+        <li>ملفات يتم إنشاؤها داخل التطبيق مثل كشوف الحساب والتقارير وملفات التصدير.</li>
       </ul>
 
-      <h3>د. بيانات تُجمَع تلقائياً</h3>
+      <h3>الصور والملفات</h3>
       <ul>
-        <li>سجلات الدخول وعنوان IP وطابع الزمن (لأغراض الأمان فقط، عبر مزوِّد البنية التحتية).</li>
-        <li>معلومات أساسية عن الجهاز ونظام التشغيل (لمعالجة الأخطاء).</li>
+        <li>قد يطلب التطبيق صلاحية الصور لاختيار شعار أو ترويسة من معرض الصور.</li>
+        <li>قد يطلب التطبيق صلاحية الكاميرا لالتقاط صورة شعار أو مستند متعلق بإعداداتك.</li>
+        <li>لا نصل إلى الصور إلا عندما تختار أنت صورة أو تلتقطها من داخل التطبيق.</li>
       </ul>
 
-      <h3>هـ. ما لا نجمعه</h3>
-      <p>التطبيق <strong>لا يجمع</strong> أيًّا مما يلي:</p>
-      <ul>
-        <li>الموقع الجغرافي.</li>
-        <li>تسجيلات الصوت أو الميكروفون.</li>
-        <li>جهات الاتصال في هاتفك.</li>
-        <li>التقويم.</li>
-        <li>سجل التصفح أو معرِّفات الإعلانات.</li>
-        <li>البيانات الصحية أو الرياضية.</li>
-      </ul>
-
-      <h2>3. كيف نستخدم بياناتك</h2>
-      <ul>
-        <li>توفير وظائف التطبيق الأساسية: إنشاء الحساب، المصادقة، حفظ بياناتك ومزامنتها.</li>
-        <li>تأمين حسابك (الكشف عن محاولات الدخول المشبوهة، PIN).</li>
-        <li>إرسال إشعارات داخل التطبيق متعلقة بنشاطك (تذكير ديون، استحقاقات، إلخ).</li>
-        <li>تحسين أداء التطبيق ومعالجة الأخطاء.</li>
-      </ul>
-      <p><strong>لا نَبِيع بياناتك ولا نَستخدمها للإعلانات.</strong></p>
-
-      <h2>4. مع من نُشارك البيانات</h2>
-      <p>نشارك بياناتك فقط مع مُعالِجي البيانات اللازمين لتشغيل التطبيق:</p>
-      <ul>
-        <li><strong>Supabase Inc.</strong> — مزوِّد قاعدة البيانات والمصادقة والتخزين السحابي. تخضع بياناتك لسياسة خصوصيتهم:
-          <a href="https://supabase.com/privacy" target="_blank" rel="noopener">supabase.com/privacy</a>
-        </li>
-        <li><strong>Google Play Services</strong> — لإيصال التطبيق وتحديثاته فقط.</li>
-      </ul>
-      <p>لا نُشارك بياناتك مع أي طرف ثالث آخر لأغراض تسويقية أو تحليلية.</p>
-
-      <h2>5. مكان تخزين البيانات</h2>
+      <h3>الإشعارات</h3>
       <p>
-        تُخزَّن البيانات على خوادم Supabase السحابية. قد تكون الخوادم خارج بلدك. باستخدامك للتطبيق، فإنك توافق على نقل بياناتك ومعالجتها في تلك الخوادم.
+        قد يطلب التطبيق صلاحية الإشعارات لإظهار تنبيهات مرتبطة بالحسابات والحركات داخل التطبيق.
+        لا نستخدم الإشعارات للإعلانات.
       </p>
 
-      <h2>6. مدة الاحتفاظ بالبيانات</h2>
+      <h3>بيانات تقنية</h3>
       <ul>
-        <li>تبقى بياناتك محفوظة طالما حسابك نشط.</li>
-        <li>يمكنك حذف حسابك في أي وقت من داخل التطبيق أو بالتواصل معنا. عند الحذف، تُحذف جميع بياناتك خلال 30 يوماً، باستثناء ما يلزم احتفاظه قانونياً.</li>
+        <li>عنوان IP، سجلات الدخول، والتوقيتات التي توفرها خدمات البنية التحتية لأغراض الأمان والتشخيص.</li>
+        <li>معلومات أساسية عن الجهاز ونظام التشغيل عند الحاجة لمعالجة الأخطاء وتحسين الاستقرار.</li>
+      </ul>
+
+      <h2>3. ما لا يجمعه التطبيق</h2>
+      <ul>
+        <li>لا يجمع الموقع الجغرافي.</li>
+        <li>لا يجمع جهات الاتصال أو التقويم.</li>
+        <li>لا يسجل الصوت ولا يستخدم الميكروفون.</li>
+        <li>لا يجمع بيانات صحية أو رياضية.</li>
+        <li>لا يستخدم معرّفات إعلانية ولا يبيع البيانات ولا يستخدمها للإعلانات.</li>
+      </ul>
+
+      <h2>4. كيف نستخدم البيانات</h2>
+      <ul>
+        <li>توفير وظائف التطبيق الأساسية مثل الحسابات، العملاء، الحركات، التقارير، والتصدير.</li>
+        <li>مزامنة البيانات بين التطبيق والخادم.</li>
+        <li>حماية الحساب ومنع الوصول غير المصرح به.</li>
+        <li>إنشاء ملفات PDF وملفات التصدير التي يطلبها المستخدم.</li>
+        <li>إظهار إشعارات مرتبطة بنشاط المستخدم داخل التطبيق.</li>
+        <li>تشخيص الأخطاء وتحسين أداء التطبيق.</li>
+      </ul>
+
+      <h2>5. مشاركة البيانات</h2>
+      <p>نشارك البيانات فقط مع مزودي الخدمات اللازمين لتشغيل التطبيق:</p>
+      <ul>
+        <li><strong>Supabase Inc.</strong> للمصادقة، قاعدة البيانات، والتخزين السحابي. سياسة الخصوصية الخاصة بهم: <a href="https://supabase.com/privacy">https://supabase.com/privacy</a></li>
+        <li><strong>Google Play Services</strong> لتوزيع التطبيق وتحديثاته وخدمات أندرويد الأساسية.</li>
+      </ul>
+      <p>لا نبيع بياناتك ولا نشاركها مع أطراف تسويقية أو شبكات إعلانية.</p>
+
+      <h2>6. الاحتفاظ والحذف</h2>
+      <ul>
+        <li>نحتفظ بالبيانات طالما أن حسابك نشط أو طالما كان ذلك لازمًا لتشغيل التطبيق.</li>
+        <li>يمكنك حذف حسابك من داخل التطبيق من شاشة الإعدادات.</li>
+        <li>يمكنك أيضًا طلب حذف الحساب عبر الرابط: <a href="https://articode.com.tr/akked/delete-account">https://articode.com.tr/akked/delete-account</a></li>
+        <li>عند قبول طلب الحذف، يتم حذف الحساب والبيانات المرتبطة به خلال فترة معقولة، ما لم يكن الاحتفاظ ببعض السجلات مطلوبًا لأسباب قانونية أو أمنية.</li>
       </ul>
 
       <h2>7. حقوقك</h2>
-      <p>لديك الحق في:</p>
       <ul>
-        <li><strong>الوصول</strong> إلى بياناتك (متاحة بالكامل داخل التطبيق).</li>
-        <li><strong>التصحيح</strong> أو التعديل في أي وقت.</li>
-        <li><strong>الحذف</strong> الكامل لحسابك وبياناتك.</li>
-        <li><strong>التصدير</strong> عبر ميزة النسخ الاحتياطي داخل التطبيق.</li>
-        <li><strong>سحب الموافقة</strong> على معالجة بياناتك.</li>
+        <li>الوصول إلى بياناتك داخل التطبيق.</li>
+        <li>تعديل أو تصحيح بياناتك.</li>
+        <li>تصدير بياناتك من ميزة تصدير البيانات.</li>
+        <li>طلب حذف الحساب والبيانات المرتبطة به.</li>
+        <li>التواصل معنا لأي استفسار متعلق بالخصوصية.</li>
       </ul>
-      <p>لطلب أي من هذه الحقوق راسلنا على: <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a></p>
 
       <h2>8. أمان البيانات</h2>
       <ul>
-        <li>كلمات المرور مُشفَّرة بخوارزمية تجزئة آمنة (لا نراها كنص واضح).</li>
-        <li>كل الاتصالات تجري عبر HTTPS مُشفَّر.</li>
-        <li>الوصول إلى البيانات مُقيَّد بنظام Row Level Security من Supabase.</li>
-        <li>رمز PIN اختياري لحماية إضافية داخل التطبيق.</li>
+        <li>يتم نقل البيانات عبر HTTPS.</li>
+        <li>كلمات المرور لا تخزن كنص واضح.</li>
+        <li>يتم تقييد الوصول إلى البيانات حسب حساب المستخدم وصلاحياته.</li>
+        <li>يوفر التطبيق PIN اختياريًا لحماية إضافية داخل الجهاز.</li>
       </ul>
-      <p class="muted">رغم ذلك، لا يُمكن ضمان أمان مُطلَق لأي نظام إلكتروني.</p>
+      <p class="muted">لا يمكن لأي نظام إلكتروني ضمان أمان مطلق، لكننا نستخدم إجراءات معقولة لحماية البيانات.</p>
 
-      <h2>9. خصوصية الأطفال</h2>
+      <h2>9. الأطفال</h2>
       <p>
-        التطبيق موجَّه للبالغين فوق 18 سنة لإدارة أعمالهم. لا نجمع بياناتٍ عن قصد من أطفال دون 13 عاماً.
-        إذا اكتشفنا ذلك سنحذف البيانات فوراً.
+        التطبيق موجه لاستخدام البالغين وأصحاب الأعمال، وليس موجّهًا للأطفال. لا نقوم بجمع بيانات الأطفال عن قصد.
       </p>
 
-      <h2>10. الصلاحيات على جهازك</h2>
-      <p>التطبيق يطلب الصلاحيات التالية فقط:</p>
-      <ul>
-        <li><strong>الكاميرا</strong> — لالتقاط صورة شعار المتجر.</li>
-        <li><strong>الصور والوسائط</strong> — لاختيار شعار المتجر وترويسة الفاتورة من المعرض.</li>
-        <li><strong>الإشعارات</strong> — لتذكيرك بالاستحقاقات والديون.</li>
-        <li><strong>الإنترنت</strong> — للمزامنة مع الخادم.</li>
-      </ul>
-
-      <h2>11. التغييرات على هذه السياسة</h2>
+      <h2>10. تغييرات السياسة</h2>
       <p>
-        قد نُحدِّث هذه السياسة من وقت لآخر. سننشر النسخة المُحدَّثة على هذه الصفحة مع تاريخ التحديث.
-        التغييرات الجوهرية ستُعلَن داخل التطبيق.
+        قد نقوم بتحديث هذه السياسة من وقت لآخر. سيتم نشر النسخة المحدثة على هذه الصفحة مع تاريخ التحديث.
       </p>
 
-      <h2>12. تواصَل معنا</h2>
-      <p>لأي استفسار أو شكوى أو طلب يخص الخصوصية:</p>
+      <h2>11. التواصل</h2>
       <p>
-        <strong>{{COMPANY_NAME}}</strong><br />
-        البريد: <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a><br />
-        البلد: {{COUNTRY}}
+        لأي سؤال أو طلب متعلق بالخصوصية أو حذف الحساب، تواصل معنا عبر:
+        <a href="mailto:jallalalomary@gmail.com">jallalalomary@gmail.com</a>
       </p>
     </section>
 
-
-    <!-- ============================== English ============================== -->
     <section id="en" lang="en" dir="ltr">
-      <h1>Privacy Policy — Akked App</h1>
-      <p class="muted">Effective date: {{EFFECTIVE_DATE}} &nbsp;·&nbsp; Last updated: {{LAST_UPDATED}}</p>
+      <h1>Privacy Policy - Akked App</h1>
+      <p class="muted">Effective date: June 3, 2026 · Last updated: June 3, 2026</p>
 
       <p>
-        This Privacy Policy explains how <strong>{{COMPANY_NAME}}</strong> ("we", "us", or the "Developer")
-        collects, uses, and protects your data when you use the <strong>Akked</strong> app
-        (package name: <code>com.articode.akked</code>) on Android.
+        This Privacy Policy explains how ArtiCode collects, uses, and protects your data when you use
+        the <strong>Akked</strong> Android app, package name <code>com.articode.akked</code>.
       </p>
+
+      <div class="notice">
+        Official privacy policy URL: <a href="https://articode.com.tr/akked/privacy-policy">https://articode.com.tr/akked/privacy-policy</a><br />
+        Account deletion request URL: <a href="https://articode.com.tr/akked/delete-account">https://articode.com.tr/akked/delete-account</a>
+      </div>
 
       <h2>1. Who we are</h2>
       <p>
-        <strong>Developer:</strong> {{COMPANY_NAME}}<br />
-        <strong>Country:</strong> {{COUNTRY}}<br />
-        <strong>Privacy contact:</strong> <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a>
+        <strong>Developer:</strong> ArtiCode<br />
+        <strong>Website:</strong> <a href="https://articode.com.tr">https://articode.com.tr</a><br />
+        <strong>Support and privacy contact:</strong> <a href="mailto:jallalalomary@gmail.com">jallalalomary@gmail.com</a>
       </p>
 
-      <h2>2. Data we collect</h2>
+      <h2>2. Data the app collects</h2>
 
-      <h3>a. Account data (provided by you)</h3>
+      <h3>Account data</h3>
       <ul>
-        <li><span class="badge">Required</span> Email and password to create your account and sign in.</li>
-        <li><span class="badge">Optional</span> A PIN code for extra in-app protection.</li>
+        <li>Name, email address, and password for account creation and sign-in.</li>
+        <li>An optional PIN code for extra protection inside the app.</li>
+        <li>Authentication session data needed to secure your account.</li>
       </ul>
 
-      <h3>b. Business data you enter</h3>
-      <p>Akked is a tool for managing customers and financial movements, so it stores the data you choose to enter:</p>
+      <h3>Business data you enter</h3>
       <ul>
-        <li>Customer records (names, phone numbers, addresses, debt balances).</li>
-        <li>Financial transactions, account movements, and exchange rates.</li>
-        <li>Receipts, invoices, and shop settings (logo, letterhead, shop name).</li>
-        <li>Local notifications scheduled on your device.</li>
-      </ul>
-      <p><strong>This data belongs to you</strong> and is never used by us for any commercial purpose.</p>
-
-      <h3>c. Images and files</h3>
-      <ul>
-        <li>Shop logo and invoice header images you select from your gallery or capture with the camera.</li>
-        <li>Backup files you choose via the document picker.</li>
+        <li>Customer records such as names, phone numbers, addresses, and notes.</li>
+        <li>Financial movements, balances, debts, payments, and exchange rates.</li>
+        <li>Shop settings such as shop name, logo, and PDF letterhead.</li>
+        <li>Files generated by the app, such as account statements, debt reports, and export files.</li>
       </ul>
 
-      <h3>d. Automatically collected data</h3>
+      <h3>Images and files</h3>
       <ul>
-        <li>Login logs, IP address, and timestamps (for security only, via our infrastructure provider).</li>
-        <li>Basic device and OS information (for error reporting).</li>
+        <li>The app may request photo access so you can choose a shop logo or letterhead from your gallery.</li>
+        <li>The app may request camera access so you can capture a logo or document related to your settings.</li>
+        <li>We only access images when you choose or capture them from inside the app.</li>
       </ul>
 
-      <h3>e. What we do NOT collect</h3>
-      <p>The app does <strong>not</strong> collect any of the following:</p>
-      <ul>
-        <li>Precise or approximate location.</li>
-        <li>Audio or microphone recordings.</li>
-        <li>Phone contacts.</li>
-        <li>Calendar entries.</li>
-        <li>Browsing history or advertising identifiers.</li>
-        <li>Health or fitness data.</li>
-      </ul>
-
-      <h2>3. How we use your data</h2>
-      <ul>
-        <li>To provide the app's core functionality: account creation, authentication, data storage and sync.</li>
-        <li>To secure your account (detecting suspicious login attempts, PIN protection).</li>
-        <li>To send in-app notifications related to your activity (debt reminders, due dates, etc.).</li>
-        <li>To improve app performance and fix errors.</li>
-      </ul>
-      <p><strong>We do not sell your data or use it for advertising.</strong></p>
-
-      <h2>4. Who we share data with</h2>
-      <p>We only share data with processors strictly necessary to operate the app:</p>
-      <ul>
-        <li><strong>Supabase Inc.</strong> — our database, authentication, and cloud storage provider.
-          Your data is subject to their privacy policy: <a href="https://supabase.com/privacy" target="_blank" rel="noopener">supabase.com/privacy</a>
-        </li>
-        <li><strong>Google Play Services</strong> — solely for app delivery and updates.</li>
-      </ul>
-      <p>We do not share data with any other third party for marketing or analytics purposes.</p>
-
-      <h2>5. Where data is stored</h2>
+      <h3>Notifications</h3>
       <p>
-        Data is stored on Supabase's cloud servers. Servers may be located outside your country.
-        By using the app, you consent to your data being transferred to and processed on those servers.
+        The app may request notification permission to show alerts related to accounts and movements inside the app.
+        Notifications are not used for advertising.
       </p>
 
-      <h2>6. Data retention</h2>
+      <h3>Technical data</h3>
       <ul>
-        <li>Your data is kept as long as your account is active.</li>
-        <li>You can delete your account at any time from within the app or by contacting us.
-          Upon deletion, all your data is removed within 30 days, except where retention is legally required.</li>
+        <li>IP address, login logs, and timestamps provided by infrastructure services for security and diagnostics.</li>
+        <li>Basic device and operating system information when needed to resolve errors and improve stability.</li>
+      </ul>
+
+      <h2>3. What the app does not collect</h2>
+      <ul>
+        <li>The app does not collect location data.</li>
+        <li>The app does not collect contacts or calendar data.</li>
+        <li>The app does not record audio or use the microphone.</li>
+        <li>The app does not collect health or fitness data.</li>
+        <li>The app does not use advertising identifiers, sell data, or use data for advertising.</li>
+      </ul>
+
+      <h2>4. How we use data</h2>
+      <ul>
+        <li>To provide core app features such as accounts, customers, movements, reports, and export.</li>
+        <li>To sync data between the app and the server.</li>
+        <li>To protect accounts and prevent unauthorized access.</li>
+        <li>To generate PDF and export files requested by the user.</li>
+        <li>To show notifications related to user activity inside the app.</li>
+        <li>To diagnose errors and improve app performance.</li>
+      </ul>
+
+      <h2>5. Data sharing</h2>
+      <p>We share data only with service providers required to operate the app:</p>
+      <ul>
+        <li><strong>Supabase Inc.</strong> for authentication, database, and cloud storage. Their privacy policy is available at <a href="https://supabase.com/privacy">https://supabase.com/privacy</a></li>
+        <li><strong>Google Play Services</strong> for app distribution, updates, and Android platform services.</li>
+      </ul>
+      <p>We do not sell your data or share it with marketing companies or advertising networks.</p>
+
+      <h2>6. Retention and deletion</h2>
+      <ul>
+        <li>We keep data as long as your account is active or as long as needed to operate the app.</li>
+        <li>You can delete your account from the settings screen inside the app.</li>
+        <li>You can also request account deletion at <a href="https://articode.com.tr/akked/delete-account">https://articode.com.tr/akked/delete-account</a></li>
+        <li>When a deletion request is accepted, the account and associated data are deleted within a reasonable period, unless some records must be retained for legal or security reasons.</li>
       </ul>
 
       <h2>7. Your rights</h2>
-      <p>You have the right to:</p>
       <ul>
-        <li><strong>Access</strong> your data (fully available inside the app).</li>
-        <li><strong>Correct</strong> or update your data at any time.</li>
-        <li><strong>Delete</strong> your account and all associated data.</li>
-        <li><strong>Export</strong> your data via the in-app backup feature.</li>
-        <li><strong>Withdraw consent</strong> for data processing.</li>
+        <li>Access your data inside the app.</li>
+        <li>Update or correct your data.</li>
+        <li>Export your data using the export data feature.</li>
+        <li>Request deletion of your account and associated data.</li>
+        <li>Contact us with any privacy-related question.</li>
       </ul>
-      <p>To exercise any of these rights, contact us at: <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a></p>
 
       <h2>8. Data security</h2>
       <ul>
-        <li>Passwords are hashed using a secure algorithm (we never see them in plain text).</li>
-        <li>All communications use encrypted HTTPS.</li>
-        <li>Data access is restricted via Supabase Row Level Security.</li>
-        <li>An optional PIN code adds in-app protection.</li>
+        <li>Data is transmitted over HTTPS.</li>
+        <li>Passwords are not stored in plain text.</li>
+        <li>Data access is restricted by user account and permissions.</li>
+        <li>The app provides an optional PIN for additional on-device protection.</li>
       </ul>
-      <p class="muted">No electronic system can guarantee absolute security.</p>
+      <p class="muted">No electronic system can guarantee absolute security, but we use reasonable safeguards to protect data.</p>
 
-      <h2>9. Children's privacy</h2>
+      <h2>9. Children</h2>
       <p>
-        Akked is intended for adults aged 18 and over for business use.
-        We do not knowingly collect data from children under 13. If we discover such data, it is deleted immediately.
+        The app is intended for adults and business users. It is not directed to children, and we do not knowingly collect children's data.
       </p>
 
-      <h2>10. Permissions requested</h2>
-      <p>The app requests only the following permissions:</p>
-      <ul>
-        <li><strong>Camera</strong> — to capture a shop logo image.</li>
-        <li><strong>Photos &amp; media</strong> — to select a shop logo or invoice header from the gallery.</li>
-        <li><strong>Notifications</strong> — to remind you of due dates and debts.</li>
-        <li><strong>Internet</strong> — to sync with the server.</li>
-      </ul>
-
-      <h2>11. Changes to this policy</h2>
+      <h2>10. Changes to this policy</h2>
       <p>
-        We may update this policy from time to time. The updated version will be published on this page with the new date.
-        Material changes will be announced inside the app.
+        We may update this policy from time to time. The updated version will be published on this page with the updated date.
       </p>
 
-      <h2>12. Contact us</h2>
-      <p>For any privacy-related question, complaint, or request:</p>
+      <h2>11. Contact</h2>
       <p>
-        <strong>{{COMPANY_NAME}}</strong><br />
-        Email: <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a><br />
-        Country: {{COUNTRY}}
+        For privacy questions or account deletion requests, contact us at
+        <a href="mailto:jallalalomary@gmail.com">jallalalomary@gmail.com</a>.
       </p>
     </section>
-
   </main>
 </body>
 </html>

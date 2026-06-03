@@ -142,17 +142,22 @@ function buildGeneratedCustomerHeaderSvg(
   const phoneNumber = escapeXml(customer.phone || '');
   const accountNumber = escapeXml(customer.account_number || '');
   const initials = escapeXml((customer.name?.trim()?.charAt(0) || 'C').toUpperCase());
+  const svgHeight = 460;
+  const nameY = 188;
+  const phoneY = 282;
+  const accountY = 366;
+  const dividerY = 420;
 
   return `
-  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="620" viewBox="0 0 2048 620">
-    <rect width="2048" height="620" fill="#ffffff" />
-    <text x="170" y="188" font-size="62" font-weight="800" fill="#111111">${englishName}</text>
-    ${phoneNumber ? `<text x="170" y="282" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
-    ${accountNumber ? `<text x="170" y="366" font-size="34" font-weight="500" fill="#6B7280">Account: ${accountNumber}</text>` : ``}
+  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="${svgHeight}" viewBox="0 0 2048 ${svgHeight}" direction="ltr">
+    <rect width="2048" height="${svgHeight}" fill="#ffffff" />
+    <text x="170" y="${nameY}" font-size="62" font-weight="800" fill="#111111">${englishName}</text>
+    ${phoneNumber ? `<text x="170" y="${phoneY}" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
+    ${accountNumber ? `<text x="170" y="${accountY}" font-size="34" font-weight="500" fill="#6B7280">Account: ${accountNumber}</text>` : ``}
 
-    <text x="1878" y="150" text-anchor="end" font-size="62" font-weight="800" fill="#111111">${arabicName}</text>
-    ${phoneNumber ? `<text x="1878" y="222" text-anchor="end" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
-    ${accountNumber ? `<text x="1878" y="286" text-anchor="end" font-size="34" font-weight="500" fill="#6B7280">${accountNumber}</text>` : ``}
+    <text x="1878" y="${nameY}" text-anchor="start" font-size="62" font-weight="800" fill="#111111" direction="rtl" unicode-bidi="plaintext">${arabicName}</text>
+    ${phoneNumber ? `<text x="1878" y="${phoneY}" text-anchor="end" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
+    ${accountNumber ? `<text x="1878" y="${accountY}" text-anchor="end" font-size="34" font-weight="500" fill="#6B7280">${accountNumber}</text>` : ``}
 
     <circle cx="1024" cy="218" r="150" fill="#ffffff" stroke="#111111" stroke-width="6" />
     ${
@@ -161,7 +166,7 @@ function buildGeneratedCustomerHeaderSvg(
         : `<text x="1024" y="236" text-anchor="middle" font-size="118" font-weight="700" fill="#111111">${initials}</text>`
     }
 
-    <line x1="150" y1="548" x2="1898" y2="548" stroke="#BDBDBD" stroke-width="3.5" />
+    <line x1="150" y1="${dividerY}" x2="1898" y2="${dividerY}" stroke="#BDBDBD" stroke-width="3.5" />
   </svg>
   `;
 }
@@ -188,19 +193,25 @@ function buildStoredLetterheadHeaderSvg(
   const showLogo = settings.show_logo ?? true;
   const showPhone = settings.show_phone ?? true;
   const initials = escapeXml((settings.business_name?.trim()?.charAt(0) || 'A').toUpperCase());
+  const svgHeight = 460;
+  const borderHeight = 412;
+  const nameY = 188;
+  const phoneY = 282;
+  const addressY = 366;
+  const dividerY = 420;
 
   return `
-  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="620" viewBox="0 0 2048 620">
-    <rect width="2048" height="620" fill="#ffffff" />
-    <rect x="24" y="24" width="2000" height="572" rx="24" fill="#ffffff" stroke="#D4D4D4" stroke-width="2.5" />
+  <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="${svgHeight}" viewBox="0 0 2048 ${svgHeight}" direction="ltr">
+    <rect width="2048" height="${svgHeight}" fill="#ffffff" />
+    <rect x="24" y="24" width="2000" height="${borderHeight}" rx="24" fill="#ffffff" stroke="#D4D4D4" stroke-width="2.5" />
 
-    <text x="170" y="188" font-size="62" font-weight="800" fill="#111111">${englishName}</text>
-    ${showPhone && phoneNumber ? `<text x="170" y="282" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
-    ${addressEn ? `<text x="170" y="366" font-size="34" font-weight="500" fill="#6B7280">${addressEn}</text>` : ``}
+    <text x="170" y="${nameY}" font-size="62" font-weight="800" fill="#111111">${englishName}</text>
+    ${showPhone && phoneNumber ? `<text x="170" y="${phoneY}" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
+    ${addressEn ? `<text x="170" y="${addressY}" font-size="34" font-weight="500" fill="#6B7280">${addressEn}</text>` : ``}
 
-    <text x="1878" y="150" text-anchor="end" font-size="62" font-weight="800" fill="#111111">${arabicName}</text>
-    ${showPhone && phoneNumber ? `<text x="1878" y="222" text-anchor="end" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
-    ${addressAr ? `<text x="1878" y="286" text-anchor="end" font-size="34" font-weight="500" fill="#6B7280">${addressAr}</text>` : ``}
+    <text x="1878" y="${nameY}" text-anchor="start" font-size="62" font-weight="800" fill="#111111" direction="rtl" unicode-bidi="plaintext">${arabicName}</text>
+    ${showPhone && phoneNumber ? `<text x="1878" y="${phoneY}" text-anchor="end" font-size="36" font-weight="500" fill="#4B5563">${phoneNumber}</text>` : ``}
+    ${addressAr ? `<text x="1878" y="${addressY}" text-anchor="start" font-size="34" font-weight="500" fill="#6B7280" direction="rtl" unicode-bidi="plaintext">${addressAr}</text>` : ``}
 
     ${showLogo ? `
       <circle cx="1024" cy="218" r="150" fill="#ffffff" stroke="#111111" stroke-width="6" />
@@ -210,7 +221,7 @@ function buildStoredLetterheadHeaderSvg(
       }
     ` : ``}
 
-    <line x1="150" y1="548" x2="1898" y2="548" stroke="#BDBDBD" stroke-width="3.5" />
+    <line x1="150" y1="${dividerY}" x2="1898" y2="${dividerY}" stroke="#BDBDBD" stroke-width="3.5" />
   </svg>
   `;
 }

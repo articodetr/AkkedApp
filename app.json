@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Akked",
+    "name": "أكِّد",
     "slug": "articodeapp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -26,9 +26,7 @@
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.VIBRATE",
-        "android.permission.SCHEDULE_EXACT_ALARM",
-        "android.permission.USE_EXACT_ALARM"
+        "android.permission.VIBRATE"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
@@ -81,8 +79,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "يحتاج تطبيق عَقَّدْ إلى صلاحية الوصول إلى الصور لاختيار شعار المتجر وترويسة الفواتير.",
-          "cameraPermission": "يحتاج تطبيق عَقَّدْ إلى صلاحية الكاميرا لالتقاط صورة لشعار المتجر.",
+          "photosPermission": "يحتاج تطبيق أكِّد إلى صلاحية الوصول إلى الصور لاختيار شعار المتجر وترويسة الفواتير.",
+          "cameraPermission": "يحتاج تطبيق أكِّد إلى صلاحية الكاميرا لالتقاط صورة لشعار المتجر.",
           "microphonePermission": false
         }
       ],
@@ -134,6 +132,12 @@
       "EXPO_PUBLIC_SUPABASE_URL": "https://hnaudgieczuzuduplhkp.supabase.co",
       "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuYXVkZ2llY3p1enVkdXBsaGtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTE3OTYsImV4cCI6MjA5MDM4Nzc5Nn0.alA4zTeQLwEPcepUVrfyAPaneJNtNaN9QmQJrNJRqm8",
       "router": {},
+      "legal": {
+        "website": "https://articode.com.tr",
+        "privacyPolicyUrl": "https://articode.com.tr/akked/privacy-policy",
+        "accountDeletionUrl": "https://articode.com.tr/akked/delete-account",
+        "supportEmail": "jallalalomary@gmail.com"
+      },
       "eas": {
         "projectId": "f6c89bb9-f1ac-4863-91f0-8d02da4f59af"
       }
