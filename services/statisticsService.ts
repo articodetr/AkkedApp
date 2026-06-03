@@ -473,16 +473,19 @@ export class StatisticsService {
       throw new Error(`فشل تحميل الإحصاءات من قاعدة البيانات: ${error.message}`);
     }
 
-    const debug = await this.fetchStatisticsDebug(userId);
-    const normalized = normalizeStatisticsPayload(data, debug);
+    const normalized = normalizeStatisticsPayload(data, null);
 
+    // لا نطلب بيانات التشخيص في كل تحميل ناجح — فهي غير معروضة في الواجهة
+    // وتُضيف طلب خادم ثانٍ ثقيلاً يُبطئ الشاشة. نطلبها فقط عند نتيجة صفرية
+    // مشبوهة (قد تدل على مشكلة) للمساعدة في التشخيص.
     if (
       normalized.totalMovements === 0 &&
-      normalized.cashFlowByCurrency.length === 0 &&
-      debug &&
-      debug.scopedMovements > 0
+      normalized.cashFlowByCurrency.length === 0
     ) {
-      console.warn('[StatisticsService] Statistics returned zero, but debug found scoped movements:', debug);
+      const debug = await this.fetchStatisticsDebug(userId);
+      if (debug && debug.scopedMovements > 0) {
+        console.warn('[StatisticsService] Statistics returned zero, but debug found scoped movements:', debug);
+      }
     }
 
     return normalized;

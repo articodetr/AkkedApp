@@ -3,6 +3,12 @@
     "name": "أكِّد",
     "slug": "articodeapp",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f6c89bb9-f1ac-4863-91f0-8d02da4f59af"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "akked",
