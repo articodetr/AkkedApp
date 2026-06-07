@@ -29,6 +29,11 @@ import {
   isCustomerAccountNumberConflict,
 } from '@/utils/customerAccountNumber';
 import { validateNumericInput } from '@/utils/numericValidation';
+import {
+  FREE_CUSTOMER_LIMIT,
+  isCustomerLimitReachedMessage,
+} from '@/utils/subscriptionUpgradeRequest';
+import { SubscriptionLimitUpgradeModal } from '@/components/SubscriptionLimitUpgradeModal';
 
 type CustomerType = 'regular' | 'linked';
 
@@ -72,6 +77,12 @@ export default function AddCustomerScreen() {
 
   const [showAdditionalFields, setShowAdditionalFields] = useState(false);
   const [formData, setFormData] = useState<FormDataState>(EMPTY_FORM);
+
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [limitQuota, setLimitQuota] = useState<{
+    customerCount: number | null;
+    customerLimit: number;
+  } | null>(null);
 
   useEffect(() => {
     if (customerId) {
@@ -277,10 +288,61 @@ export default function AddCustomerScreen() {
     }
   };
 
+  const currentUserInfo = {
+    userId: currentUser?.userId ?? null,
+    userName: currentUser?.userName ?? null,
+    fullName: currentUser?.fullName ?? null,
+    accountNumber: currentUser?.accountNumber ?? null,
+  };
+
+  // عدّ عملاء المستخدم الحاليين (عاديون + مربوطون)، باستثناء حساب الأرباح/الخسائر الثابت.
+  const getCustomerCount = async (): Promise<number | null> => {
+    if (!currentUser?.userId) return null;
+
+    const { count, error } = await supabase
+      .from('customers')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', currentUser.userId)
+      .or('is_profit_loss_account.is.null,is_profit_loss_account.is.false');
+
+    if (error) {
+      console.warn('[add-customer] Failed to count customers:', error);
+      return null;
+    }
+
+    return count ?? 0;
+  };
+
+  const openLimitModal = (count: number | null) => {
+    setLimitQuota({
+      customerCount: typeof count === 'number' ? count : null,
+      customerLimit: FREE_CUSTOMER_LIMIT,
+    });
+    setShowLimitModal(true);
+  };
+
+  // شبكة أمان: إذا أعادت قاعدة البيانات رسالة تجاوز الحد (سباق بيانات نادر)،
+  // نعرض نافذة الاشتراك بدل رسالة خطأ عامة.
+  const maybeHandleLimitMessage = async (message?: string | null) => {
+    if (!isCustomerLimitReachedMessage(message)) return false;
+    const count = await getCustomerCount();
+    openLimitModal(count);
+    return true;
+  };
+
   const handleSubmit = async () => {
     if (!currentUser?.userId) {
       Alert.alert('خطأ', 'يجب تسجيل الدخول أولاً');
       return;
+    }
+
+    // فحص الحد المجاني قبل أي إضافة جديدة (لا ينطبق على وضع التعديل).
+    if (!isEditMode) {
+      const count = await getCustomerCount();
+      if (typeof count === 'number' && count >= FREE_CUSTOMER_LIMIT) {
+        openLimitModal(count);
+        return;
+      }
     }
 
     if (customerType === 'linked' && !isEditMode) {
@@ -311,12 +373,17 @@ export default function AddCustomerScreen() {
               onPress: () => router.back(),
             },
           ]);
+        } else if (await maybeHandleLimitMessage(result?.message)) {
+          // تم عرض نافذة الاشتراك بدل رسالة الخطأ.
         } else {
           Alert.alert('خطأ', result?.message || 'حدث خطأ أثناء ربط المستخدم');
         }
       } catch (error) {
         console.error('Error linking user:', error);
-        Alert.alert('خطأ', 'حدث خطأ أثناء ربط المستخدم كعميل');
+        const message = (error as { message?: string })?.message;
+        if (!(await maybeHandleLimitMessage(message))) {
+          Alert.alert('خطأ', 'حدث خطأ أثناء ربط المستخدم كعميل');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -364,7 +431,10 @@ export default function AddCustomerScreen() {
       }
     } catch (error) {
       console.error('Error saving customer:', error);
-      Alert.alert('خطأ', getCustomerSaveErrorMessage(error, isEditMode));
+      const message = (error as { message?: string })?.message;
+      if (!(await maybeHandleLimitMessage(message))) {
+        Alert.alert('خطأ', getCustomerSaveErrorMessage(error, isEditMode));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -641,6 +711,13 @@ export default function AddCustomerScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <SubscriptionLimitUpgradeModal
+        visible={showLimitModal}
+        currentUser={currentUserInfo}
+        quota={limitQuota}
+        onClose={() => setShowLimitModal(false)}
+      />
     </View>
   );
 }
