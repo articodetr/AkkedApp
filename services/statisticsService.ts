@@ -475,6 +475,37 @@ export class StatisticsService {
 
     const normalized = normalizeStatisticsPayload(data, null);
 
+    // عمولات النظام الجديد تسكن حساب الأرباح والخسائر الخاص بالمستخدم،
+    // وget_app_statistics يستثني حسابات الأرباح والخسائر من نطاقه، لذلك
+    // تُدمج من ملخص مستقل (بالصافي: الدخل - المصروف).
+    try {
+      const { data: plSummary, error: plError } = await supabase.rpc('get_commission_pl_summary', {
+        p_user_id: userId,
+      });
+
+      if (!plError && Array.isArray(plSummary)) {
+        const merged = new Map<string, number>();
+        for (const entry of normalized.commissionStats.commissionByCurrency) {
+          merged.set(entry.currency, entry.total);
+        }
+        for (const row of plSummary as Array<Record<string, unknown>>) {
+          const currency = asString(row?.currency);
+          if (!currency) continue;
+          const net = asNumber(row?.net);
+          merged.set(currency, (merged.get(currency) || 0) + net);
+        }
+        normalized.commissionStats.commissionByCurrency = Array.from(merged.entries())
+          .map(([currency, total]) => ({ currency, total }))
+          .filter((entry) => entry.total !== 0);
+        normalized.commissionStats.totalCommission = normalized.commissionStats.commissionByCurrency.reduce(
+          (max, entry) => (Math.abs(entry.total) > Math.abs(max) ? entry.total : max),
+          0,
+        );
+      }
+    } catch (plSummaryError) {
+      console.warn('[StatisticsService] get_commission_pl_summary failed:', plSummaryError);
+    }
+
     // لا نطلب بيانات التشخيص في كل تحميل ناجح — فهي غير معروضة في الواجهة
     // وتُضيف طلب خادم ثانٍ ثقيلاً يُبطئ الشاشة. نطلبها فقط عند نتيجة صفرية
     // مشبوهة (قد تدل على مشكلة) للمساعدة في التشخيص.

@@ -229,10 +229,23 @@ export function generateAccountStatementHTML(
             ? formatAmount(combinedAmount)
             : '-';
 
+          // النظام الجديد: amount = الإجمالي، والتفصيل يظهر في البيان فقط
+          // حتى يبقى الرصيد الجاري مبنياً على إجمالي حركة العميل.
+          const newCommission = Number((movement as any).commission_amount) || 0;
+          const commissionNote = newCommission > 0
+            ? `<div style="font-size: 10px; color: #6B7280;">أساسي ${formatAmount(Number((movement as any).base_amount) || 0)} + عمولة ${formatAmount(newCommission)}${
+                (movement as any).commission_owner === 'account_owner'
+                  ? ' (العمولة للعميل)'
+                  : (movement as any).commission_owner === 'current_user'
+                    ? ' (العمولة لنا)'
+                    : ''
+              }</div>`
+            : '';
+
           return `
           <tr>
             <td class="cell text-center">${dateStr}</td>
-            <td class="cell" style="text-align: right; padding-right: 12px;">${movement.notes || movement.movement_number}</td>
+            <td class="cell" style="text-align: right; padding-right: 12px;">${movement.notes || movement.movement_number}${commissionNote}</td>
             <td class="cell text-center">${incomingAmount}</td>
             <td class="cell text-center">${outgoingAmount}</td>
             <td class="cell text-center">${balanceDisplay}</td>

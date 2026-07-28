@@ -110,6 +110,10 @@ export interface AccountMovement {
   mirror_movement_id?: string;
   is_commission_movement?: boolean;
   related_commission_movement_id?: string;
+  base_amount?: number | null;
+  commission_amount?: number | null;
+  commission_owner?: 'account_owner' | 'current_user' | null;
+  operation_group_id?: string | null;
   created_by_user_id?: string;
   created_by_user_name?: string;
   source_user_id?: string;

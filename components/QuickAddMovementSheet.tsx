@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
 import { ArrowDownCircle, ArrowUpCircle, Save, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,6 +23,13 @@ import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { supabase } from '@/lib/supabase';
 import { Currency, CURRENCIES } from '@/types/database';
 import { isPendingMovement } from '@/utils/movementApproval';
+import {
+  CommissionOwner,
+  computeMovementEffects,
+  getCommissionOwnerLabel,
+  getProfitLossEffectLabel,
+} from '@/utils/movementEffects';
+import { validateNumericInput } from '@/utils/numericValidation';
 
 interface QuickAddMovementSheetProps {
   visible: boolean;
@@ -56,12 +64,20 @@ export default function QuickAddMovementSheet({
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<Currency>('USD' as Currency);
   const [notes, setNotes] = useState('');
+  const [commissionEnabled, setCommissionEnabled] = useState(false);
+  const [commissionAmount, setCommissionAmount] = useState('');
+  const [commissionOwner, setCommissionOwner] = useState<CommissionOwner | null>(null);
+  const [commissionError, setCommissionError] = useState<string | null>(null);
+  const [operationId, setOperationId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
   useEffect(() => {
     if (visible) {
       loadLastUsedCurrency();
+      // مفتاح منع التكرار: يثبت طوال جلسة الإدخال حتى تنجح العملية،
+      // فإعادة المحاولة بعد انقطاع الشبكة لا تنشئ حركة مكررة.
+      setOperationId(Crypto.randomUUID());
       if (initialMovementType) {
         setMovementType(initialMovementType);
       }
@@ -93,6 +109,11 @@ export default function QuickAddMovementSheet({
     setMovementType('');
     setAmount('');
     setNotes('');
+    setCommissionEnabled(false);
+    setCommissionAmount('');
+    setCommissionOwner(null);
+    setCommissionError(null);
+    setOperationId('');
   };
 
   const getCurrencySymbol = (code: string) => {
@@ -100,16 +121,22 @@ export default function QuickAddMovementSheet({
     return curr?.symbol || code;
   };
 
+  const parsedBaseAmount = parseFloat(amount) || 0;
+  const parsedCommissionAmount = commissionEnabled ? parseFloat(commissionAmount) || 0 : 0;
+  const movementEffects = movementType
+    ? computeMovementEffects({
+        movementType,
+        baseAmount: parsedBaseAmount,
+        commissionAmount: parsedCommissionAmount,
+        commissionOwner: commissionEnabled ? commissionOwner : null,
+      })
+    : null;
+
   const calculateProjectedBalance = () => {
-    const amountNum = parseFloat(amount) || 0;
     const currentBalance = currentBalances.find((item) => item.currency === currency)?.balance || 0;
 
-    if (movementType === 'incoming') {
-      return currentBalance + amountNum;
-    }
-
-    if (movementType === 'outgoing') {
-      return currentBalance - amountNum;
+    if (movementEffects?.valid) {
+      return currentBalance + movementEffects.customerSignedEffect;
     }
 
     return currentBalance;
@@ -222,6 +249,22 @@ export default function QuickAddMovementSheet({
       return;
     }
 
+    if (commissionEnabled) {
+      const parsedCommission = parseFloat(commissionAmount);
+      if (!commissionAmount || !(parsedCommission > 0)) {
+        Alert.alert('خطأ', 'قيمة العمولة يجب أن تكون أكبر من صفر');
+        return;
+      }
+      if (!commissionOwner) {
+        Alert.alert('خطأ', 'يجب تحديد صاحب العمولة');
+        return;
+      }
+      if (movementEffects && !movementEffects.valid) {
+        Alert.alert('خطأ', movementEffects.error || 'بيانات العمولة غير صالحة');
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
@@ -232,23 +275,23 @@ export default function QuickAddMovementSheet({
 
       await ensureReciprocalLinkedCustomer();
 
-      const { data: insertedData, error } = await supabase.rpc('insert_movement_with_user', {
+      const { data: insertedData, error } = await supabase.rpc('create_movement_with_commission', {
         p_user_name: currentUser.userName,
         p_customer_id: customerId,
         p_movement_type: movementType,
-        p_amount: parsedAmount,
+        p_base_amount: parsedAmount,
         p_currency: currency,
         p_notes: trimmedNotes,
+        p_commission_amount: commissionEnabled ? parseFloat(commissionAmount) : null,
+        p_commission_owner: commissionEnabled ? commissionOwner : null,
+        p_operation_id: operationId || null,
         p_sender_name: movementType === 'outgoing' ? customerName : currentUser.fullName || currentUser.userName,
         p_beneficiary_name: movementType === 'outgoing' ? currentUser.fullName || currentUser.userName : customerName,
-        p_commission: null,
-        p_commission_currency: currency,
-        p_commission_recipient_id: null,
       });
 
       if (error) throw error;
 
-      if (!insertedData || (Array.isArray(insertedData) && insertedData.length === 0)) {
+      if (!insertedData) {
         throw new Error('لم يتم إرجاع بيانات الحركة');
       }
 
@@ -407,9 +450,183 @@ export default function QuickAddMovementSheet({
                   />
                 </View>
 
+                <View style={styles.section}>
+                  <View style={styles.commissionToggleRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.commissionToggleButton,
+                        !commissionEnabled && styles.commissionToggleButtonActive,
+                      ]}
+                      onPress={() => {
+                        setCommissionEnabled(false);
+                        setCommissionAmount('');
+                        setCommissionOwner(null);
+                        setCommissionError(null);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.commissionToggleText,
+                          !commissionEnabled && styles.commissionToggleTextActive,
+                        ]}
+                      >
+                        بدون عمولة
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.commissionToggleButton,
+                        commissionEnabled && styles.commissionToggleButtonActive,
+                      ]}
+                      onPress={() => setCommissionEnabled(true)}
+                    >
+                      <Text
+                        style={[
+                          styles.commissionToggleText,
+                          commissionEnabled && styles.commissionToggleTextActive,
+                        ]}
+                      >
+                        إضافة عمولة
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {commissionEnabled && (
+                    <>
+                      <View style={styles.commissionAmountRow}>
+                        <View style={styles.commissionCurrencyChip}>
+                          <Text style={styles.commissionCurrencyChipText}>{currency}</Text>
+                          <Text style={styles.commissionCurrencyChipSymbol}>
+                            {getCurrencySymbol(currency)}
+                          </Text>
+                        </View>
+                        <TextInput
+                          style={[styles.commissionInput, commissionError ? styles.commissionInputError : null]}
+                          value={commissionAmount}
+                          onChangeText={(text) => {
+                            const validation = validateNumericInput(text, { allowDecimal: true });
+                            setCommissionAmount(validation.cleanedValue);
+                            setCommissionError(validation.error);
+                          }}
+                          placeholder="قيمة العمولة"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="decimal-pad"
+                          textAlign="center"
+                        />
+                      </View>
+                      {commissionError ? (
+                        <Text style={styles.commissionErrorText}>{commissionError}</Text>
+                      ) : null}
+                      <Text style={styles.commissionCurrencyNote}>
+                        العمولة بنفس عملة الحركة دائماً
+                      </Text>
+
+                      <View style={styles.commissionOwnerRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.commissionOwnerButton,
+                            commissionOwner === 'account_owner' && styles.commissionOwnerButtonActive,
+                          ]}
+                          onPress={() => setCommissionOwner('account_owner')}
+                        >
+                          <Text
+                            style={[
+                              styles.commissionOwnerText,
+                              commissionOwner === 'account_owner' && styles.commissionOwnerTextActive,
+                            ]}
+                          >
+                            العمولة للعميل
+                          </Text>
+                          <Text
+                            style={[
+                              styles.commissionOwnerSubtext,
+                              commissionOwner === 'account_owner' && styles.commissionOwnerTextActive,
+                            ]}
+                          >
+                            تُحسب لصالح {customerName || 'العميل'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.commissionOwnerButton,
+                            commissionOwner === 'current_user' && styles.commissionOwnerButtonActive,
+                          ]}
+                          onPress={() => setCommissionOwner('current_user')}
+                        >
+                          <Text
+                            style={[
+                              styles.commissionOwnerText,
+                              commissionOwner === 'current_user' && styles.commissionOwnerTextActive,
+                            ]}
+                          >
+                            العمولة لي
+                          </Text>
+                          <Text
+                            style={[
+                              styles.commissionOwnerSubtext,
+                              commissionOwner === 'current_user' && styles.commissionOwnerTextActive,
+                            ]}
+                          >
+                            ربح لحسابي
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </View>
+
                 {!!amount && !!movementType && (
                   <View style={styles.previewSection}>
                     <Text style={styles.previewTitle}>معاينة الأثر</Text>
+
+                    {commissionEnabled && movementEffects && !movementEffects.valid && (
+                      <Text style={styles.previewErrorText}>{movementEffects.error}</Text>
+                    )}
+
+                    {commissionEnabled && movementEffects?.valid && movementEffects.commissionAmount > 0 && (
+                      <>
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewValue}>
+                            {movementEffects.baseAmount.toFixed(2)} {getCurrencySymbol(currency)}
+                          </Text>
+                          <Text style={styles.previewLabel}>المبلغ الأساسي:</Text>
+                        </View>
+
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewValue}>
+                            {movementEffects.commissionAmount.toFixed(2)} {getCurrencySymbol(currency)} (
+                            {getCommissionOwnerLabel(movementEffects.commissionOwner)})
+                          </Text>
+                          <Text style={styles.previewLabel}>العمولة:</Text>
+                        </View>
+
+                        <View style={styles.previewRow}>
+                          <Text style={[styles.previewValue, styles.previewValueBold]}>
+                            {movementEffects.customerTotalAmount.toFixed(2)} {getCurrencySymbol(currency)}{' '}
+                            {movementEffects.customerType === 'incoming' ? 'له' : 'عليه'}
+                          </Text>
+                          <Text style={styles.previewLabel}>إجمالي حركة العميل:</Text>
+                        </View>
+
+                        <View style={styles.previewRow}>
+                          <Text
+                            style={[
+                              styles.previewValue,
+                              {
+                                color:
+                                  movementEffects.profitLossType === 'incoming' ? '#10B981' : '#EF4444',
+                              },
+                            ]}
+                          >
+                            {movementEffects.profitLossAmount.toFixed(2)} {getCurrencySymbol(currency)}{' '}
+                            {getProfitLossEffectLabel(movementEffects.profitLossType)}
+                          </Text>
+                          <Text style={styles.previewLabel}>الأرباح والخسائر:</Text>
+                        </View>
+                      </>
+                    )}
 
                     <View style={styles.previewRow}>
                       <Text style={styles.previewValue}>{formatBalance(currentBalance)}</Text>
@@ -661,6 +878,122 @@ const styles = StyleSheet.create({
     color: '#111827',
     minHeight: 84,
     textAlignVertical: 'top',
+  },
+  commissionToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  commissionToggleButton: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  commissionToggleButtonActive: {
+    backgroundColor: '#4F46E5',
+    borderColor: '#4F46E5',
+  },
+  commissionToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  commissionToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  commissionAmountRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  commissionCurrencyChip: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    width: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commissionCurrencyChipText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#4F46E5',
+  },
+  commissionCurrencyChipSymbol: {
+    fontSize: 11,
+    color: '#6366F1',
+    marginTop: 2,
+  },
+  commissionInput: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  commissionInputError: {
+    borderColor: '#EF4444',
+  },
+  commissionErrorText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#EF4444',
+    textAlign: 'right',
+  },
+  commissionCurrencyNote: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'right',
+  },
+  commissionOwnerRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  commissionOwnerButton: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  commissionOwnerButtonActive: {
+    backgroundColor: '#0EA5E9',
+    borderColor: '#0EA5E9',
+  },
+  commissionOwnerText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  commissionOwnerSubtext: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  commissionOwnerTextActive: {
+    color: '#FFFFFF',
+  },
+  previewErrorText: {
+    fontSize: 13,
+    color: '#EF4444',
+    textAlign: 'right',
+    marginBottom: 8,
+    lineHeight: 20,
   },
   previewSection: {
     backgroundColor: '#F9FAFB',

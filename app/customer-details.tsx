@@ -40,6 +40,7 @@ import {
   normalizeMovementApprovalStatus,
   requiresCounterpartyApproval,
 } from '@/utils/movementApproval';
+import { getCommissionOwnerLabel, getMovementDisplayParts } from '@/utils/movementEffects';
 
 
 function sanitizeStatementPdfFileName(value: string | number | null | undefined): string {
@@ -217,8 +218,16 @@ function calculateBalanceByCurrency(
   return Object.values(currencyMap).filter((item) => item.balance !== 0);
 }
 
-function shouldIncludeMovementInBalance(movement: AccountMovement): boolean {
-  return !(movement as any).is_commission_movement && isPostedMovement(movement);
+function shouldIncludeMovementInBalance(
+  movement: AccountMovement,
+  includeCommissionRows = false,
+): boolean {
+  // قيود العمولة تُستثنى من أرصدة العملاء، لكنها هي نفسها رصيد حساب
+  // الأرباح والخسائر فتُحتسب هناك.
+  if ((movement as any).is_commission_movement && !includeCommissionRows) {
+    return false;
+  }
+  return isPostedMovement(movement);
 }
 
 function calculateRunningBalanceAfterMovement(
@@ -350,22 +359,6 @@ function getCombinedAmount(
   );
 
   return baseAmount + commissionTotal;
-}
-
-function getRelatedCommission(
-  movement: AccountMovement,
-  allMovements: AccountMovement[],
-): number {
-  const relatedCommissions = allMovements.filter(
-    (m) =>
-      (m as any).is_commission_movement === true &&
-      (m as any).related_commission_movement_id === movement.id &&
-      m.customer_id === movement.customer_id &&
-      m.movement_type === movement.movement_type &&
-      m.currency === movement.currency
-  );
-
-  return relatedCommissions.reduce((sum, m) => sum + Number(m.amount), 0);
 }
 
 function isMovementCreatedByCurrentUser(
@@ -592,7 +585,10 @@ export default function CustomerDetailsScreen() {
       setVisibleCount(PAGE_SIZE);
 
       const approvedOnlyMovements = movementsData.filter((m) =>
-        shouldIncludeMovementInBalance(m as AccountMovement)
+        shouldIncludeMovementInBalance(
+          m as AccountMovement,
+          Boolean(customerResult.data?.is_profit_loss_account),
+        )
       );
 
       const incoming =
@@ -659,7 +655,7 @@ export default function CustomerDetailsScreen() {
   const handleWhatsApp = async () => {
     if (customer?.phone) {
       const cleanPhone = customer.phone.replace(/[^0-9]/g, '');
-      const approvedOnlyMovements = movements.filter(shouldIncludeMovementInBalance);
+      const approvedOnlyMovements = movements.filter((m) => shouldIncludeMovementInBalance(m, Boolean(customer?.is_profit_loss_account)));
       const balances = calculateBalanceByCurrency(approvedOnlyMovements);
 
       const templates = await fetchWhatsAppTemplates();
@@ -700,7 +696,7 @@ export default function CustomerDetailsScreen() {
       return;
     }
 
-    const approvedOnlyMovements = movements.filter(shouldIncludeMovementInBalance);
+    const approvedOnlyMovements = movements.filter((m) => shouldIncludeMovementInBalance(m, Boolean(customer?.is_profit_loss_account)));
 
     if (approvedOnlyMovements.length === 0) {
       Alert.alert('تنبيه', 'لا توجد حركات معتمدة لطباعتها');
@@ -826,7 +822,7 @@ export default function CustomerDetailsScreen() {
     const previous: AccountMovement[] = [];
 
     movements.forEach((movement) => {
-      if (!shouldIncludeMovementInBalance(movement)) {
+      if (!shouldIncludeMovementInBalance(movement, Boolean(customer?.is_profit_loss_account))) {
         return;
       }
 
@@ -842,7 +838,7 @@ export default function CustomerDetailsScreen() {
   };
 
   const handlePrintAll = () => {
-    executePrint(movements.filter(shouldIncludeMovementInBalance));
+    executePrint(movements.filter((m) => shouldIncludeMovementInBalance(m, Boolean(customer?.is_profit_loss_account))));
   };
 
   const handleSettleUp = () => {
@@ -885,7 +881,7 @@ export default function CustomerDetailsScreen() {
       return;
     }
 
-    const approvedOnlyMovements = movements.filter(shouldIncludeMovementInBalance);
+    const approvedOnlyMovements = movements.filter((m) => shouldIncludeMovementInBalance(m, Boolean(customer?.is_profit_loss_account)));
     const approvedBalances = calculateBalanceByCurrency(approvedOnlyMovements);
     const hasApprovedBalance =
       approvedBalances.length > 0 && approvedBalances.some((b) => b.balance !== 0);
@@ -980,7 +976,7 @@ export default function CustomerDetailsScreen() {
     if (!customer) return;
 
     const templates = await fetchWhatsAppTemplates();
-    const approvedOnlyMovements = movements.filter(shouldIncludeMovementInBalance);
+    const approvedOnlyMovements = movements.filter((m) => shouldIncludeMovementInBalance(m, Boolean(customer?.is_profit_loss_account)));
     const balances = calculateBalanceByCurrency(approvedOnlyMovements);
 
     const balancesText = balances.length === 0
@@ -1115,7 +1111,9 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
       );
     });
 
-  const approvedMovements = movements.filter((movement) => shouldIncludeMovementInBalance(movement));
+  const approvedMovements = movements.filter((movement) =>
+    shouldIncludeMovementInBalance(movement, Boolean(customer?.is_profit_loss_account)),
+  );
 
   const pendingMovements = movements.filter(
     (movement) =>
@@ -1652,11 +1650,17 @@ const handleDeleteMovement = (_movement: AccountMovement) => {
 	                        >
 	                          {formatSmartNumber(getCombinedAmount(movement, movements))}
 	                        </Text>
-	                        {getRelatedCommission(movement, movements) > 0 && (
-	                          <Text style={styles.commissionBadge}>
-	                            شامل {formatSmartNumber(getRelatedCommission(movement, movements))} عمولة
-	                          </Text>
-	                        )}
+	                        {(() => {
+	                          const parts = getMovementDisplayParts(movement as any, movements as any[]);
+	                          if (!parts.hasCommission) return null;
+	                          const ownerLabel = getCommissionOwnerLabel(parts.commissionOwner);
+	                          return (
+	                            <Text style={styles.commissionBadge}>
+	                              شامل {formatSmartNumber(parts.commissionAmount)} عمولة
+	                              {ownerLabel ? ` — ${ownerLabel}` : ''}
+	                            </Text>
+	                          );
+	                        })()}
 	                        <Text style={styles.movementLabel}>
 	                          {(movement as any).is_internal_transfer
 	                            ? 'تحويل'

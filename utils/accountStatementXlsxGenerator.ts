@@ -567,7 +567,7 @@ function buildWorksheetRows(options: AccountStatementXlsxOptions) {
 
   printedMovements.forEach((movement, index) => {
     const amount = getCombinedAmountFromPool(movement, movementPool);
-    const relatedCommission = movementPool
+    const legacyRelatedCommission = movementPool
       .filter(
         (item) =>
           (item as any).is_commission_movement === true &&
@@ -577,6 +577,10 @@ function buildWorksheetRows(options: AccountStatementXlsxOptions) {
           item.currency === movement.currency,
       )
       .reduce((sum, item) => sum + Number(item.amount), 0);
+    // النظام الجديد يخزن العمولة في commission_amount مباشرة (وamount يشمل
+    // الإجمالي)؛ الصفوف القديمة تعتمد على صفوف العمولة المنفصلة إن وُجدت.
+    const newCommission = Number((movement as any).commission_amount) || 0;
+    const relatedCommission = newCommission > 0 ? newCommission : legacyRelatedCommission;
 
     runningBalances[movement.currency] =
       (runningBalances[movement.currency] || 0) +

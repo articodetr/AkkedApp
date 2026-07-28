@@ -44,6 +44,7 @@ import {
   normalizeMovementApprovalStatus,
 } from '@/utils/movementApproval';
 import { formatSmartNumber } from '@/utils/arabicFormat';
+import { getCommissionOwnerLabel, getProfitLossEffectLabel } from '@/utils/movementEffects';
 
 export default function MovementDetailsScreen() {
   const router = useRouter();
@@ -55,6 +56,7 @@ export default function MovementDetailsScreen() {
   const [customerAccountNumber, setCustomerAccountNumber] = useState<string>('');
   const [customerLinkedUserId, setCustomerLinkedUserId] = useState<string | null>(null);
   const [relatedCommissionMovements, setRelatedCommissionMovements] = useState<AccountMovement[]>([]);
+  const [profitLossEntries, setProfitLossEntries] = useState<AccountMovement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
@@ -158,6 +160,13 @@ export default function MovementDetailsScreen() {
             c.currency === resolvedMovement.currency
         );
         setRelatedCommissionMovements(customerCommissions);
+        // قيود الأرباح والخسائر للنظام الجديد تكون على حساب مختلف (حساب
+        // الأرباح والخسائر الخاص بالمستخدم) وليست على حساب العميل نفسه.
+        setProfitLossEntries(
+          commissionsResult.data.filter(
+            (c) => c.customer_id !== resolvedMovement.customer_id,
+          ),
+        );
       }
     } catch (error) {
       console.error('Error loading movement:', error);
@@ -402,7 +411,90 @@ const handleDelete = () => {
               </Text>
             </View>
           )}
+          {Number(movement.commission_amount) > 0 && (
+            <View style={styles.amountBreakdown}>
+              <Text style={styles.breakdownLabel}>
+                المبلغ الأساسي: {formatSmartNumber(Number(movement.base_amount) || 0)}{' '}
+                {getCurrencySymbol(movement.currency)}
+              </Text>
+              <Text style={styles.breakdownLabel}>
+                العمولة: {formatSmartNumber(Number(movement.commission_amount))}{' '}
+                {getCurrencySymbol(movement.currency)}
+                {movement.commission_owner
+                  ? ` — ${getCommissionOwnerLabel(movement.commission_owner)}`
+                  : ''}
+              </Text>
+            </View>
+          )}
         </View>
+
+        {Number(movement.commission_amount) > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>تفاصيل العمولة</Text>
+
+            <View style={styles.infoCard}>
+              <View style={styles.infoRow}>
+                <View style={styles.infoIconContainer}>
+                  <DollarSign size={20} color="#6B7280" />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>صاحب العمولة</Text>
+                  <Text style={styles.infoValue}>
+                    {getCommissionOwnerLabel(movement.commission_owner)}
+                  </Text>
+                </View>
+              </View>
+
+              {profitLossEntries.length > 0 && (
+                <View style={styles.infoRow}>
+                  <View style={styles.infoIconContainer}>
+                    <FileText size={20} color="#6B7280" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>قيد الأرباح والخسائر</Text>
+                    {profitLossEntries.map((entry) => (
+                      <Text
+                        key={entry.id}
+                        style={[
+                          styles.infoValue,
+                          { color: entry.movement_type === 'incoming' ? '#10B981' : '#EF4444' },
+                        ]}
+                      >
+                        {getProfitLossEffectLabel(entry.movement_type as 'incoming' | 'outgoing')}{' '}
+                        {formatSmartNumber(Number(entry.amount))} {getCurrencySymbol(entry.currency)}{' '}
+                        — {getMovementApprovalLabel(entry)}
+                      </Text>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {movement.operation_group_id && (
+                <View style={styles.infoRow}>
+                  <View style={styles.infoIconContainer}>
+                    <Hash size={20} color="#6B7280" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>رقم العملية الموحد</Text>
+                    <Text style={styles.infoSubValue}>{movement.operation_group_id}</Text>
+                  </View>
+                </View>
+              )}
+
+              {movement.created_by_user_name && (
+                <View style={styles.infoRow}>
+                  <View style={styles.infoIconContainer}>
+                    <User size={20} color="#6B7280" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>أنشأها</Text>
+                    <Text style={styles.infoValue}>{movement.created_by_user_name}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>معلومات المعاملة</Text>

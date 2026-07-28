@@ -144,7 +144,38 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
   const currencyName = getCurrencyName(currency);
   const commissionCurrencyName = getCurrencyName(commission_currency);
 
-  const netAmount = Number(amount) - Number(commission || 0);
+  /*
+    نظام العمولات الجديد: amount يخزن إجمالي حركة العميل، وbase_amount /
+    commission_amount / commission_owner حقول عرض. صيغة "الصافي = المبلغ -
+    العمولة" القديمة تبقى للسندات التاريخية فقط ولا تُطبق على الحركات الجديدة.
+  */
+  const newCommissionAmount = Number(receiptData.commission_amount) || 0;
+  const hasNewCommission = newCommissionAmount > 0;
+  const baseAmountDisplay = hasNewCommission
+    ? Number(receiptData.base_amount) || Number(amount)
+    : Number(amount);
+  const totalAmountDisplay = Number(amount);
+
+  // صاحب العمولة من منظور قارئ السند: على السند المعروض من طرف مرتبط
+  // غير منشئ الحركة تنعكس التسمية كما ينعكس اتجاه الحركة.
+  const storedCommissionOwner = receiptData.commission_owner || null;
+  const viewerCommissionOwner = !storedCommissionOwner
+    ? null
+    : isLinkedView
+      ? storedCommissionOwner === 'account_owner'
+        ? 'current_user'
+        : 'account_owner'
+      : storedCommissionOwner;
+  const commissionOwnerLabel =
+    viewerCommissionOwner === 'account_owner'
+      ? 'العمولة للعميل'
+      : viewerCommissionOwner === 'current_user'
+        ? 'العمولة لنا'
+        : '';
+
+  const netAmount = hasNewCommission
+    ? totalAmountDisplay
+    : Number(amount) - Number(commission || 0);
 
   const amountInWords = numberToArabicTextWithCurrency(netAmount, currency as Currency);
 
@@ -881,6 +912,31 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
           </div>
 
           <div class="four-cards-row">
+            ${hasNewCommission
+              ? `
+            <div class="info-card">
+              <div class="card-label">المبلغ الأساسي</div>
+              <div class="card-value">${baseAmountDisplay} <span class="card-currency">${getCurrencySymbol(currency)}</span></div>
+            </div>
+
+            <div class="info-card">
+              <div class="card-label">عملة الحساب</div>
+              <div class="card-value">${currencyName}</div>
+            </div>
+
+            <div class="info-card">
+              <div class="card-label">العمولة</div>
+              <div class="card-value">
+                ${newCommissionAmount} <span class="card-currency">${getCurrencySymbol(currency)}</span>
+              </div>
+            </div>
+
+            <div class="info-card">
+              <div class="card-label">الإجمالي</div>
+              <div class="card-value">${totalAmountDisplay} <span class="card-currency">${getCurrencySymbol(currency)}</span></div>
+            </div>
+            `
+              : `
             <div class="info-card">
               <div class="card-label">المبلغ الإجمالي</div>
               <div class="card-value">${amount} <span class="card-currency">${getCurrencySymbol(currency)}</span></div>
@@ -902,6 +958,7 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
               <div class="card-label">الصافي</div>
               <div class="card-value">${netAmount} <span class="card-currency">${getCurrencySymbol(currency)}</span></div>
             </div>
+            `}
           </div>
 
           <div class="amount-words-row">
@@ -931,7 +988,12 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
                 <span class="detail-label">${isLinkedView ? (perspectiveType === 'outgoing' ? 'المرسل' : 'المستلم') : (perspectiveType === 'outgoing' ? 'المستلم' : 'المرسل')}:</span>
                 <span class="detail-value">${isLinkedView ? (beneficiary_name || customerName) : (beneficiary_name || 'غير محدد')}</span>
               </div>
-              ${commission && commission > 0 ? `
+              ${hasNewCommission ? `
+              <div class="detail-row">
+                <span class="detail-label">صاحب العمولة:</span>
+                <span class="detail-value">${commissionOwnerLabel || 'غير محدد'}</span>
+              </div>
+              ` : commission && commission > 0 ? `
               <div class="detail-row">
                 <span class="detail-label">مستلم العمولة:</span>
                 <span class="detail-value">${receiptData.commission_recipient_name || 'الأرباح والخسائر'}</span>
