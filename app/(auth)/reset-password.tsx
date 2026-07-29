@@ -334,6 +334,7 @@ function RequirementRow({ ok, text }: { ok: boolean; text: string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F3F4F6',
   },
   gradientHeader: {
@@ -504,7 +505,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     minWidth: 56,
-    textAlign: 'left',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   requirementsBox: {
     marginTop: 18,

@@ -1,17 +1,16 @@
-import '@/utils/arabicRTL';
 import { useEffect } from 'react';
+import type { ComponentType } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, ViewProps } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { DataRefreshProvider } from '@/contexts/DataRefreshContext';
-import { setupArabicRTL } from '@/utils/rtl';
 import { DailyStartupAd } from '@/components/DailyStartupAd';
 import { useSystemNotifications } from '@/hooks/useSystemNotifications';
 
-setupArabicRTL();
+const DirectionalView = View as ComponentType<ViewProps & { dir?: 'ltr' | 'rtl' }>;
 
 function RootLayoutNav() {
   const { currentUser, isAuthenticated, isLoading } = useAuth();
@@ -55,6 +54,9 @@ function RootLayoutNav() {
         <Stack.Screen name="exchange-rates" />
         <Stack.Screen name="calculator" />
         <Stack.Screen name="statistics" />
+        <Stack.Screen name="entities-networks" />
+        <Stack.Screen name="manage-transfer-entities" />
+        <Stack.Screen name="transfer-commission-settings" />
         <Stack.Screen name="ai-assistant" />
         <Stack.Screen name="backup" />
         <Stack.Screen name="reports" />
@@ -73,9 +75,9 @@ export default function RootLayout() {
       <AuthProvider>
         <DataRefreshProvider>
           <SafeAreaView style={styles.safeArea} edges={['top']}>
-            <View style={styles.rtlRoot}>
+            <DirectionalView dir="rtl" style={styles.rtlRoot}>
               <RootLayoutNav />
-            </View>
+            </DirectionalView>
             <StatusBar style="auto" />
           </SafeAreaView>
         </DataRefreshProvider>

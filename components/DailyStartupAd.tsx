@@ -63,12 +63,14 @@ export function DailyStartupAd({ enabled }: DailyStartupAdProps) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
+    direction: 'rtl',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
     backgroundColor: 'rgba(15, 23, 42, 0.68)',
   },
   card: {
+    direction: 'rtl',
     overflow: 'hidden',
     borderRadius: 10,
     backgroundColor: '#F8F6F1',

@@ -14,6 +14,8 @@ expo-env.d.ts
 
 # Local/editor
 .vscode/
+.claude/settings.local.json
+supabase/.temp/
 
 # Temporary backups
 *.backup

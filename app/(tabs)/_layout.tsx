@@ -145,8 +145,10 @@ export default function TabsLayout() {
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '600',
+          writingDirection: 'rtl',
         },
         tabBarStyle: {
+          direction: 'rtl',
           height: 64 + insets.bottom,
           paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 8,

@@ -2,7 +2,7 @@
   "expo": {
     "name": "أكِّد",
     "slug": "articodeapp",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "runtimeVersion": {
       "policy": "fingerprint"
     },
@@ -108,19 +108,27 @@
               "intent": [
                 {
                   "action": "android.intent.action.VIEW",
-                  "data": { "scheme": "https" }
+                  "data": {
+                    "scheme": "https"
+                  }
                 },
                 {
                   "action": "android.intent.action.VIEW",
-                  "data": { "scheme": "http" }
+                  "data": {
+                    "scheme": "http"
+                  }
                 },
                 {
                   "action": "android.intent.action.SENDTO",
-                  "data": { "scheme": "mailto" }
+                  "data": {
+                    "scheme": "mailto"
+                  }
                 },
                 {
                   "action": "android.intent.action.DIAL",
-                  "data": { "scheme": "tel" }
+                  "data": {
+                    "scheme": "tel"
+                  }
                 }
               ]
             }
@@ -129,12 +137,27 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-asset",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "ios": [
+              "ar"
+            ],
+            "android": [
+              "ar"
+            ]
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
+      "supportsRTL": true,
+      "forcesRTL": true,
       "EXPO_PUBLIC_SUPABASE_URL": "https://hnaudgieczuzuduplhkp.supabase.co",
       "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuYXVkZ2llY3p1enVkdXBsaGtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTE3OTYsImV4cCI6MjA5MDM4Nzc5Nn0.alA4zTeQLwEPcepUVrfyAPaneJNtNaN9QmQJrNJRqm8",
       "router": {},

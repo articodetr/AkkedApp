@@ -87,6 +87,7 @@ export default function AuthCallbackScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
     alignItems: 'center',
     justifyContent: 'center',

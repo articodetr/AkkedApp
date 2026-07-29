@@ -301,6 +301,7 @@ export default function CheckEmailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
     paddingHorizontal: 24,
     paddingTop: 24,

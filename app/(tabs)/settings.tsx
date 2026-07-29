@@ -16,6 +16,7 @@ import {
   User,
   MessageCircle,
   Link as LinkIcon,
+  BadgePercent,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -57,6 +58,13 @@ export default function SettingsScreen() {
       subtitle: 'المستخدمون المربوطون بك كعملاء',
       color: '#3B82F6',
       onPress: () => router.push('/linked-accounts' as any),
+    },
+    {
+      icon: BadgePercent,
+      title: 'عمولات الحوالات',
+      subtitle: 'إدارة قواعد عمولة الإرسال والاستلام',
+      color: '#4F46E5',
+      onPress: () => router.push('/transfer-commission-settings' as any),
     },
     {
       icon: MessageCircle,
@@ -117,7 +125,6 @@ export default function SettingsScreen() {
                 onPress={item.onPress}
                 activeOpacity={0.85}
               >
-                <ChevronLeft size={20} color="#9CA3AF" />
                 <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
                   <IconComponent size={22} color={item.color} />
                 </View>
@@ -126,6 +133,7 @@ export default function SettingsScreen() {
                   <Text style={styles.menuTitle}>{item.title}</Text>
                   <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
                 </View>
+                <ChevronLeft size={20} color="#9CA3AF" />
               </TouchableOpacity>
             );
           })}
@@ -148,6 +156,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   header: {
@@ -214,7 +223,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
-    direction: 'ltr',
   },
   lastMenuItem: {
     borderBottomWidth: 0,

@@ -34,6 +34,7 @@ export default function LetterheadSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F5F5F5',
   },
   header: {

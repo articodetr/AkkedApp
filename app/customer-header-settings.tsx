@@ -257,7 +257,7 @@ export default function CustomerHeaderSettingsScreen() {
           <Text style={styles.cardTitle}>العميل</Text>
           <Text style={styles.customerName}>{customer?.name || customerNameParam}</Text>
           <Text style={styles.helperText}>
-            الترويسة الافتراضية الحالية ستبقى مستخدمة إذا تركت الوضع على "افتراضي".
+            الترويسة الافتراضية الحالية ستبقى مستخدمة إذا تركت الوضع على &quot;افتراضي&quot;.
           </Text>
         </View>
 
@@ -443,6 +443,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F8FAFC',
   },
   header: {

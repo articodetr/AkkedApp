@@ -179,6 +179,7 @@ export default function ShopSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F8FAFC',
   },
   header: {

@@ -182,6 +182,7 @@ export default function LinkedAccountsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   header: {

@@ -179,6 +179,7 @@ export default function CalculatorScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   header: {
@@ -311,6 +312,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },

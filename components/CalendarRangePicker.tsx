@@ -207,7 +207,7 @@ export default function CalendarRangePicker({
               onPress={() => setCurrentMonth(subMonths(currentMonth, 1))}
               style={styles.navButton}
             >
-              <ChevronLeft size={24} color="#10B981" />
+              <ChevronRight size={24} color="#10B981" />
             </TouchableOpacity>
 
             <View style={styles.selectionInfo}>
@@ -242,7 +242,7 @@ export default function CalendarRangePicker({
                 isAfter(startOfMonth(currentMonth), startOfMonth(maxDate))
               }
             >
-              <ChevronRight
+              <ChevronLeft
                 size={24}
                 color={
                   isSameDay(startOfMonth(currentMonth), startOfMonth(maxDate)) ||
@@ -347,12 +347,14 @@ export default function CalendarRangePicker({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   container: {
+    direction: 'rtl',
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     width: '100%',

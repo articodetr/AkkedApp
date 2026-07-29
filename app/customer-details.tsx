@@ -851,6 +851,10 @@ export default function CustomerDetailsScreen() {
       Alert.alert('غير مسموح', 'حساب الأرباح والخسائر حساب ثابت ولا يمكن تصفيره.');
       return;
     }
+    if ((customer as any).is_entity_settlement_account) {
+      Alert.alert('غير مسموح', 'حساب تسوية الجهة حساب نظامي ولا يمكن تصفيره.');
+      return;
+    }
 
     const effectiveMovements = movements.filter((m) => {
       const mAny = m as any;
@@ -878,6 +882,10 @@ export default function CustomerDetailsScreen() {
     if (!customer) return;
     if (customer.is_profit_loss_account) {
       Alert.alert('غير مسموح', 'حساب الأرباح والخسائر حساب ثابت ولا يمكن حذفه.');
+      return;
+    }
+    if ((customer as any).is_entity_settlement_account) {
+      Alert.alert('غير مسموح', 'حساب تسوية الجهة حساب نظامي ولا يمكن حذفه.');
       return;
     }
 
@@ -1947,6 +1955,7 @@ const styles = StyleSheet.create({
 
   printFormatOverlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
@@ -2053,6 +2062,7 @@ const styles = StyleSheet.create({
 
   settingsOverlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
@@ -2110,6 +2120,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F3F4F6',
   },
   gradientHeader: {
@@ -2725,7 +2736,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 24,
-    right: 24,
+    end: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -2740,6 +2751,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },

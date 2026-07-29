@@ -286,12 +286,13 @@ export function PreDeleteSettlementSheet({
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, justifyContent: 'flex-end' },
+  flex: { flex: 1, justifyContent: 'flex-end', direction: 'rtl' },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(17, 24, 39, 0.55)',
   },
   sheet: {
+    direction: 'rtl',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,

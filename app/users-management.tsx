@@ -218,7 +218,7 @@ export default function UsersManagement() {
           <Info size={20} color="#3730A3" />
           <Text style={styles.infoText}>
             أصبح إنشاء الحسابات يتم عبر التسجيل بالبريد الإلكتروني أو Google.
-            لتغيير كلمة المرور استخدم "نسيت كلمة المرور؟" في شاشة الدخول.
+            لتغيير كلمة المرور استخدم &quot;نسيت كلمة المرور؟&quot; في شاشة الدخول.
           </Text>
         </View>
 
@@ -238,6 +238,7 @@ export default function UsersManagement() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   header: {

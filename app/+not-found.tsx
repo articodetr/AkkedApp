@@ -18,6 +18,7 @@ export default function NotFoundScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,

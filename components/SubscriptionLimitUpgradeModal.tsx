@@ -122,12 +122,14 @@ export function SubscriptionLimitUpgradeModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(15, 23, 42, 0.58)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   card: {
+    direction: 'rtl',
     width: '100%',
     maxWidth: 390,
     backgroundColor: '#FFFFFF',

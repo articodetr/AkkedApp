@@ -276,6 +276,7 @@ export default function PartySelector({
 
 const styles = StyleSheet.create({
   container: {
+    direction: 'rtl',
     marginBottom: 20,
   },
   label: {
@@ -328,10 +329,12 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
+    direction: 'rtl',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,

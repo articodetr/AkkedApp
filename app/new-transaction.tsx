@@ -83,6 +83,7 @@ export default function NewTransactionScreen() {
         .from('customers')
         .select('*')
         .not('is_profit_loss_account', 'is', true)
+        .not('is_entity_settlement_account', 'is', true)
         .or(buildOwnedCustomerFilter(currentUser.userId))
         .order('name', { ascending: true });
 
@@ -427,6 +428,7 @@ export default function NewTransactionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   header: {
@@ -618,6 +620,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },

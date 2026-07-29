@@ -8,6 +8,7 @@ export interface Customer {
   balance: number;
   notes?: string;
   is_profit_loss_account?: boolean;
+  is_entity_settlement_account?: boolean;
   user_id: string;
   linked_user_id?: string;
   created_at: string;
@@ -131,6 +132,77 @@ export interface AccountMovement {
   void_reason?: string;
   reject_reason?: string;
   is_voided?: boolean;
+  created_at: string;
+}
+
+export interface TransferEntity {
+  id: string;
+  user_id: string;
+  name: string;
+  entity_type: 'entity' | 'network';
+  phone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+  settlement_customer_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EntityTransferDirection = 'send' | 'receive';
+export type TransferCommissionCalculationType =
+  | 'fixed'
+  | 'percentage'
+  | 'per_thousand'
+  | 'per_million';
+
+export interface TransferCommissionRule {
+  id: string;
+  user_id: string;
+  direction: EntityTransferDirection;
+  currency: Currency;
+  min_amount: number;
+  max_amount?: number | null;
+  calculation_type: TransferCommissionCalculationType;
+  customer_value: number;
+  network_value: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EntityTransfer {
+  id: string;
+  operation_id: string;
+  transfer_number: string;
+  user_id: string;
+  entity_id?: string | null;
+  direction: EntityTransferDirection;
+  sender_name: string;
+  sender_phone: string;
+  beneficiary_name: string;
+  beneficiary_phone: string;
+  amount: number;
+  currency: Currency;
+  debit_customer_id: string;
+  credit_customer_id: string;
+  debit_movement_id?: string | null;
+  credit_movement_id?: string | null;
+  commission_enabled: boolean;
+  commission_source: 'none' | 'rule' | 'manual';
+  commission_rule_id?: string | null;
+  commission_rule_snapshot?: Record<string, unknown> | null;
+  calculated_customer_commission: number;
+  calculated_network_commission: number;
+  customer_commission: number;
+  network_commission: number;
+  commission_overridden: boolean;
+  debit_total: number;
+  network_total: number;
+  net_profit: number;
+  profit_loss_movement_id?: string | null;
+  notes?: string | null;
+  status: 'completed' | 'cancelled';
   created_at: string;
 }
 

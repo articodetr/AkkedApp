@@ -721,6 +721,7 @@ const handleDelete = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F3F4F6',
   },
   gradientHeader: {
@@ -1038,6 +1039,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     padding: 20,

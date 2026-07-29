@@ -396,13 +396,16 @@ export default function EditMovementSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   sheetContainer: {
     height: '92%',
+    direction: 'rtl',
   },
   sheet: {
+    direction: 'rtl',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -431,6 +434,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    direction: 'rtl',
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 104,
@@ -592,10 +596,12 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   pickerContent: {
+    direction: 'rtl',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,

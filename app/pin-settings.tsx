@@ -1230,6 +1230,7 @@ export default function PinSettings() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F8FAFC',
   },
   flex: {
@@ -1374,14 +1375,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF5F5',
   },
   collapsibleHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
   collapsibleHeaderRight: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     flex: 1,
@@ -1456,7 +1457,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   inputWrap: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#F9FAFB',
@@ -1621,6 +1622,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
+    direction: 'rtl',
     justifyContent: 'flex-end',
   },
   modalBackdrop: {

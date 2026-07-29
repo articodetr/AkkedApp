@@ -754,10 +754,12 @@ export default function NotificationsTabScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F8FAFC',
   },
   loadingContainer: {
     flex: 1,
+    direction: 'rtl',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F8FAFC',

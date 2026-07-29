@@ -297,6 +297,7 @@ export default function NotificationCard({
 
 const styles = StyleSheet.create({
   notificationCard: {
+    direction: 'rtl',
     borderRadius: 14,
     borderWidth: 1,
     padding: 10,
@@ -468,12 +469,14 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 22,
   },
   modalContent: {
+    direction: 'rtl',
     width: '100%',
     borderRadius: 20,
     backgroundColor: '#FFFFFF',

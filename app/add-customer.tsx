@@ -303,7 +303,8 @@ export default function AddCustomerScreen() {
       .from('customers')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', currentUser.userId)
-      .or('is_profit_loss_account.is.null,is_profit_loss_account.is.false');
+      .or('is_profit_loss_account.is.null,is_profit_loss_account.is.false')
+      .not('is_entity_settlement_account', 'is', true);
 
     if (error) {
       console.warn('[add-customer] Failed to count customers:', error);
@@ -725,11 +726,13 @@ export default function AddCustomerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F8FAFC',
   },
 
   loadingContainer: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',

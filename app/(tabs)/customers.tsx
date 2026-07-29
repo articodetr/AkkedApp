@@ -554,6 +554,7 @@ export default function CustomersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   header: {
@@ -773,7 +774,7 @@ const styles = StyleSheet.create({
   moreBalancesText: {
     fontSize: 11,
     color: '#94A3B8',
-    textAlign: 'left',
+    textAlign: 'right',
     writingDirection: 'rtl',
   },
   emptyContainer: {
@@ -789,7 +790,7 @@ const styles = StyleSheet.create({
   floatingButton: {
     position: 'absolute',
     bottom: 24,
-    right: 24,
+    end: 24,
     width: 64,
     height: 64,
     backgroundColor: '#10B981',

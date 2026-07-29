@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { BarChart3, FileText, Users } from 'lucide-react-native';
+import { BarChart3, FileText, Users, Waypoints } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function DashboardScreen() {
@@ -47,6 +47,13 @@ export default function DashboardScreen() {
       subtitle: 'إحصائيات شاملة',
       color: '#EC4899',
       route: '/statistics',
+    },
+    {
+      icon: Waypoints,
+      title: 'الجهات والشبكات',
+      subtitle: 'إرسال واستلام الحوالات وإدارة الجهات',
+      color: '#0EA5E9',
+      route: '/entities-networks',
     },
   ];
 
@@ -95,6 +102,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   header: {

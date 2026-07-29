@@ -287,6 +287,7 @@ const renderMovement = ({ item }: { item: MovementWithCustomer }) => (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   header: {

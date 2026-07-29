@@ -371,10 +371,12 @@ export default function WhatsAppTemplatesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F3F4F6',
   },
   loadingContainer: {
     flex: 1,
+    direction: 'rtl',
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F3F4F6',

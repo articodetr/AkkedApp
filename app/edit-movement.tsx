@@ -479,6 +479,7 @@ export default function EditMovementScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   header: {
@@ -722,6 +723,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
@@ -773,6 +775,7 @@ const styles = StyleSheet.create({
   },
   successModalContainer: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',

@@ -415,6 +415,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F9FAFB',
   },
   keyboardView: {
@@ -585,6 +586,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: 'rgba(17, 24, 39, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',

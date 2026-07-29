@@ -104,6 +104,10 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
   const receiptDate = format(new Date(created_at), 'yyyy-MM-dd', { locale: ar });
   const receiptTime = format(new Date(created_at), 'HH:mm:ss', { locale: ar });
   const receiptDateTime = format(new Date(created_at), 'dd/MM/yyyy', { locale: ar });
+  const displayTransferNumber = transfer_number?.replace(
+    /^(TRF-\d{8}-[A-F0-9]{12})-[DC]$/i,
+    '$1',
+  );
 
   const isTransfer = Boolean(receiptData.transfer_direction);
   const approvalStatus = normalizeMovementApprovalStatus(receiptData);
@@ -970,7 +974,7 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
               <span class="box-label">البيان</span>
             </div>
             <div class="code-box">
-              <span class="box-label">${transfer_number || 'الكود'}</span>
+              <span class="box-label">${displayTransferNumber || 'الكود'}</span>
             </div>
           </div>
 
@@ -978,7 +982,7 @@ export function generateReceiptHTML(receiptData: ReceiptData, qrCodeDataUrl: str
             <div class="transfer-details">
               <div class="detail-row">
                 <span class="detail-label">رقم الحوالة:</span>
-                <span class="detail-value">${transfer_number || 'غير محدد'}</span>
+                <span class="detail-value">${displayTransferNumber || 'غير محدد'}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">${isLinkedView ? (perspectiveType === 'outgoing' ? 'المستلم' : 'المرسل') : (perspectiveType === 'outgoing' ? 'المرسل' : 'المستلم')}:</span>

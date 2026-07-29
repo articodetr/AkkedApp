@@ -696,10 +696,12 @@ export default function CustomerNotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    direction: 'rtl',
     backgroundColor: '#F8FAFC',
   },
   loadingContainer: {
     flex: 1,
+    direction: 'rtl',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,

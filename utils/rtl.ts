@@ -1,10 +1,35 @@
-import { I18nManager, TextStyle, ViewStyle } from 'react-native';
+import { I18nManager, Platform, TextStyle, ViewStyle } from 'react-native';
 
 export const ARABIC_DIRECTION = 'rtl' as const;
 
 export function setupArabicRTL() {
+  if (Platform.OS === 'web') {
+    const constants = I18nManager.getConstants();
+    if (!constants.isRTL) {
+      I18nManager.getConstants = () => ({
+        ...constants,
+        isRTL: true,
+        doLeftAndRightSwapInRTL: true,
+        localeIdentifier: 'ar',
+      });
+      I18nManager.isRTL = true;
+      I18nManager.doLeftAndRightSwapInRTL = true;
+    }
+
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = 'ar';
+      document.documentElement.dir = ARABIC_DIRECTION;
+      document.body?.setAttribute('dir', ARABIC_DIRECTION);
+      document.body?.setAttribute('lang', 'ar');
+    }
+    return;
+  }
+
   I18nManager.allowRTL(true);
-  I18nManager.forceRTL(true);
+  I18nManager.swapLeftAndRightInRTL(true);
+  if (!I18nManager.isRTL) {
+    I18nManager.forceRTL(true);
+  }
 }
 
 export const rtlText: TextStyle = {
@@ -19,7 +44,7 @@ export const rtlCenterText: TextStyle = {
 
 export const ltrNumberText: TextStyle = {
   textAlign: 'right',
-  writingDirection: 'rtl',
+  writingDirection: 'ltr',
 };
 
 export const rtlRow: ViewStyle = {
