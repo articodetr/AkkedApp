@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -117,6 +118,8 @@ export default function EntityTransferFormSheet({
   const [pickerKind, setPickerKind] = useState<PickerKind>(null);
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [pickerKeyboardHeight, setPickerKeyboardHeight] = useState(0);
+  const pickerSearchInputRef = React.useRef<TextInput>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -246,6 +249,29 @@ export default function EntityTransferFormSheet({
     direction,
     visible,
   ]);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+      setPickerKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setPickerKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (pickerKind !== 'currency' && pickerKind !== null) {
+      const timer = setTimeout(() => {
+        pickerSearchInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [pickerKind]);
 
   const selectedDebitAccount = accounts.find((account) => account.id === debitCustomerId);
   const selectedCreditAccount = accounts.find((account) => account.id === creditCustomerId);
@@ -475,8 +501,10 @@ export default function EntityTransferFormSheet({
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.sheetContainer}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+            enabled={Platform.OS === 'ios'}
           >
             <TouchableOpacity
               activeOpacity={1}
@@ -843,13 +871,15 @@ export default function EntityTransferFormSheet({
           }}
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.pickerKeyboardContainer}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+            enabled={Platform.OS === 'ios'}
           >
             <TouchableOpacity
               activeOpacity={1}
               onPress={(event) => event.stopPropagation()}
-              style={[styles.pickerContent, { paddingBottom: Math.max(insets.bottom, 18) }]}
+              style={[styles.pickerContent, { paddingBottom: Math.max(insets.bottom + pickerKeyboardHeight, 18) }]}
             >
               <View style={styles.pickerHeader}>
                 <TouchableOpacity
@@ -869,6 +899,7 @@ export default function EntityTransferFormSheet({
                 <View style={styles.pickerSearchBox}>
                   <Search size={19} color="#9CA3AF" />
                   <TextInput
+                    ref={pickerSearchInputRef}
                     value={accountSearchQuery}
                     onChangeText={setAccountSearchQuery}
                     style={styles.pickerSearchInput}
@@ -876,7 +907,6 @@ export default function EntityTransferFormSheet({
                     placeholderTextColor="#9CA3AF"
                     textAlign="right"
                     returnKeyType="search"
-                    autoFocus
                     accessibilityLabel="البحث باسم الحساب"
                   />
                   {accountSearchQuery ? (
@@ -1082,11 +1112,12 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    height: '92%',
+    flex: 1,
     direction: 'rtl',
   },
   sheet: {
-    height: '100%',
+    flex: 1,
+    maxHeight: '92%',
     direction: 'rtl',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
