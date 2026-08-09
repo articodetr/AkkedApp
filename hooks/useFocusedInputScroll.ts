@@ -1,23 +1,32 @@
 import { useCallback, useRef } from 'react';
 import { NativeScrollEvent, NativeSyntheticEvent, ScrollView, TextInput, View } from 'react-native';
 
-/** المسافة التي تُترك تحت الحقل بعد رفعه، حتى لا يلتصق بحافة لوحة المفاتيح. */
-const SPACE_BELOW_INPUT = 24;
+/** المسافة التي تُترك فوق الحقل بعد رفعه، حتى تبقى تسميته ظاهرة معه. */
+const SPACE_ABOVE_INPUT = 44;
+
+/** لا نحرّك الشاشة لمسافة تافهة، فالحركة الصغيرة تبدو ارتجاجاً. */
+const MIN_WORTHWHILE_SHIFT = 8;
 
 /**
- * يرفع الحقل المُركَّز فوق لوحة المفاتيح داخل ScrollView.
+ * يرفع الحقل المُركَّز إلى أعلى منطقة التمرير عند فتح لوحة المفاتيح.
  *
  * أندرويد لا يمرّر تلقائياً إلى الحقل المُركَّز داخل النوافذ المنبثقة، فيبقى
  * الحقل مختبئاً خلف اللوحة.
  *
- * القياس يتم بـ measureInWindow على الحقل وعلى إطار التمرير معاً، ثم نمرّر
- * بمقدار التداخل بينهما. تعمد استخدام measureInWindow دون measureLayout:
- * الأخيرة مع رقم عقدة (getInnerViewNode) لا تعمل في المعمارية الجديدة
- * (Fabric) المفعّلة افتراضياً في SDK 57، وتفشل بصمت فلا يحدث تمرير.
+ * الحساب يعتمد على **الفرق** بين قياسَي measureInWindow للحقل ولإطار التمرير،
+ * أي موضع الحقل داخل الإطار. هذا مقصود:
+ *
+ * - الفرق بين قياسين في نفس النظام الإحداثي صحيح دائماً، دون الحاجة لمعرفة
+ *   أين تبدأ النافذة أو أين يقف الكيبورد.
+ * - نافذة Modal على أندرويد لا تنكمش دائماً أمام لوحة المفاتيح، فأسفل إطار
+ *   التمرير قد يقع خلف اللوحة. لذلك لا نقارن الحقل بأسفل الإطار — بل نرفعه
+ *   إلى أعلاه، وأعلى الإطار ظاهر دائماً فوق اللوحة.
+ *
+ * ولا نمرّر إلا إلى الأمام، حتى لا تقفز الشاشة للخلف عند لمس حقل أعلى.
  */
 export function useFocusedInputScroll() {
   const scrollRef = useRef<ScrollView>(null);
-  /** غلاف حول ScrollView — إطاره هو المساحة المرئية فعلاً بعد انكماش النافذة. */
+  /** غلاف حول ScrollView — يوفّر عرضاً أصلياً قابلاً للقياس على أندرويد. */
   const scrollAreaRef = useRef<View>(null);
   const scrollOffset = useRef(0);
 
@@ -34,14 +43,13 @@ export function useFocusedInputScroll() {
       const scrollView = scrollRef.current;
       if (!scrollArea || !scrollView) return;
 
-      input.measureInWindow((_inputX, inputY, _inputWidth, inputHeight) => {
-        scrollArea.measureInWindow((_areaX, areaY, _areaWidth, areaHeight) => {
-          const inputBottom = inputY + inputHeight + SPACE_BELOW_INPUT;
-          const visibleBottom = areaY + areaHeight;
-          const hiddenBy = inputBottom - visibleBottom;
+      input.measureInWindow((_inputX, inputY) => {
+        scrollArea.measureInWindow((_areaX, areaY) => {
+          const inputYWithinArea = inputY - areaY;
+          const target = scrollOffset.current + inputYWithinArea - SPACE_ABOVE_INPUT;
 
-          if (hiddenBy > 0) {
-            scrollView.scrollTo({ y: scrollOffset.current + hiddenBy, animated: true });
+          if (target > scrollOffset.current + MIN_WORTHWHILE_SHIFT) {
+            scrollView.scrollTo({ y: target, animated: true });
           }
         });
       });

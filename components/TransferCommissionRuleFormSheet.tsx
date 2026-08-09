@@ -325,8 +325,8 @@ export default function TransferCommissionRuleFormSheet({
                 style={styles.scrollView}
                 contentContainerStyle={[
                   styles.content,
-                  // مساحة إضافية تسمح برفع آخر حقل فوق اللوحة بدل أن يقف عند نهاية المحتوى
-                  keyboardHeight > 0 && styles.contentWithKeyboard,
+                  // بدون مساحة بقدر اللوحة يصطدم آخر حقل بنهاية المحتوى قبل أن يبلغ الأعلى
+                  keyboardHeight > 0 && { paddingBottom: keyboardHeight + 48 },
                 ]}
                 onScroll={handleScroll}
                 scrollEventThrottle={16}
@@ -720,9 +720,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 32,
-  },
-  contentWithKeyboard: {
-    paddingBottom: 260,
   },
   section: {
     marginBottom: 20,
