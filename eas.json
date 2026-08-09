@@ -8,13 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "node": "24.14.1",
-      "android": {
-        "buildType": "apk"
-      },
-      "env": {
-        "APP_VARIANT": "development"
-      }
+      "node": "24.14.1"
     },
     "preview": {
       "channel": "preview",
