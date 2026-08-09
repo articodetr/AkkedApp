@@ -117,7 +117,8 @@ export default function TransferCommissionRuleFormSheet({
   const [pickerKind, setPickerKind] = useState<PickerKind>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const { scrollRef, scrollInputIntoView } = useFocusedInputScroll();
+  const { scrollRef, scrollAreaRef, handleScroll, scrollInputIntoView } =
+    useFocusedInputScroll();
   const minAmountRef = useRef<TextInput>(null);
   const maxAmountRef = useRef<TextInput>(null);
   const customerValueRef = useRef<TextInput>(null);
@@ -317,6 +318,8 @@ export default function TransferCommissionRuleFormSheet({
                 <View style={styles.headerSpacer} />
               </View>
 
+              {/* collapsable={false} يضمن وجود عرض أصلي يمكن قياسه على أندرويد */}
+              <View ref={scrollAreaRef} collapsable={false} style={styles.scrollArea}>
               <ScrollView
                 ref={scrollRef}
                 style={styles.scrollView}
@@ -325,6 +328,8 @@ export default function TransferCommissionRuleFormSheet({
                   // مساحة إضافية تسمح برفع آخر حقل فوق اللوحة بدل أن يقف عند نهاية المحتوى
                   keyboardHeight > 0 && styles.contentWithKeyboard,
                 ]}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
@@ -547,6 +552,7 @@ export default function TransferCommissionRuleFormSheet({
                 />
               </View>
               </ScrollView>
+              </View>
 
               <View
                 style={[
@@ -702,6 +708,9 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 36,
+  },
+  scrollArea: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
