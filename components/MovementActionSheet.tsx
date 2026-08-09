@@ -340,7 +340,7 @@ export function MovementActionSheet({
 const styles = StyleSheet.create({
   flex: { flex: 1, justifyContent: 'flex-end', direction: 'rtl' },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(17, 24, 39, 0.55)',
   },
   sheet: {

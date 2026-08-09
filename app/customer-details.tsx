@@ -1959,7 +1959,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   printFormatBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   printFormatSheet: {
     backgroundColor: '#FFFFFF',
@@ -2066,7 +2066,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   settingsBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   settingsSheet: {
     backgroundColor: '#FFFFFF',
