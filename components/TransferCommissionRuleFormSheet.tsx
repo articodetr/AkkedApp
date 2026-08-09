@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -113,6 +114,7 @@ export default function TransferCommissionRuleFormSheet({
   const [isActive, setIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [pickerKind, setPickerKind] = useState<PickerKind>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const isEditing = Boolean(rule?.id);
   const selectedCurrency = CURRENCIES.find((item) => item.code === currency);
@@ -138,6 +140,20 @@ export default function TransferCommissionRuleFormSheet({
     setIsSaving(false);
     setPickerKind(null);
   }, [rule, visible]);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const pickerOptions: PickerOption[] =
     pickerKind === 'currency'
@@ -257,10 +273,22 @@ export default function TransferCommissionRuleFormSheet({
   return (
     <>
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => {
+            if (keyboardHeight > 0) {
+              Keyboard.dismiss();
+              return;
+            }
+            onClose();
+          }}
+        >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.sheetContainer}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+            enabled={Platform.OS === 'ios'}
           >
             <TouchableOpacity
               activeOpacity={1}
@@ -500,7 +528,12 @@ export default function TransferCommissionRuleFormSheet({
               </View>
               </ScrollView>
 
-              <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+              <View
+                style={[
+                  styles.footer,
+                  { paddingBottom: keyboardHeight > 0 ? 12 : Math.max(insets.bottom, 12) },
+                ]}
+              >
                 <TouchableOpacity
                   style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
                   onPress={handleSave}
@@ -605,11 +638,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    height: '92%',
+    flex: 1,
     direction: 'rtl',
+    justifyContent: 'flex-end',
   },
   sheet: {
     flex: 1,
+    maxHeight: '92%',
     direction: 'rtl',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
