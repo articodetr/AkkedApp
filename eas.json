@@ -7,11 +7,13 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "node": "24.14.1"
     },
     "preview": {
       "channel": "preview",
       "distribution": "internal",
+      "node": "24.14.1",
       "android": {
         "buildType": "apk",
         "credentialsSource": "remote"
@@ -24,6 +26,7 @@
     },
     "production": {
       "channel": "production",
+      "node": "24.14.1",
       "android": {
         "buildType": "app-bundle"
       },
