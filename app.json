@@ -7,7 +7,10 @@
       "policy": "fingerprint"
     },
     "updates": {
-      "enabled": false
+      "enabled": true,
+      "url": "https://u.expo.dev/f6c89bb9-f1ac-4863-91f0-8d02da4f59af",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
     },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
