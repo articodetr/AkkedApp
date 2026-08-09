@@ -95,6 +95,20 @@ function numberToInput(value: number | null | undefined) {
   return String(Number(value));
 }
 
+/**
+ * الصفر يُترك فارغاً ليظهر كنص إرشادي رمادي بدل قيمة حقيقية، فلا يعلق قبل
+ * الرقم الذي يكتبه المستخدم (0500). الحقل الفارغ يُقرأ صفراً عند الحفظ.
+ */
+function amountToInput(value: number | null | undefined) {
+  if (value === null || value === undefined || Number(value) === 0) return '';
+  return String(Number(value));
+}
+
+/** قيمة الحقل الرقمي، والحقل الفارغ يعني صفراً. */
+function parseAmountOrZero(value: string) {
+  return value.trim() ? parseAmount(value) : 0;
+}
+
 export default function TransferCommissionRuleFormSheet({
   visible,
   rule = null,
@@ -106,12 +120,12 @@ export default function TransferCommissionRuleFormSheet({
 
   const [direction, setDirection] = useState<TransferDirection>('send');
   const [currency, setCurrency] = useState<Currency>('SAR');
-  const [minAmount, setMinAmount] = useState('0');
+  const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
   const [calculationType, setCalculationType] =
     useState<TransferCommissionCalculationType>('fixed');
-  const [customerValue, setCustomerValue] = useState('0');
-  const [networkValue, setNetworkValue] = useState('0');
+  const [customerValue, setCustomerValue] = useState('');
+  const [networkValue, setNetworkValue] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [pickerKind, setPickerKind] = useState<PickerKind>(null);
@@ -139,11 +153,11 @@ export default function TransferCommissionRuleFormSheet({
         ? (rule?.currency as Currency)
         : 'SAR',
     );
-    setMinAmount(numberToInput(rule?.min_amount) || '0');
+    setMinAmount(amountToInput(rule?.min_amount));
     setMaxAmount(numberToInput(rule?.max_amount));
     setCalculationType(rule?.calculation_type || 'fixed');
-    setCustomerValue(numberToInput(rule?.customer_value) || '0');
-    setNetworkValue(numberToInput(rule?.network_value) || '0');
+    setCustomerValue(amountToInput(rule?.customer_value));
+    setNetworkValue(amountToInput(rule?.network_value));
     setIsActive(rule?.is_active ?? true);
     setIsSaving(false);
     setPickerKind(null);
@@ -196,10 +210,10 @@ export default function TransferCommissionRuleFormSheet({
       return;
     }
 
-    const parsedMinAmount = parseAmount(minAmount);
+    const parsedMinAmount = parseAmountOrZero(minAmount);
     const parsedMaxAmount = maxAmount.trim() ? parseAmount(maxAmount) : null;
-    const parsedCustomerValue = parseAmount(customerValue);
-    const parsedNetworkValue = parseAmount(networkValue);
+    const parsedCustomerValue = parseAmountOrZero(customerValue);
+    const parsedNetworkValue = parseAmountOrZero(networkValue);
 
     if (parsedMinAmount === null) {
       Alert.alert('بيانات غير صحيحة', 'أدخل الحد الأدنى للمبلغ بشكل صحيح');
