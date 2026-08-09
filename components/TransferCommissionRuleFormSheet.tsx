@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import { supabase } from '@/lib/supabase';
 import {
   CURRENCIES,
@@ -115,6 +116,12 @@ export default function TransferCommissionRuleFormSheet({
   const [isSaving, setIsSaving] = useState(false);
   const [pickerKind, setPickerKind] = useState<PickerKind>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const { scrollRef, scrollInputIntoView } = useFocusedInputScroll();
+  const minAmountRef = useRef<TextInput>(null);
+  const maxAmountRef = useRef<TextInput>(null);
+  const customerValueRef = useRef<TextInput>(null);
+  const networkValueRef = useRef<TextInput>(null);
 
   const isEditing = Boolean(rule?.id);
   const selectedCurrency = CURRENCIES.find((item) => item.code === currency);
@@ -311,8 +318,13 @@ export default function TransferCommissionRuleFormSheet({
               </View>
 
               <ScrollView
+                ref={scrollRef}
                 style={styles.scrollView}
-                contentContainerStyle={styles.content}
+                contentContainerStyle={[
+                  styles.content,
+                  // مساحة إضافية تسمح برفع آخر حقل فوق اللوحة بدل أن يقف عند نهاية المحتوى
+                  keyboardHeight > 0 && styles.contentWithKeyboard,
+                ]}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
@@ -392,9 +404,11 @@ export default function TransferCommissionRuleFormSheet({
                     <Text style={styles.inputLabel}>من</Text>
                     <View style={styles.inputWithSuffix}>
                       <TextInput
+                        ref={minAmountRef}
                         style={styles.numericInput}
                         value={minAmount}
                         onChangeText={setMinAmount}
+                        onFocus={() => scrollInputIntoView(minAmountRef.current)}
                         placeholder="0"
                         placeholderTextColor="#9CA3AF"
                         keyboardType="decimal-pad"
@@ -407,9 +421,11 @@ export default function TransferCommissionRuleFormSheet({
                     <Text style={styles.inputLabel}>إلى (اختياري)</Text>
                     <View style={styles.inputWithSuffix}>
                       <TextInput
+                        ref={maxAmountRef}
                         style={styles.numericInput}
                         value={maxAmount}
                         onChangeText={setMaxAmount}
+                        onFocus={() => scrollInputIntoView(maxAmountRef.current)}
                         placeholder="بدون حد"
                         placeholderTextColor="#9CA3AF"
                         keyboardType="decimal-pad"
@@ -456,9 +472,11 @@ export default function TransferCommissionRuleFormSheet({
                     </View>
                     <View style={styles.inputWithSuffix}>
                       <TextInput
+                        ref={customerValueRef}
                         style={styles.numericInput}
                         value={customerValue}
                         onChangeText={setCustomerValue}
+                        onFocus={() => scrollInputIntoView(customerValueRef.current)}
                         placeholder="0"
                         placeholderTextColor="#9CA3AF"
                         keyboardType="decimal-pad"
@@ -484,9 +502,11 @@ export default function TransferCommissionRuleFormSheet({
                     </View>
                     <View style={styles.inputWithSuffix}>
                       <TextInput
+                        ref={networkValueRef}
                         style={styles.numericInput}
                         value={networkValue}
                         onChangeText={setNetworkValue}
+                        onFocus={() => scrollInputIntoView(networkValueRef.current)}
                         placeholder="0"
                         placeholderTextColor="#9CA3AF"
                         keyboardType="decimal-pad"
@@ -691,6 +711,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 32,
+  },
+  contentWithKeyboard: {
+    paddingBottom: 260,
   },
   section: {
     marginBottom: 20,
