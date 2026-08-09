@@ -29,6 +29,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { supabase } from '@/lib/supabase';
 import {
@@ -120,6 +121,10 @@ export default function EntityTransferFormSheet({
   const [isSaving, setIsSaving] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const pickerSearchInputRef = React.useRef<TextInput>(null);
+  const amountInputRef = React.useRef<TextInput>(null);
+  const notesInputRef = React.useRef<TextInput>(null);
+  const { scrollRef, scrollAreaRef, handleScroll, scrollInputIntoView } =
+    useFocusedInputScroll();
 
   useEffect(() => {
     if (!visible) return;
@@ -529,9 +534,18 @@ export default function EntityTransferFormSheet({
                 <View style={styles.headerPlaceholder} />
               </View>
 
+              {/* collapsable={false} يضمن وجود عرض أصلي يمكن قياسه على أندرويد */}
+              <View ref={scrollAreaRef} collapsable={false} style={styles.scrollArea}>
               <ScrollView
+                ref={scrollRef}
                 style={styles.scrollView}
-                contentContainerStyle={styles.content}
+                contentContainerStyle={[
+                  styles.content,
+                  // بدون مساحة بقدر اللوحة يصطدم آخر حقل بنهاية المحتوى قبل أن يبلغ الأعلى
+                  keyboardHeight > 0 && { paddingBottom: keyboardHeight + 48 },
+                ]}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
@@ -593,12 +607,14 @@ export default function EntityTransferFormSheet({
                       value={senderName}
                       onChangeText={setSenderName}
                       placeholder="اسم المرسل"
+                      onFocusInput={scrollInputIntoView}
                     />
                     <FormInput
                       value={senderPhone}
                       onChangeText={setSenderPhone}
                       placeholder="هاتف المرسل"
                       keyboardType="phone-pad"
+                      onFocusInput={scrollInputIntoView}
                     />
                   </View>
                 </View>
@@ -612,12 +628,14 @@ export default function EntityTransferFormSheet({
                       value={beneficiaryName}
                       onChangeText={setBeneficiaryName}
                       placeholder="اسم المستلم"
+                      onFocusInput={scrollInputIntoView}
                     />
                     <FormInput
                       value={beneficiaryPhone}
                       onChangeText={setBeneficiaryPhone}
                       placeholder="هاتف المستلم"
                       keyboardType="phone-pad"
+                      onFocusInput={scrollInputIntoView}
                     />
                   </View>
                 </View>
@@ -635,11 +653,13 @@ export default function EntityTransferFormSheet({
                       <Text style={styles.currencySymbol}>{selectedCurrency?.symbol}</Text>
                     </TouchableOpacity>
                     <TextInput
+                      ref={amountInputRef}
                       style={styles.amountInput}
                       value={amount}
                       onChangeText={(value) =>
                         setAmount(validateNumericInput(value, { allowDecimal: true }).cleanedValue)
                       }
+                      onFocus={() => scrollInputIntoView(amountInputRef.current)}
                       placeholder="0.00"
                       placeholderTextColor="#9CA3AF"
                       keyboardType="decimal-pad"
@@ -770,6 +790,7 @@ export default function EntityTransferFormSheet({
                           currency={currency}
                           color="#4F46E5"
                           onChangeText={setCustomerCommission}
+                          onFocusInput={scrollInputIntoView}
                         />
                         <CommissionInput
                           label="عمولة الشبكة"
@@ -777,6 +798,7 @@ export default function EntityTransferFormSheet({
                           currency={currency}
                           color="#0EA5E9"
                           onChangeText={setNetworkCommission}
+                          onFocusInput={scrollInputIntoView}
                         />
                       </View>
 
@@ -818,9 +840,11 @@ export default function EntityTransferFormSheet({
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>ملاحظات</Text>
                   <TextInput
+                    ref={notesInputRef}
                     style={styles.notesInput}
                     value={notes}
                     onChangeText={setNotes}
+                    onFocus={() => scrollInputIntoView(notesInputRef.current)}
                     placeholder="ملاحظات اختيارية"
                     placeholderTextColor="#9CA3AF"
                     multiline
@@ -837,6 +861,7 @@ export default function EntityTransferFormSheet({
                   </View>
                 ) : null}
               </ScrollView>
+              </View>
 
               <View
                 style={[
@@ -989,17 +1014,23 @@ function FormInput({
   onChangeText,
   placeholder,
   keyboardType = 'default',
+  onFocusInput,
 }: {
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
   keyboardType?: 'default' | 'phone-pad';
+  onFocusInput?: (input: TextInput | null) => void;
 }) {
+  const inputRef = React.useRef<TextInput>(null);
+
   return (
     <TextInput
+      ref={inputRef}
       style={styles.input}
       value={value}
       onChangeText={onChangeText}
+      onFocus={() => onFocusInput?.(inputRef.current)}
       placeholder={placeholder}
       placeholderTextColor="#9CA3AF"
       keyboardType={keyboardType}
@@ -1014,14 +1045,17 @@ function CommissionInput({
   currency,
   color,
   onChangeText,
+  onFocusInput,
 }: {
   label: string;
   value: string;
   currency: string;
   color: string;
   onChangeText: (value: string) => void;
+  onFocusInput?: (input: TextInput | null) => void;
 }) {
   const [isFocused, setIsFocused] = useState(false);
+  const inputRef = React.useRef<TextInput>(null);
   const isZeroValue = value.trim() !== '' && Number(value) === 0;
 
   return (
@@ -1032,6 +1066,7 @@ function CommissionInput({
       </View>
       <View style={styles.commissionInputBox}>
         <TextInput
+          ref={inputRef}
           style={[
             styles.commissionInput,
             isZeroValue && !isFocused && styles.commissionInputZero,
@@ -1045,6 +1080,7 @@ function CommissionInput({
           onFocus={() => {
             setIsFocused(true);
             if (isZeroValue) onChangeText('');
+            onFocusInput?.(inputRef.current);
           }}
           onBlur={() => setIsFocused(false)}
           placeholder={isFocused ? '' : '0'}
@@ -1159,6 +1195,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#111827',
+  },
+  scrollArea: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
