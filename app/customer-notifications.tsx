@@ -10,8 +10,7 @@ StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowRight, Bell, Search, X } from 'lucide-react-native';
 
 import { supabase } from '@/lib/supabase';

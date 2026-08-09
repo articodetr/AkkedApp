@@ -118,7 +118,7 @@ export default function EntityTransferFormSheet({
   const [pickerKind, setPickerKind] = useState<PickerKind>(null);
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [pickerKeyboardHeight, setPickerKeyboardHeight] = useState(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const pickerSearchInputRef = React.useRef<TextInput>(null);
 
   useEffect(() => {
@@ -252,10 +252,10 @@ export default function EntityTransferFormSheet({
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
-      setPickerKeyboardHeight(e.endCoordinates.height);
+      setKeyboardHeight(e.endCoordinates.height);
     });
     const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
-      setPickerKeyboardHeight(0);
+      setKeyboardHeight(0);
     });
 
     return () => {
@@ -499,7 +499,17 @@ export default function EntityTransferFormSheet({
   return (
     <>
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => {
+            if (keyboardHeight > 0) {
+              Keyboard.dismiss();
+              return;
+            }
+            onClose();
+          }}
+        >
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.sheetContainer}
@@ -828,7 +838,12 @@ export default function EntityTransferFormSheet({
                 ) : null}
               </ScrollView>
 
-              <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+              <View
+                style={[
+                  styles.footer,
+                  { paddingBottom: keyboardHeight > 0 ? 12 : Math.max(insets.bottom, 12) },
+                ]}
+              >
                 <TouchableOpacity
                   style={[
                     styles.saveButton,
@@ -879,7 +894,7 @@ export default function EntityTransferFormSheet({
             <TouchableOpacity
               activeOpacity={1}
               onPress={(event) => event.stopPropagation()}
-              style={[styles.pickerContent, { paddingBottom: Math.max(insets.bottom + pickerKeyboardHeight, 18) }]}
+              style={[styles.pickerContent, { paddingBottom: Math.max(insets.bottom + keyboardHeight, 18) }]}
             >
               <View style={styles.pickerHeader}>
                 <TouchableOpacity
@@ -1114,6 +1129,7 @@ const styles = StyleSheet.create({
   sheetContainer: {
     flex: 1,
     direction: 'rtl',
+    justifyContent: 'flex-end',
   },
   sheet: {
     flex: 1,
