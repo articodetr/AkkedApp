@@ -38,9 +38,9 @@ export function KeyboardAwareView({
     return (
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={offset}
-        enabled={enableAutomaticScroll}
+        enabled={Platform.OS === 'ios' && enableAutomaticScroll}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <View style={[{ flex: 1 }, contentContainerStyle]}>
@@ -54,9 +54,9 @@ export function KeyboardAwareView({
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={offset}
-      enabled={enableAutomaticScroll}
+      enabled={Platform.OS === 'ios' && enableAutomaticScroll}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <ScrollView

@@ -623,7 +623,7 @@ export default function PinSettings() {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={insets.top + 8}
       >
         <ScrollView
@@ -1042,7 +1042,7 @@ export default function PinSettings() {
       >
         <KeyboardAvoidingView
           style={styles.modalContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={insets.top + 8}
         >
           <TouchableWithoutFeedback onPress={() => !isDeleting && setShowDeleteModal(false)}>
@@ -1116,7 +1116,7 @@ export default function PinSettings() {
       >
         <KeyboardAvoidingView
           style={styles.modalContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={insets.top + 8}
         >
           <TouchableWithoutFeedback

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,6 +17,7 @@ import { Building2, Save, Waypoints, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { supabase } from '@/lib/supabase';
 import { TransferEntity } from '@/types/database';
 
@@ -42,6 +44,7 @@ export default function TransferEntityFormSheet({
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const keyboardHeight = useKeyboardHeight();
 
   const isEditing = Boolean(entity?.id);
 
@@ -115,10 +118,22 @@ export default function TransferEntityFormSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={() => {
+          if (keyboardHeight > 0) {
+            Keyboard.dismiss();
+            return;
+          }
+          onClose();
+        }}
+      >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.sheetContainer}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+          enabled={Platform.OS === 'ios'}
         >
           <TouchableOpacity
             activeOpacity={1}
@@ -239,7 +254,12 @@ export default function TransferEntityFormSheet({
               </View>
             </ScrollView>
 
-            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <View
+              style={[
+                styles.footer,
+                { paddingBottom: keyboardHeight > 0 ? 12 : Math.max(insets.bottom, 12) },
+              ]}
+            >
               <TouchableOpacity
                 style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
                 onPress={handleSave}
@@ -272,15 +292,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    height: '85%',
+    flex: 1,
     direction: 'rtl',
+    justifyContent: 'flex-end',
   },
   sheet: {
     direction: 'rtl',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    height: '100%',
+    flex: 1,
+    maxHeight: '85%',
   },
   header: {
     flexDirection: 'row',

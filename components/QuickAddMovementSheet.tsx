@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { supabase } from '@/lib/supabase';
 import { Currency, CURRENCIES } from '@/types/database';
 import { isPendingMovement } from '@/utils/movementApproval';
@@ -71,6 +72,7 @@ export default function QuickAddMovementSheet({
   const [operationId, setOperationId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const keyboardHeight = useKeyboardHeight();
 
   useEffect(() => {
     if (visible) {
@@ -324,10 +326,22 @@ export default function QuickAddMovementSheet({
   return (
     <>
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => {
+            if (keyboardHeight > 0) {
+              Keyboard.dismiss();
+              return;
+            }
+            onClose();
+          }}
+        >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.sheetContainer}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+            enabled={Platform.OS === 'ios'}
           >
             <TouchableOpacity activeOpacity={1} onPress={(event) => event.stopPropagation()} style={styles.sheet}>
               <View style={styles.header}>
@@ -756,15 +770,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    height: '92%',
+    flex: 1,
     direction: 'rtl',
+    justifyContent: 'flex-end',
   },
   sheet: {
     direction: 'rtl',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    height: '100%',
+    flex: 1,
+    maxHeight: '92%',
   },
   header: {
     flexDirection: 'row',
